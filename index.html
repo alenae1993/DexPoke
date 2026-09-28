@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mi Dex</title>
+<meta name="description" content="Pokédex personal: Pokémon, movimientos, habilidades, simulador de IVs/EVs y comparador.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mi Dex">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#EEF2F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1412" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+html{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
+body{margin:0}
+[hidden]{display:none!important}
+img{max-width:100%}
+:root{
+  --bg:#EEF2F0; --surface:#FFFFFF; --surface2:#E4EAE7; --ink:#15201C; --ink2:#51615A; --ink3:#7D8C85;
+  --line:#D3DCD8; --accent:#17745F; --accent-ink:#FFFFFF; --accent-soft:#D5ECE5; --bar:#17745F; --bar-bg:#E1E8E5;
+  --good:#1E8A4C; --bad:#C43D2E; --shadow:0 1px 2px rgba(20,40,30,.06),0 6px 18px rgba(20,40,30,.06);
+  --display:"Chakra Petch",ui-rounded,"Segoe UI",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;--bg:#0E1412;--surface:#161E1B;--surface2:#1E2825;--ink:#E4ECE8;--ink2:#A3B3AC;--ink3:#72827B;
+  --line:#2A3632;--accent:#4CC2A5;--accent-ink:#06231C;--accent-soft:#173A31;--bar:#4CC2A5;--bar-bg:#24302C;
+  --good:#5BCB86;--bad:#F07A6A;--shadow:none;}}
+:root[data-theme="dark"]{
+  color-scheme:dark;--bg:#0E1412;--surface:#161E1B;--surface2:#1E2825;--ink:#E4ECE8;--ink2:#A3B3AC;--ink3:#72827B;
+  --line:#2A3632;--accent:#4CC2A5;--accent-ink:#06231C;--accent-soft:#173A31;--bar:#4CC2A5;--bar-bg:#24302C;
+  --good:#5BCB86;--bad:#F07A6A;--shadow:none;}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column;max-width:720px;margin:0 auto}
+.top{padding:14px 16px 10px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.brand h1{font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:.01em;margin:0}
+.brand small{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 12px;height:44px}
+.search input{border:0;background:transparent;outline:none;flex:1;min-width:0;font-size:16px}
+.search svg{flex:none;color:var(--ink3)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+#fk{flex-basis:100%}
+.row select{flex:1;min-width:0;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 10px;font-size:14px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-inline:-16px;padding-inline:16px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:13px;font-weight:500;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--c,var(--accent));border-color:transparent;color:var(--ct,#fff)}
+main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 16px}
+.count{font-size:12px;color:var(--ink3);font-family:var(--mono);padding:2px 0 8px}
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.item{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;width:100%}
+.item:last-child{border-bottom:0}
+.item:active{background:var(--surface2)}
+.disc img{width:86%;height:86%;object-fit:contain;grid-area:1/1}
+.disc b{grid-area:1/1;font-weight:500}
+.disc.im{background:linear-gradient(135deg,color-mix(in srgb,var(--c1) 30%,var(--surface)) 50%,color-mix(in srgb,var(--c2) 30%,var(--surface)) 50%)}
+.disc.im b{display:none}
+.disc{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:500;color:#fff;background:linear-gradient(135deg,var(--c1) 50%,var(--c2) 50%);text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.nm{font-weight:600;font-size:15px;display:block}
+.sub{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+.tp{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:5px;background:var(--c);color:var(--ct)}
+.metric{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.metric b{display:block;font-size:15px;font-weight:500}
+.metric span{font-size:10px;color:var(--ink3);letter-spacing:.06em}
+nav.tabs{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--surface);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs button{border:0;background:transparent;padding:9px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--ink3);letter-spacing:.02em}
+nav.tabs button[aria-selected="true"]{color:var(--accent)}
+/* sheet */
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:10;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet-in{max-width:720px;width:100%;margin:0 auto;display:flex;flex-direction:column;height:100%;min-height:0}
+.bar{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 4px}
+.back{border:0;background:transparent;display:flex;align-items:center;gap:2px;padding:8px;color:var(--accent);font-weight:600}
+.bar .t{font-family:var(--mono);font-size:12px;color:var(--ink3);margin-left:auto;padding-right:10px}
+.sheet .body{flex:1;overflow-y:auto;padding:0 16px 32px;display:flex;flex-direction:column;gap:14px}
+.hero{display:grid;grid-template-columns:88px 1fr;gap:16px;align-items:center}
+.hero .disc{width:88px;height:88px;font-size:16px}
+.hero h2{font-family:var(--display);font-size:30px;line-height:1.05;margin:0;text-wrap:balance}
+.hero .cat{color:var(--ink2);font-size:13px;margin-top:2px}
+.flag{display:inline-block;font-size:11px;font-weight:600;border:1px solid var(--accent);color:var(--accent);border-radius:5px;padding:1px 6px;letter-spacing:.03em}
+.dx{margin:0;color:var(--ink2);font-size:14px;max-width:65ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h3{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.04em;text-transform:uppercase;margin:0 0 10px;color:var(--ink2)}
+.stats{display:grid;grid-template-columns:auto auto 1fr;gap:7px 10px;align-items:center;font-variant-numeric:tabular-nums}
+.stats .l{font-size:12px;color:var(--ink2)}
+.stats .v{font-family:var(--mono);font-size:14px;text-align:right;min-width:3ch}
+.track{height:8px;background:var(--bar-bg);border-radius:4px;overflow:hidden}
+.fill{height:100%;border-radius:4px;background:var(--bar)}
+.fill.lo{background:#D9822B}.fill.hi{background:#2E9A5A}
+.total{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:10px;padding-top:8px;font-size:13px;color:var(--ink2)}
+.total b{font-family:var(--mono);color:var(--ink);font-size:15px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.kv div span{display:block;font-size:11px;color:var(--ink3);letter-spacing:.05em;text-transform:uppercase}
+.kv div b{font-weight:500;font-size:14px}
+.abil{display:flex;flex-direction:column;gap:10px}
+.abil p{margin:2px 0 0;font-size:13px;color:var(--ink2)}
+.abil b{font-weight:600}
+.abbtn{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:9px 11px}
+.abbtn::after{content:"Ver detalle ›";display:block;font-size:11px;font-weight:600;color:var(--accent);margin-top:4px}
+.fx .nt{font-family:var(--body);color:var(--ink2)}
+.abil em{font-style:normal;font-size:11px;color:var(--accent);font-weight:600;margin-left:6px;letter-spacing:.04em;text-transform:uppercase}
+.eff{display:flex;flex-direction:column;gap:8px}
+.eff .r{display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:start}
+.eff .x{font-family:var(--mono);font-size:13px;font-weight:500;padding-top:2px}
+.eff .x.w{color:var(--bad)}.eff .x.s{color:var(--good)}
+.evo{display:flex;flex-direction:column;gap:6px}
+.evo button{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:left}
+.evo .disc{width:32px;height:32px;font-size:9px}
+.evo small{color:var(--ink2);font-size:12px;display:block}
+.seg{display:flex;background:var(--surface2);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:8px;padding:7px 4px;font-size:13px;font-weight:600;color:var(--ink2)}
+.seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.mv{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:9px 0;border:0;border-bottom:1px solid var(--line);background:transparent;width:100%;text-align:left}
+.mv:last-child{border-bottom:0}
+.mv .lv{font-family:var(--mono);font-size:12px;color:var(--ink3);text-align:center}
+.mv .nm{font-size:14px}
+.mv .nums{font-family:var(--mono);font-size:12px;color:var(--ink2);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mv .nums small{display:block;color:var(--ink3);font-size:10px}
+.catg{font-size:11px;color:var(--ink2)}
+.mvlist.plain .mv{grid-template-columns:1fr auto}
+.empty{padding:24px 8px;text-align:center;color:var(--ink3);font-size:14px}
+.mhero h2{font-family:var(--display);font-size:28px;margin:0 0 2px}
+.en{display:block;font-size:12px;color:var(--ink3);margin-top:1px}
+.en-big{display:flex;align-items:center;gap:6px;font-size:15px;color:var(--ink2);margin-bottom:8px}
+.en-big span{font-family:var(--mono);font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--ink3)}
+.fx{display:flex;flex-wrap:wrap;gap:3px 6px;margin-top:4px;font-size:11px;line-height:1.3}
+.fx .who{color:var(--ink3);font-weight:600;letter-spacing:.02em}
+.fx i{font-style:normal;font-family:var(--mono);white-space:nowrap}
+.up{color:var(--good)}.dn{color:var(--bad)}
+.tbl{overflow-x:auto;margin-inline:-4px}
+.fxt{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.fxt th{text-align:left;font-size:10px;font-weight:600;color:var(--ink3);letter-spacing:.05em;text-transform:uppercase;padding:4px;border-bottom:1px solid var(--line)}
+.fxt td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+.fxt tr:last-child td{border-bottom:0}
+.fxt td small{display:block;font-size:10px;color:var(--ink3)}
+.fxt td:nth-child(n+3){font-family:var(--mono)}
+.ref{margin-top:12px;font-size:13px}
+.ref summary{cursor:pointer;color:var(--accent);font-weight:600;padding:4px 0}
+/* simulator */
+.sim-top{display:grid;grid-template-columns:88px 1fr;gap:10px;margin-bottom:12px}
+.sim-top label,.simg .h{font-size:11px;color:var(--ink3);letter-spacing:.05em;text-transform:uppercase}
+.sim-top input,.sim-top select,.simg input{width:100%;height:38px;border-radius:9px;border:1px solid var(--line);background:var(--surface2);padding:0 8px;font-family:var(--mono);font-size:16px;text-align:center}
+.sim-top select{font-family:var(--body);font-size:14px;text-align:left}
+.simg{display:grid;grid-template-columns:minmax(0,1fr) 52px 60px 50px;gap:6px 8px;align-items:center;font-variant-numeric:tabular-nums}
+.simg .h{text-align:center}.simg .h:first-child{text-align:left}
+.simg .nm2{font-size:13px;display:flex;flex-direction:column;min-width:0}
+.simg .nm2 small{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.simg .fin{font-family:var(--mono);font-size:17px;font-weight:500;text-align:right}
+.simg .fin.up{color:var(--bad)}.simg .fin.dn{color:#3A73C9}
+.simg .rng{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:-2px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.simg .rng:last-child{border-bottom:0}
+.simg .rng .track{flex:1}
+.simg .rng span{font-family:var(--mono);font-size:10px;color:var(--ink3);white-space:nowrap}
+.sim-btns{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
+.sim-btns button{border:1px solid var(--line);background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600}
+.evtot{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink2);margin-top:8px}
+.evtot b{font-family:var(--mono);color:var(--ink)}
+.evtot b.over{color:var(--bad)}
+.evtot .track{flex:1;margin:0 10px}
+.big{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.big div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
+.big b{display:block;font-family:var(--mono);font-size:18px;font-weight:500}
+.big span{font-size:10px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase}
+.learn{display:flex;flex-direction:column}
+.learn .item{grid-template-columns:32px 1fr auto;padding:8px 0}
+.learn .disc{width:32px;height:32px;font-size:9px}
+.cmp-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cmp-pick select{width:100%;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:14px}
+.cmp-head{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cmp-head>div{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 8px}
+.cmp-head .disc{width:56px;height:56px;font-size:12px}
+.cmp-head b{font-family:var(--display);font-size:18px}
+.cmp{display:grid;grid-template-columns:1fr 64px 1fr;gap:8px 8px;align-items:center;font-variant-numeric:tabular-nums}
+.cmp .lab{text-align:center;font-size:11px;color:var(--ink2);line-height:1.2}
+.cmp .side{display:flex;align-items:center;gap:6px}
+.cmp .side.l{flex-direction:row-reverse}
+.cmp .side .track{flex:1}
+.cmp .side.l .fill{margin-left:auto}
+.cmp .n{font-family:var(--mono);font-size:13px;min-width:3ch;text-align:center}
+.cmp .n.win{color:var(--good);font-weight:600}
+.note{font-size:12px;color:var(--ink3);max-width:65ch}
+.battle-link{font-weight:600;font-size:14px;color:var(--accent-ink);background:var(--accent);border-radius:999px;padding:6px 12px;text-decoration:none}
+.link{border:0;background:transparent;color:var(--accent);font-weight:600;padding:0}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <div class="top" id="top"></div>
+  <main id="main"></main>
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="dex" aria-selected="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h6m6 0h6"/><circle cx="12" cy="12" r="3"/></svg>Pokédex</button>
+    <button role="tab" data-tab="moves" aria-selected="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Movimientos</button>
+    <button role="tab" data-tab="abil" aria-selected="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l2.2 5.6L20 9.3l-4.4 3.9 1.3 5.8L12 16l-4.9 3 1.3-5.8L4 9.3l5.8-.7z"/></svg>Habilidades</button>
+    <button role="tab" data-tab="cmp" aria-selected="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M14 20v-7M20 20V8"/></svg>Comparar</button>
+  </nav>
+</div>
+<div class="sheet" id="sheet" hidden><div class="sheet-in" id="sheetIn"></div></div>
+
+<script src="data.js"></script>
+<script>
+const P=D.P, M=D.M, A=D.A;
+const TY={NORMAL:["Normal","#9FA19F","#111"],FIRE:["Fuego","#E62829","#fff"],WATER:["Agua","#2980EF","#fff"],GRASS:["Planta","#3FA129","#fff"],ELECTRIC:["Eléctrico","#FAC000","#111"],ICE:["Hielo","#3DCEF3","#111"],FIGHTING:["Lucha","#FF8000","#111"],POISON:["Veneno","#9141CB","#fff"],GROUND:["Tierra","#915121","#fff"],FLYING:["Volador","#81B9EF","#111"],PSYCHIC:["Psíquico","#EF4179","#fff"],BUG:["Bicho","#91A119","#fff"],ROCK:["Roca","#AFA981","#111"],GHOST:["Fantasma","#704170","#fff"],DRAGON:["Dragón","#5060E1","#fff"],DARK:["Siniestro","#624D4E","#fff"],STEEL:["Acero","#60A1B8","#fff"],FAIRY:["Hada","#EF70EF","#111"]};
+const TK=Object.keys(TY);
+const CH={NORMAL:{ROCK:.5,GHOST:0,STEEL:.5},FIRE:{FIRE:.5,WATER:.5,GRASS:2,ICE:2,BUG:2,ROCK:.5,DRAGON:.5,STEEL:2},WATER:{FIRE:2,WATER:.5,GRASS:.5,GROUND:2,ROCK:2,DRAGON:.5},ELECTRIC:{WATER:2,ELECTRIC:.5,GRASS:.5,GROUND:0,FLYING:2,DRAGON:.5},GRASS:{FIRE:.5,WATER:2,GRASS:.5,POISON:.5,GROUND:2,FLYING:.5,BUG:.5,ROCK:2,DRAGON:.5,STEEL:.5},ICE:{FIRE:.5,WATER:.5,GRASS:2,ICE:.5,GROUND:2,FLYING:2,DRAGON:2,STEEL:.5},FIGHTING:{NORMAL:2,ICE:2,POISON:.5,FLYING:.5,PSYCHIC:.5,BUG:.5,ROCK:2,GHOST:0,DARK:2,STEEL:2,FAIRY:.5},POISON:{GRASS:2,POISON:.5,GROUND:.5,ROCK:.5,GHOST:.5,STEEL:0,FAIRY:2},GROUND:{FIRE:2,ELECTRIC:2,GRASS:.5,POISON:2,FLYING:0,BUG:.5,ROCK:2,STEEL:2},FLYING:{ELECTRIC:.5,GRASS:2,FIGHTING:2,BUG:2,ROCK:.5,STEEL:.5},PSYCHIC:{FIGHTING:2,POISON:2,PSYCHIC:.5,DARK:0,STEEL:.5},BUG:{FIRE:.5,GRASS:2,FIGHTING:.5,POISON:.5,FLYING:.5,PSYCHIC:2,GHOST:.5,DARK:2,STEEL:.5,FAIRY:.5},ROCK:{FIRE:2,ICE:2,FIGHTING:.5,GROUND:.5,FLYING:2,BUG:2,STEEL:.5},GHOST:{NORMAL:0,PSYCHIC:2,GHOST:2,DARK:.5},DRAGON:{DRAGON:2,STEEL:.5,FAIRY:0},DARK:{FIGHTING:.5,PSYCHIC:2,GHOST:2,DARK:.5,FAIRY:.5},STEEL:{FIRE:.5,WATER:.5,ELECTRIC:.5,ICE:2,ROCK:2,STEEL:.5,FAIRY:2},FAIRY:{FIRE:.5,FIGHTING:2,POISON:.5,DRAGON:2,DARK:2,STEEL:.5}};
+const CAT={Physical:"Físico",Special:"Especial",Status:"Estado"};
+const SL=["PS","Ataque","Defensa","At. Esp.","Def. Esp.","Velocidad"];
+const SK=["HP","ATK","DEF","SPA","SPD","SPE"];
+const GROW={Medium:"Medio",Parabolic:"Parabólico",Slow:"Lento",Fast:"Rápido",Erratic:"Errático",Fluctuating:"Fluctuante"};
+const GEN={Female50Percent:"50% ♀ · 50% ♂",Genderless:"Sin género",FemaleOneEighth:"12,5% ♀ · 87,5% ♂",AlwaysFemale:"100% ♀",AlwaysMale:"100% ♂",Female75Percent:"75% ♀ · 25% ♂",Female25Percent:"25% ♀ · 75% ♂",FemaleSevenEighths:"87,5% ♀ · 12,5% ♂"};
+const HAB={Grassland:"Pradera",Forest:"Bosque",Mountain:"Montaña",WatersEdge:"Orilla",Sea:"Mar",Urban:"Ciudad",RoughTerrain:"Terreno escarpado",Rare:"Raro",Cave:"Cueva"};
+const COL={Blue:"Azul",Brown:"Marrón",Green:"Verde",Gray:"Gris",Red:"Rojo",Yellow:"Amarillo",Purple:"Morado",White:"Blanco",Pink:"Rosa",Black:"Negro"};
+const FKN={mega:"Megaevolución",gmax:"Gigamax",regional:"Forma regional",forma:"Forma alternativa"};
+const FLG={Legendary:"Legendario",Mythical:"Singular",Paradox:"Paradoja",UltraBeast:"Ultraente"};
+const EVM={Level:"Nivel",Item:"Usar",HasMove:"Conociendo",Happiness:"Amistad alta",HappinessDay:"Amistad alta (día)",HappinessNight:"Amistad alta (noche)",CableLinkItem:"Intercambio con",TradeSpecies:"Intercambio por",LevelDay:"Nivel (día)",LevelNight:"Nivel (noche)",LevelFemale:"Nivel (hembra)",LevelWalk:"Caminar, nivel",LevelRain:"Nivel con lluvia",ItemNight:"Usar (noche)",NightHoldItem:"Nivel de noche sosteniendo",DayHoldItem:"Nivel de día sosteniendo",HasInParty:"Con en el equipo",LevelDarkInParty:"Nivel con Siniestro en equipo",LevelUseMoveCount:"Usar movimiento, nivel",LevelDefeatItsKindWithItem:"Derrotar a su especie",LevelRandForm:"Nivel",HasMoveRandForm:"Conociendo",LevelRecoilDamageForm0:"Recibir daño de retroceso",LevelCoins:"Reunir monedas",None:"Especial"};
+const ITEM={THUNDERSTONE:"Piedra Trueno",FIRESTONE:"Piedra Fuego",WATERSTONE:"Piedra Agua",LEAFSTONE:"Piedra Hoja",MOONSTONE:"Piedra Lunar",SUNSTONE:"Piedra Solar",SHINYSTONE:"Piedra Día",DUSKSTONE:"Piedra Noche",DAWNSTONE:"Piedra Alba",ICESTONE:"Piedra Hielo",OVALSTONE:"Piedra Oval"};
+
+const byCode={}; P.forEach((p,i)=>byCode[p.c]=i);
+const norm=s=>(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pad=n=>String(n).padStart(4,"0").replace(/^0(?=\d{3})/,"");
+const nn=v=>v==null||v===""?"—":v;
+const tchip=t=>{const x=TY[t]||[t,"#888","#fff"];return `<span class="tp" style="--c:${x[1]};--ct:${x[2]}">${x[0]}</span>`};
+const disc=p=>{const a=TY[p.t[0]]||TY.NORMAL,b=TY[p.t[1]||p.t[0]]||a;return `<span class="disc im" style="--c1:${a[1]};--c2:${b[1]}"><img src="${ART}${p.im||p.id}.png" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.remove('im');this.remove()"><b>${pad(p.id)}</b></span>`};
+const ART="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/";
+const mname=c=>(M[c]&&M[c][0])||c;
+const aname=c=>(A[c]&&A[c][0])||c;
+const pname=c=>{const i=byCode[c];return i==null?c.charAt(0)+c.slice(1).toLowerCase():P[i].n};
+const human=c=>ITEM[c]||(M[c]?mname(c):(byCode[c]!=null?pname(c):c.charAt(0)+c.slice(1).toLowerCase()));
+
+// who learns what
+const learn={};
+P.forEach((p,i)=>{
+  p.lv.forEach(([l,c])=>{(learn[c]=learn[c]||[]).push([i,"lv",l])});
+  p.tm.forEach(c=>{(learn[c]=learn[c]||[]).push([i,"tm"])});
+  p.em.forEach(c=>{(learn[c]=learn[c]||[]).push([i,"em"])});
+});
+const abUsers={};P.forEach((p,i)=>{p.a.forEach(c=>(abUsers[c]=abUsers[c]||[]).push([i,0]));p.ha.forEach(c=>(abUsers[c]=abUsers[c]||[]).push([i,1]))});
+// pre-evolutions
+const pre={};
+P.forEach((p,i)=>p.ev.forEach(e=>{if(!pre[e[0]])pre[e[0]]=[i,e[1],e[2]]}));
+
+function defMult(types){const out={};TK.forEach(a=>{let m=1;types.forEach(d=>{const r=CH[a][d];if(r!=null)m*=r});out[a]=m});return out}
+
+const S={tab:"dex",q:"",type:"",gen:"",sort:"id",fk:"",mq:"",mtype:"",mcat:"",aq:"",af:"",cA:byCode.CHARIZARD??5,cB:byCode.BLASTOISE??8};
+try{const s=JSON.parse(localStorage.getItem("pkdx")||"{}");Object.assign(S,s,{q:"",mq:"",aq:""})}catch(e){}
+function save(){try{const {tab,type,gen,sort,fk,mtype,mcat,af,cA,cB}=S;localStorage.setItem("pkdx",JSON.stringify({tab,type,gen,sort,fk,mtype,mcat,af,cA,cB}))}catch(e){}}
+
+const $=id=>document.getElementById(id);
+const searchSvg='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+const typeChips=(cur,name)=>`<div class="chips" data-chips="${name}"><button class="chip" data-v="" aria-pressed="${cur===""}">Todos</button>${TK.map(t=>`<button class="chip" data-v="${t}" style="--c:${TY[t][1]};--ct:${TY[t][2]}" aria-pressed="${cur===t}">${TY[t][0]}</button>`).join("")}</div>`;
+
+function renderTop(){
+  const t=$("top");
+  if(S.tab==="dex"){
+    t.innerHTML=`<div class="brand"><h1>Pokédex</h1><a class="battle-link" href="batalla.html">⚔ Batalla</a></div><div style="margin-top:-6px;font-family:var(--mono);font-size:12px;color:var(--ink3)">${P.filter(p=>!p.fk).length} especies · ${P.filter(p=>p.fk).length} formas</div>
+    <label class="search">${searchSvg}<input id="q" type="search" placeholder="Nombre o número" autocomplete="off" value="${esc(S.q)}"></label>
+    ${typeChips(S.type,"type")}
+    <div class="row"><select id="gen" aria-label="Generación"><option value="">Todas las generaciones</option>${[1,2,3,4,5,6,7,8,9].map(g=>`<option value="${g}" ${S.gen==g?"selected":""}>Generación ${g}</option>`).join("")}</select>
+    <select id="sort" aria-label="Ordenar"><option value="id">Nº Pokédex</option><option value="name">Nombre</option><option value="bst">Total stats</option>${SK.map((k,i)=>`<option value="${i}">${SL[i]}</option>`).join("")}</select>
+    <select id="fk" aria-label="Formas"><option value="">Todas las formas</option><option value="base">Solo especies</option><option value="mega">Megaevoluciones</option><option value="gmax">Gigamax</option><option value="regional">Formas regionales</option><option value="forma">Otras formas</option></select></div>`;
+    $("sort").value=S.sort;$("fk").value=S.fk;
+  }else if(S.tab==="moves"){
+    t.innerHTML=`<div class="brand"><h1>Movimientos</h1><small>${Object.keys(M).length} en total</small></div>
+    <label class="search">${searchSvg}<input id="mq" type="search" placeholder="Buscar en español o inglés" autocomplete="off" value="${esc(S.mq)}"></label>
+    ${typeChips(S.mtype,"mtype")}
+    <div class="row"><select id="mcat" aria-label="Categoría"><option value="">Todas las categorías</option>${Object.entries(CAT).map(([k,v])=>`<option value="${k}" ${S.mcat===k?"selected":""}>${v}</option>`).join("")}<option value="fx" ${S.mcat==="fx"?"selected":""}>Cambian estadísticas</option><option value="fxu" ${S.mcat==="fxu"?"selected":""}>Suben estadísticas</option><option value="fxd" ${S.mcat==="fxd"?"selected":""}>Bajan estadísticas</option></select></div>`;
+  }else if(S.tab==="abil"){
+    t.innerHTML=`<div class="brand"><h1>Habilidades</h1><small>${Object.keys(A).length} en total</small></div>
+    <label class="search">${searchSvg}<input id="aq" type="search" placeholder="Buscar en español o inglés" autocomplete="off" value="${esc(S.aq)}"></label>
+    <div class="row"><select id="af" aria-label="Tipo de efecto"><option value="">Todas las habilidades</option><option value="any">Con efecto numérico</option><option value="s">Cambian niveles de stats</option><option value="m">Multiplicadores (stats, daño, potencia)</option><option value="p">PS, probabilidades y prioridad</option></select></div>`;
+    $("af").value=S.af;
+  }else{
+    const opts=sel=>P.map((p,i)=>`<option value="${i}" ${i==sel?"selected":""}>${pad(p.id)} ${esc(p.n)}${p.fn&&p.fn!==p.n?" ("+esc(p.fn)+")":""}</option>`).join("");
+    t.innerHTML=`<div class="brand"><h1>Comparar</h1><small>stats base</small></div>
+    <div class="cmp-pick"><select id="cA" aria-label="Pokémon A">${opts(S.cA)}</select><select id="cB" aria-label="Pokémon B">${opts(S.cB)}</select></div>`;
+  }
+}
+
+function filteredDex(){
+  const q=norm(S.q).trim();
+  let r=P.map((p,i)=>i).filter(i=>{const p=P[i];
+    if(S.type&&!p.t.includes(S.type))return false;
+    if(S.gen&&p.g!=S.gen)return false;
+    if(S.fk==="base"?p.fk:(S.fk&&p.fk!==S.fk))return false;
+    if(q){if(/^\d+$/.test(q))return String(p.id).startsWith(String(+q));return norm(p.n).includes(q)}
+    return true});
+  const s=S.sort;
+  if(s==="name")r.sort((a,b)=>P[a].n.localeCompare(P[b].n));
+  else if(s==="bst")r.sort((a,b)=>(P[b].b||0)-(P[a].b||0));
+  else if(s!=="id")r.sort((a,b)=>(P[b].st[s]||0)-(P[a].st[s]||0));
+  return r;
+}
+function renderMain(){
+  const m=$("main");
+  if(S.tab==="dex"){
+    const r=filteredDex(); const s=S.sort; const lab=s==="id"||s==="name"||s==="bst"?"TOTAL":SL[s].toUpperCase();
+    m.innerHTML=`<div class="count">${r.length} resultado${r.length===1?"":"s"}</div>`+(r.length?`<div class="list">${r.map(i=>{const p=P[i];const v=(s==="id"||s==="name"||s==="bst")?p.b:p.st[s];
+      return `<button class="item" data-p="${i}">${disc(p)}<span><span class="nm">${esc(p.n)}</span>${p.fn&&p.fn!==p.n?`<span class="en">${esc(p.fn)}</span>`:""}<span class="sub">${p.t.map(tchip).join("")}</span></span><span class="metric"><b>${nn(v)}</b><span>${lab}</span></span></button>`}).join("")}</div>`:`<div class="empty">Ningún Pokémon coincide. Prueba otro nombre o quita un filtro.</div>`);
+  }else if(S.tab==="moves"){
+    const q=norm(S.mq).trim();
+    const r=Object.keys(M).filter(c=>{const x=M[c];if(S.mtype&&x[1]!==S.mtype)return false;if(S.mcat==="fx"){if(!x[11])return false}else if(S.mcat==="fxu"){if(!(x[11]||[]).some(f=>f[2]>0))return false}else if(S.mcat==="fxd"){if(!(x[11]||[]).some(f=>f[2]<0))return false}else if(S.mcat&&x[2]!==S.mcat)return false;if(q)return norm(x[0]).includes(q)||norm(x[10]).includes(q)||norm(x[6]).includes(q)||norm(c).includes(q.replace(/\s/g,""));return true}).sort((a,b)=>mname(a).localeCompare(mname(b)));
+    m.innerHTML=`<div class="count">${r.length} movimiento${r.length===1?"":"s"}</div>`+(r.length?`<div class="list mvlist plain" style="padding:0 12px">${r.map(c=>moveRow(c)).join("")}</div>`:`<div class="empty">Ningún movimiento coincide.</div>`);
+  }else if(S.tab==="abil"){
+    const q=norm(S.aq).trim();
+    const r=Object.keys(A).filter(c=>{const a=A[c],f=AFX[c];
+      if(S.af==="any"&&!f)return false;
+      if(S.af&&S.af!=="any"&&!(f||[]).some(e=>e[0]===S.af))return false;
+      if(q)return norm(a[0]).includes(q)||norm(a[2]).includes(q)||norm(a[1]).includes(q);return true}).sort((a,b)=>(A[a][0]||a).localeCompare(A[b][0]||b));
+    m.innerHTML=`<div class="count">${r.length} habilidad${r.length===1?"":"es"}</div>`+(r.length?`<div class="list mvlist plain" style="padding:0 12px">${r.map(abRow).join("")}</div>`:`<div class="empty">Ninguna habilidad coincide.</div>`);
+  }else{
+    m.innerHTML=compareView(P[S.cA],P[S.cB]);
+  }
+}
+const STN={TOP:"Su stat más alto",RND:"Un stat al azar",ATKSPA:"Ataque o At. Esp.",ATK:"Ataque",DEF:"Defensa",SPA:"At. Esp.",SPD:"Def. Esp.",SPE:"Velocidad",ACC:"Precisión",EVA:"Evasión",CRIT:"Índice crítico"};
+const STS={TOP:"Stat mayor",RND:"Stat azar",ATKSPA:"Atq/AtEsp",ATK:"Atq",DEF:"Def",SPA:"At.Esp",SPD:"Def.Esp",SPE:"Vel",ACC:"Prec",EVA:"Eva",CRIT:"Crít"};
+const WHO={User:"Usuario",Target:"Objetivo",Allies:"Aliados",UserAndAllies:"Usuario y aliados",PoisonedTarget:"Objetivo envenenado",GrassBattlers:"Tipo Planta en combate",GroundedGrassBattlers:"Tipo Planta en el suelo",PlusMinusUserAndAllies:"Usuario y aliados con Más/Menos"};
+const WHOS={User:"Usuario",Target:"Rival",Allies:"Aliados",UserAndAllies:"Equipo",PoisonedTarget:"Rival env.",GrassBattlers:"Planta",GroundedGrassBattlers:"Planta",PlusMinusUserAndAllies:"Más/Menos"};
+const CRITP=["4,17%","12,5%","50%","100%"];
+function stageMult(st,s){if(st==="ACC"||st==="EVA")return s>0?(3+s)/3:3/(3-s);return s>0?(2+s)/2:2/(2-s)}
+const fmtN=(n,d=2)=>n.toLocaleString("es-CL",{maximumFractionDigits:d});
+function stagePct(st,s){if(st==="CRIT")return `prob. ${CRITP[Math.min(3,s)]}`;const p=Math.round((stageMult(st,s)-1)*100);return (p>0?"+":"−")+Math.abs(p)+"%"}
+const chanceTxt=x=>x[2]!=="Status"&&x[8]?`${x[8]}% de prob.`:"Siempre";
+function fxShort(x){const f=x[11];if(!f)return"";const g={};f.forEach(r=>(g[r[0]]=g[r[0]]||[]).push(r));
+  return `<span class="fx">${Object.entries(g).map(([w,rs])=>`<span class="who">${WHOS[w]||w}</span>${rs.map(r=>`<i class="${r[2]>0?"up":"dn"}">${r[2]>0?"▲":"▼"}${STS[r[1]]} ${stagePct(r[1],r[2])}</i>`).join("")}`).join("")}${x[2]!=="Status"&&x[8]?`<span class="who">${x[8]}% prob.</span>`:""}</span>`}
+function fxCard(x){const f=x[11],e=x[12]||{};
+  const ex=[];
+  if(e.dr>0)ex.push(["Absorbe",`Recupera el ${e.dr}% del daño causado`]);
+  if(e.dr<0)ex.push(["Retroceso",`Recibe el ${-e.dr}% del daño causado`]);
+  if(e.he>0)ex.push(["Curación",`Recupera el ${e.he}% de sus PS máximos`]);
+  if(e.he<0)ex.push(["Coste",`Pierde el ${-e.he}% de sus PS máximos`]);
+  if(e.fl)ex.push(["Retroceder",`${e.fl}% de hacer retroceder al objetivo`]);
+  if(e.cr)ex.push(["Crítico",`Índice de crítico alto (+${e.cr} nivel${e.cr>1?"es":""}, prob. ${CRITP[Math.min(3,e.cr)]})`]);
+  if(e.hits)ex.push(["Golpes",`${e.hits[0]===e.hits[1]?e.hits[0]:e.hits[0]+" a "+e.hits[1]} golpes`]);
+  if(!f&&!ex.length)return"";
+  const rows=f?f.map(r=>{const m=r[1]==="CRIT"?"—":"×"+fmtN(stageMult(r[1],r[2]));return `<tr><td>${WHO[r[0]]||r[0]}</td><td>${STN[r[1]]}</td><td class="${r[2]>0?"up":"dn"}">${r[2]>0?"+":"−"}${Math.abs(r[2])}${r[3]?`<small>${esc(r[3])}</small>`:""}</td><td>${m}</td><td class="${r[2]>0?"up":"dn"}"><b>${stagePct(r[1],r[2])}</b></td></tr>`}).join(""):"";
+  return `<div class="card"><h3>Efectos</h3>
+  ${f?`<div class="tbl"><table class="fxt"><thead><tr><th>Afecta a</th><th>Stat</th><th>Niveles</th><th>Mult.</th><th>Cambio</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <p class="note" style="margin:8px 0 0">Probabilidad: <b>${chanceTxt(x)}</b>. Cada nivel se acumula hasta ±6; el porcentaje es el cambio sobre el valor actual del stat.</p>`:""}
+  ${ex.length?`<div class="kv" style="margin-top:${f?12:0}px">${ex.map(([a,b])=>`<div><span>${a}</span><b>${b}</b></div>`).join("")}</div>`:""}
+  ${f?`<details class="ref"><summary>Tabla de niveles (−6 a +6)</summary><div class="tbl"><table class="fxt"><thead><tr><th>Nivel</th><th>Atq · Def · At.Esp · Def.Esp · Vel</th><th>Precisión · Evasión</th></tr></thead><tbody>${[6,5,4,3,2,1,-1,-2,-3,-4,-5,-6].map(s=>`<tr><td class="${s>0?"up":"dn"}">${s>0?"+":"−"}${Math.abs(s)}</td><td>×${fmtN(stageMult("ATK",s))} (${stagePct("ATK",s)})</td><td>×${fmtN(stageMult("ACC",s))} (${stagePct("ACC",s)})</td></tr>`).join("")}</tbody></table></div></details>`:""}
+  </div>`}
+// Efectos numéricos de habilidades (curado a mano, mecánicas actuales)
+// ["s", quién, stat, niveles, cuándo]   cambio de niveles de stat
+// ["m", qué, multiplicador, cuándo]     multiplicador directo
+// ["p", qué, valor, cuándo]             porcentaje de PS / probabilidad / prioridad
+const AFX={
+ADAPTABILITY:[["m","Bonus mismo tipo (STAB)",2,"siempre · en vez de ×1,5 (+33% sobre el STAB normal)"]],
+AERILATE:[["m","Movs. Normal → Volador",1.2,"siempre"]],
+PIXILATE:[["m","Movs. Normal → Hada",1.2,"siempre"]],
+REFRIGERATE:[["m","Movs. Normal → Hielo",1.2,"siempre"]],
+GALVANIZE:[["m","Movs. Normal → Eléctrico",1.2,"siempre"]],
+DRAGONIZE:[["m","Movs. Normal → Dragón",1.2,"siempre"]],
+NORMALIZE:[["m","Todos sus movs. (pasan a Normal)",1.2,"siempre"]],
+AFTERMATH:[["p","Daño al atacante","25% de sus PS máx.","al ser debilitado por contacto"]],
+ANALYTIC:[["m","Potencia de sus movs.",1.3,"si ataca último"]],
+ANGERPOINT:[["s","U","ATK",6,"al recibir un golpe crítico (sube al máximo)"]],
+ANGERSHELL:[["s","U","ATK",1,"al bajar del 50% de PS"],["s","U","SPA",1,"al bajar del 50% de PS"],["s","U","SPE",1,"al bajar del 50% de PS"],["s","U","DEF",-1,"al bajar del 50% de PS"],["s","U","SPD",-1,"al bajar del 50% de PS"]],
+ASONECHILLINGNEIGH:[["s","U","ATK",1,"al debilitar a un rival"]],
+ASONEGRIMNEIGH:[["s","U","SPA",1,"al debilitar a un rival"]],
+AURABREAK:[["m","Movs. potenciados por auras",0.75,"invierte Aura Oscura / Feérica"]],
+BADDREAMS:[["p","Daño a rivales dormidos","12,5% de sus PS máx.","cada turno"]],
+BATTERY:[["m","Movs. especiales de aliados",1.3,"siempre"]],
+BEADSOFRUIN:[["m","Def. Esp. de los demás Pokémon",0.75,"mientras esté en combate"]],
+BEASTBOOST:[["s","U","TOP",1,"al debilitar a un rival"]],
+BERSERK:[["s","U","SPA",1,"al bajar del 50% de PS por un ataque"]],
+BLAZE:[["m","Movs. tipo Fuego",1.5,"con 1/3 o menos de PS"]],
+OVERGROW:[["m","Movs. tipo Planta",1.5,"con 1/3 o menos de PS"]],
+TORRENT:[["m","Movs. tipo Agua",1.5,"con 1/3 o menos de PS"]],
+SWARM:[["m","Movs. tipo Bicho",1.5,"con 1/3 o menos de PS"]],
+CHEEKPOUCH:[["p","Recupera PS","33% de sus PS máx.","al comer una baya"]],
+CHILLINGNEIGH:[["s","U","ATK",1,"al debilitar a un rival"]],
+GRIMNEIGH:[["s","U","SPA",1,"al debilitar a un rival"]],
+MOXIE:[["s","U","ATK",1,"al debilitar a un rival"]],
+CHLOROPHYLL:[["m","Velocidad",2,"con sol"]],
+SWIFTSWIM:[["m","Velocidad",2,"con lluvia"]],
+SANDRUSH:[["m","Velocidad",2,"con tormenta de arena"]],
+SLUSHRUSH:[["m","Velocidad",2,"con nieve / granizo"]],
+SURGESURFER:[["m","Velocidad",2,"con campo eléctrico"]],
+UNBURDEN:[["m","Velocidad",2,"tras usar o perder su objeto"]],
+COMPETITIVE:[["s","U","SPA",2,"cada vez que un rival le baja un stat"]],
+DEFIANT:[["s","U","ATK",2,"cada vez que un rival le baja un stat"]],
+COMPOUNDEYES:[["m","Precisión de sus movs.",1.3,"siempre"]],
+COTTONDOWN:[["s","T","SPE",-1,"al recibir un ataque"]],
+CURSEDBODY:[["p","Anula el mov. del atacante","30% de prob.","al recibir un ataque"]],
+CUTECHARM:[["p","Enamora al atacante","30% de prob.","al recibir contacto (sexo opuesto)"]],
+DARKAURA:[["m","Movs. Siniestro (todos)",4/3,"siempre"]],
+FAIRYAURA:[["m","Movs. Hada (todos)",4/3,"siempre"]],
+DAUNTLESSSHIELD:[["s","U","DEF",1,"al entrar en combate (1 vez)"]],
+INTREPIDSWORD:[["s","U","ATK",1,"al entrar en combate (1 vez)"]],
+DEFEATIST:[["m","Ataque y At. Esp.",0.5,"con menos del 50% de PS"]],
+DISGUISE:[["p","Daño del primer golpe","12,5% de sus PS máx.","primer ataque recibido"]],
+DOWNLOAD:[["s","U","ATKSPA",1,"al entrar (según la defensa más baja del rival)"]],
+DRAGONSMAW:[["m","Movs. tipo Dragón",1.5,"siempre"]],
+ROCKYPAYLOAD:[["m","Movs. tipo Roca",1.5,"siempre"]],
+STEELWORKER:[["m","Movs. tipo Acero",1.5,"siempre"]],
+STEELYSPIRIT:[["m","Movs. tipo Acero (usuario y aliados)",1.5,"siempre"]],
+TRANSISTOR:[["m","Movs. tipo Eléctrico",1.3,"siempre"]],
+DRYSKIN:[["m","Daño recibido de Fuego",1.25,"siempre"],["p","Recupera PS","25% de sus PS máx.","al recibir un mov. Agua (inmune)"],["p","Recupera / pierde PS","12,5% de sus PS máx.","cada turno con lluvia / con sol"]],
+EARTHEATER:[["p","Recupera PS","25% de sus PS máx.","al recibir un mov. Tierra (inmune)"]],
+VOLTABSORB:[["p","Recupera PS","25% de sus PS máx.","al recibir un mov. Eléctrico (inmune)"]],
+WATERABSORB:[["p","Recupera PS","25% de sus PS máx.","al recibir un mov. Agua (inmune)"]],
+EFFECTSPORE:[["p","Duerme, envenena o paraliza","30% de prob.","al recibir contacto"]],
+EMBODYASPECTATTACK:[["s","U","ATK",1,"al entrar en combate"]],
+EMBODYASPECTDEFENSE:[["s","U","DEF",1,"al entrar en combate"]],
+EMBODYASPECTSPDEF:[["s","U","SPD",1,"al entrar en combate"]],
+EMBODYASPECTSPEED:[["s","U","SPE",1,"al entrar en combate"]],
+ELECTROMORPHOSIS:[["m","Siguiente mov. Eléctrico",2,"tras recibir daño"]],
+WINDPOWER:[["m","Siguiente mov. Eléctrico",2,"tras recibir un mov. de viento"]],
+FILTER:[["m","Daño supereficaz recibido",0.75,"siempre"]],
+SOLIDROCK:[["m","Daño supereficaz recibido",0.75,"siempre"]],
+PRISMARMOR:[["m","Daño supereficaz recibido",0.75,"siempre"]],
+FLAREBOOST:[["m","Movs. especiales",1.5,"estando quemado"]],
+TOXICBOOST:[["m","Movs. físicos",1.5,"estando envenenado"]],
+FLASHFIRE:[["m","Movs. tipo Fuego",1.5,"tras recibir un mov. Fuego (inmune)"]],
+FLOWERGIFT:[["m","Ataque y Def. Esp. (usuario y aliados)",1.5,"con sol"]],
+FLUFFY:[["m","Daño recibido por contacto",0.5,"siempre"],["m","Daño recibido de Fuego",2,"siempre"]],
+FRIENDGUARD:[["m","Daño recibido por aliados",0.75,"siempre"]],
+FURCOAT:[["m","Daño físico recibido",0.5,"siempre (Defensa ×2)"]],
+ICESCALES:[["m","Daño especial recibido",0.5,"siempre"]],
+GALEWINGS:[["p","Prioridad movs. Volador","+1","con PS al máximo"]],
+PRANKSTER:[["p","Prioridad movs. de estado","+1","siempre"]],
+TRIAGE:[["p","Prioridad movs. curativos","+3","siempre"]],
+GOOEY:[["s","A","SPE",-1,"al recibir contacto"]],
+TANGLINGHAIR:[["s","A","SPE",-1,"al recibir contacto"]],
+GORILLATACTICS:[["m","Ataque",1.5,"siempre (solo usa el primer mov. elegido)"]],
+GRASSPELT:[["m","Defensa",1.5,"con campo de hierba"]],
+GUARDDOG:[["s","U","ATK",1,"al recibir Intimidación"]],
+GUTS:[["m","Ataque",1.5,"con problema de estado"]],
+MARVELSCALE:[["m","Defensa",1.5,"con problema de estado"]],
+QUICKFEET:[["m","Velocidad",1.5,"con problema de estado"]],
+HADRONENGINE:[["m","At. Esp.",4/3,"con campo eléctrico"]],
+ORICHALCUMPULSE:[["m","Ataque",4/3,"con sol"]],
+HARVEST:[["p","Recupera la baya usada","50% de prob. (100% con sol)","cada turno"]],
+HEALER:[["p","Cura el estado de un aliado","30% de prob.","cada turno"]],
+SHEDSKIN:[["p","Cura su propio estado","30% de prob.","cada turno"]],
+HEATPROOF:[["m","Daño recibido de Fuego",0.5,"siempre"]],
+HOSPITALITY:[["p","Cura a un aliado","25% de sus PS máx.","al entrar en combate"]],
+HUGEPOWER:[["m","Ataque",2,"siempre"]],
+PUREPOWER:[["m","Ataque",2,"siempre"]],
+HUSTLE:[["m","Ataque",1.5,"siempre"],["m","Precisión movs. físicos",0.8,"siempre"]],
+ICEBODY:[["p","Recupera PS","6,25% de sus PS máx.","cada turno con nieve / granizo"]],
+RAINDISH:[["p","Recupera PS","6,25% de sus PS máx.","cada turno con lluvia"]],
+INTIMIDATE:[["s","R","ATK",-1,"al entrar en combate"]],
+IRONBARBS:[["p","Daño al atacante","12,5% de sus PS máx.","al recibir contacto"]],
+ROUGHSKIN:[["p","Daño al atacante","12,5% de sus PS máx.","al recibir contacto"]],
+IRONFIST:[["m","Movs. de puño",1.2,"siempre"]],
+RECKLESS:[["m","Movs. con daño de retroceso",1.2,"siempre"]],
+JUSTIFIED:[["s","U","ATK",1,"al recibir un mov. Siniestro"]],
+LIGHTNINGROD:[["s","U","SPA",1,"al recibir un mov. Eléctrico (inmune)"]],
+STORMDRAIN:[["s","U","SPA",1,"al recibir un mov. Agua (inmune)"]],
+MOTORDRIVE:[["s","U","SPE",1,"al recibir un mov. Eléctrico (inmune)"]],
+SAPSIPPER:[["s","U","ATK",1,"al recibir un mov. Planta (inmune)"]],
+THERMALEXCHANGE:[["s","U","ATK",1,"al recibir un mov. Fuego"]],
+WINDRIDER:[["s","U","ATK",1,"al recibir un mov. de viento o con Viento Afín (inmune)"]],
+WATERCOMPACTION:[["s","U","DEF",2,"al recibir un mov. Agua"]],
+WELLBAKEDBODY:[["s","U","DEF",2,"al recibir un mov. Fuego (inmune)"]],
+STEAMENGINE:[["s","U","SPE",6,"al recibir un mov. Fuego o Agua"]],
+STAMINA:[["s","U","DEF",1,"cada vez que recibe un ataque"]],
+STEADFAST:[["s","U","SPE",1,"cada vez que retrocede"]],
+RATTLED:[["s","U","SPE",1,"al recibir un mov. Siniestro, Bicho o Fantasma, o Intimidación"]],
+SOULHEART:[["s","U","SPA",1,"cada vez que cae un Pokémon"]],
+SPEEDBOOST:[["s","U","SPE",1,"al final de cada turno"]],
+MOODY:[["s","U","RND",2,"al final de cada turno"],["s","U","RND",-1,"al final de cada turno"]],
+WEAKARMOR:[["s","U","DEF",-1,"al recibir un ataque físico"],["s","U","SPE",2,"al recibir un ataque físico"]],
+SUPERSWEETSYRUP:[["s","R","EVA",-1,"al entrar en combate (1 vez)"]],
+SUPERLUCK:[["s","U","CRIT",1,"siempre"]],
+MEGALAUNCHER:[["m","Movs. de pulso y aura",1.5,"siempre"]],
+STRONGJAW:[["m","Movs. de mordisco",1.5,"siempre"]],
+SHARPNESS:[["m","Movs. cortantes",1.5,"siempre"]],
+TECHNICIAN:[["m","Movs. de potencia 60 o menos",1.5,"siempre"]],
+TOUGHCLAWS:[["m","Movs. de contacto",1.3,"siempre"]],
+SHEERFORCE:[["m","Movs. con efecto secundario",1.3,"pierden el efecto"]],
+SANDFORCE:[["m","Movs. Tierra, Roca y Acero",1.3,"con tormenta de arena"]],
+PUNKROCK:[["m","Movs. de sonido",1.3,"siempre"],["m","Daño recibido de sonido",0.5,"siempre"]],
+MINUS:[["m","At. Esp.",1.5,"con un aliado con Más o Menos"]],
+PLUS:[["m","At. Esp.",1.5,"con un aliado con Más o Menos"]],
+MULTISCALE:[["m","Daño recibido",0.5,"con PS al máximo"]],
+SHADOWSHIELD:[["m","Daño recibido",0.5,"con PS al máximo"]],
+NEUROFORCE:[["m","Daño supereficaz",1.25,"siempre"]],
+PARENTALBOND:[["m","Segundo golpe",0.25,"ataca 2 veces"]],
+POWERSPOT:[["m","Movs. de aliados",1.3,"siempre"]],
+POISONHEAL:[["p","Recupera PS","12,5% de sus PS máx.","cada turno envenenado"]],
+POISONPOINT:[["p","Envenena al atacante","30% de prob.","al recibir contacto"]],
+STATIC:[["p","Paraliza al atacante","30% de prob.","al recibir contacto"]],
+FLAMEBODY:[["p","Quema al atacante","30% de prob.","al recibir contacto"]],
+POISONTOUCH:[["p","Envenena al objetivo","30% de prob.","al atacar con contacto"]],
+TOXICCHAIN:[["p","Envenena gravemente","30% de prob.","al atacar"]],
+STENCH:[["p","Hace retroceder","10% de prob.","al atacar"]],
+QUICKDRAW:[["p","Ataca primero","30% de prob.","en su prioridad"]],
+PICKUP:[["p","Encuentra un objeto","10% de prob.","tras cada combate"]],
+PROTOSYNTHESIS:[["m","Su stat más alto",1.3,"con sol o Energía Potenciadora (×1,5 si es Velocidad)"]],
+QUARKDRIVE:[["m","Su stat más alto",1.3,"con campo eléctrico o Energía Potenciadora (×1,5 si es Velocidad)"]],
+REGENERATOR:[["p","Recupera PS","33% de sus PS máx.","al retirarse del combate"]],
+RIVALRY:[["m","Daño a mismo sexo",1.25,"siempre"],["m","Daño a sexo opuesto",0.75,"siempre"]],
+SANDVEIL:[["m","Precisión de rivales",0.8,"con tormenta de arena"]],
+SNOWCLOAK:[["m","Precisión de rivales",0.8,"con nieve / granizo"]],
+SERENEGRACE:[["m","Prob. de efectos secundarios",2,"siempre"]],
+SLOWSTART:[["m","Ataque y Velocidad",0.5,"primeros 5 turnos"]],
+SNIPER:[["m","Daño de golpes críticos",1.5,"crítico ×2,25 en vez de ×1,5"]],
+SOLARPOWER:[["m","At. Esp.",1.5,"con sol"],["p","Pierde PS","12,5% de sus PS máx.","cada turno con sol"]],
+STAKEOUT:[["m","Daño a Pokémon recién entrado",2,"si el rival entró ese turno"]],
+SUPREMEOVERLORD:[["m","Ataque y At. Esp.",1.1,"por cada aliado debilitado (máx. 5 → ×1,5)"]],
+SWORDOFRUIN:[["m","Defensa de los demás Pokémon",0.75,"mientras esté en combate"]],
+TABLETSOFRUIN:[["m","Ataque de los demás Pokémon",0.75,"mientras esté en combate"]],
+VESSELOFRUIN:[["m","At. Esp. de los demás Pokémon",0.75,"mientras esté en combate"]],
+TANGLEDFEET:[["m","Precisión de rivales",0.5,"estando confuso"]],
+THICKFAT:[["m","Daño recibido de Fuego y Hielo",0.5,"siempre"]],
+TINTEDLENS:[["m","Daño poco eficaz",2,"siempre"]],
+VICTORYSTAR:[["m","Precisión (usuario y aliados)",1.1,"siempre"]],
+WATERBUBBLE:[["m","Movs. tipo Agua",2,"siempre"],["m","Daño recibido de Fuego",0.5,"siempre"]],
+WONDERSKIN:[["p","Precisión máx. de movs. de estado rivales","50%","siempre"]],
+SIMPLE:[["m","Todos sus cambios de niveles",2,"ej.: +1 cuenta como +2 (+100% en vez de +50%)"]],
+};
+
+const AWHO={U:"Usuario",R:"Rival(es)",A:"Atacante",T:"Todos los demás"};
+const pctM=m=>{const p=Math.round((m-1)*100);return (p>0?"+":"−")+Math.abs(p)+"%"};
+function afxShort(c){const f=AFX[c];if(!f)return"";
+  return `<span class="fx">${f.map(e=>{
+    if(e[0]==="s")return `<span class="who">${e[1]==="U"?"":AWHO[e[1]]}</span><i class="${e[3]>0?"up":"dn"}">${e[3]>0?"▲":"▼"}${STS[e[2]]} ${stagePct(e[2],e[3])}</i>`;
+    if(e[0]==="m")return `<i class="${e[2]>=1?"up":"dn"}">${esc(e[1])} ×${fmtN(e[2])} (${pctM(e[2])})</i>`;
+    return `<i class="nt">${esc(e[1])}: ${esc(e[2])}</i>`}).join("")}</span>`}
+function abRow(c){const a=A[c];const n=(abUsers[c]||[]).length;
+  return `<button class="mv" data-ab="${c}"><span><span class="nm">${esc(a[0]||c)}</span>${a[2]?`<span class="en">${esc(a[2])}</span>`:""}${afxShort(c)}</span><span class="nums">${n}<small>POKÉMON</small></span></button>`}
+function stageRef(){return `<details class="ref"><summary>Tabla de niveles (−6 a +6)</summary><div class="tbl"><table class="fxt"><thead><tr><th>Nivel</th><th>Atq · Def · At.Esp · Def.Esp · Vel</th><th>Precisión · Evasión</th></tr></thead><tbody>${[6,5,4,3,2,1,-1,-2,-3,-4,-5,-6].map(s=>`<tr><td class="${s>0?"up":"dn"}">${s>0?"+":"−"}${Math.abs(s)}</td><td>×${fmtN(stageMult("ATK",s))} (${stagePct("ATK",s)})</td><td>×${fmtN(stageMult("ACC",s))} (${stagePct("ACC",s)})</td></tr>`).join("")}</tbody></table></div></details>`}
+function afxCard(c){const f=AFX[c];if(!f)return `<div class="card"><h3>Efectos</h3><p class="note" style="margin:0">Esta habilidad no tiene un efecto numérico: funciona como describe el texto (inmunidades, clima, cambios de forma, etc.).</p></div>`;
+  const S1=f.filter(e=>e[0]==="s"),M1=f.filter(e=>e[0]==="m"),P1=f.filter(e=>e[0]==="p");
+  return `<div class="card"><h3>Efectos</h3>
+  ${S1.length?`<div class="tbl"><table class="fxt"><thead><tr><th>Afecta a</th><th>Stat</th><th>Niveles</th><th>Mult.</th><th>Cambio</th></tr></thead><tbody>${S1.map(e=>`<tr><td>${AWHO[e[1]]}</td><td>${STN[e[2]]}<small>${esc(e[4])}</small></td><td class="${e[3]>0?"up":"dn"}">${e[3]>0?"+":"−"}${Math.abs(e[3])}</td><td>${e[2]==="CRIT"?"—":"×"+fmtN(stageMult(e[2],e[3]))}</td><td class="${e[3]>0?"up":"dn"}"><b>${stagePct(e[2],e[3])}</b></td></tr>`).join("")}</tbody></table></div>`:""}
+  ${M1.length?`<div class="tbl" style="margin-top:${S1.length?10:0}px"><table class="fxt"><thead><tr><th>Qué cambia</th><th>Mult.</th><th>Cambio</th></tr></thead><tbody>${M1.map(e=>`<tr><td>${esc(e[1])}<small>${esc(e[3])}</small></td><td>×${fmtN(e[2])}</td><td class="${e[2]>=1?"up":"dn"}"><b>${pctM(e[2])}</b></td></tr>`).join("")}</tbody></table></div>`:""}
+  ${P1.length?`<div class="kv" style="margin-top:${S1.length||M1.length?12:0}px">${P1.map(e=>`<div><span>${esc(e[1])}</span><b>${esc(e[2])}</b><small class="note" style="display:block">${esc(e[3])}</small></div>`).join("")}</div>`:""}
+  ${S1.length?`<p class="note" style="margin:8px 0 0">Los niveles se acumulan hasta ±6; el porcentaje es el cambio sobre el valor actual del stat.</p>${stageRef()}`:""}
+  ${M1.length&&!S1.length?`<p class="note" style="margin:8px 0 0">Los multiplicadores se aplican aparte de los niveles de stats y se combinan multiplicando.</p>`:""}
+  </div>`}
+function abilView(v){const a=A[v.c]||[v.c,""];v.at=v.at||"a";const us=abUsers[v.c]||[];
+  const g={a:us.filter(r=>!r[1]),h:us.filter(r=>r[1])};const cur=g[v.at];
+  return `<div class="mhero"><h2>${esc(a[0])}</h2>${a[2]?`<div class="en-big"><span>EN</span>${esc(a[2])}</div>`:""}</div>
+  <p class="dx">${esc(a[1]||"")}</p>
+  ${afxCard(v.c)}
+  <div class="card"><h3>La tienen · ${us.length} Pokémon</h3>
+  <div class="seg"><button data-at="a" aria-selected="${v.at==="a"}">Normal · ${g.a.length}</button><button data-at="h" aria-selected="${v.at==="h"}">Oculta · ${g.h.length}</button></div>
+  <div class="learn">${cur.length?cur.map(r=>{const p=P[r[0]];return `<button class="item" data-p="${r[0]}">${disc(p)}<span><span class="nm">${esc(p.n)}</span><span class="sub">${p.t.map(tchip).join("")}</span></span><span class="metric"><b>${p.b}</b><span>TOTAL</span></span></button>`}).join(""):`<div class="empty">Ningún Pokémon la tiene de esta forma.</div>`}</div></div>`}
+const lvLab=l=>l===0?"Evo":l<0?"Rec.":l;
+function moveRow(c,lv){const x=M[c]||[c];
+  return `<button class="mv" data-m="${c}">${lv!=null?`<span class="lv">${lvLab(lv)}</span>`:""}<span><span class="nm">${esc(x[0])}</span>${x[10]?`<span class="en">${esc(x[10])}</span>`:""}<span class="sub">${x[1]?tchip(x[1]):""}<span class="catg">${CAT[x[2]]||""}</span></span>${fxShort(x)}</span><span class="nums">${nn(x[3])} / ${nn(x[4])} / ${nn(x[5])}<small>POT / PREC / PP</small></span></button>`}
+
+function statBars(st,b){
+  return `<div class="stats">${st.map((v,i)=>`<span class="l">${SL[i]}</span><span class="v">${nn(v)}</span><span class="track"><span class="fill ${v<60?"lo":v>=110?"hi":""}" style="width:${Math.min(100,(v||0)/200*100)}%;display:block"></span></span>`).join("")}</div><div class="total"><span>Total de estadísticas base</span><b>${nn(b)}</b></div>`}
+
+function compareView(a,b){
+  const row=(i)=>{const x=a.st[i]||0,y=b.st[i]||0;
+    return `<div class="side l"><span class="n ${x>y?"win":""}">${x}</span><span class="track"><span class="fill" style="width:${Math.min(100,x/200*100)}%;display:block"></span></span></div><div class="lab">${SL[i]}</div><div class="side"><span class="n ${y>x?"win":""}">${y}</span><span class="track"><span class="fill" style="width:${Math.min(100,y/200*100)}%;display:block"></span></span></div>`};
+  const d=(a.b||0)-(b.b||0);
+  const ma=defMult(a.t),mb=defMult(b.t);
+  const weak=(mm)=>TK.filter(t=>mm[t]>1).map(tchip).join(" ")||"—";
+  return `<div style="display:flex;flex-direction:column;gap:14px">
+  <div class="cmp-head"><div>${disc(a)}<b>${esc(a.n)}</b><span class="sub">${a.t.map(tchip).join("")}</span></div><div>${disc(b)}<b>${esc(b.n)}</b><span class="sub">${b.t.map(tchip).join("")}</span></div></div>
+  <div class="card"><h3>Estadísticas base</h3><div class="cmp">${SK.map((k,i)=>row(i)).join("")}</div>
+  <div class="total"><span>Total: ${a.b} vs ${b.b}</span><b>${d===0?"Empate":(d>0?esc(a.n):esc(b.n))+" +"+Math.abs(d)}</b></div></div>
+  <div class="card"><h3>Débil frente a</h3><div class="kv"><div><span>${esc(a.n)}</span><div class="sub">${weak(ma)}</div></div><div><span>${esc(b.n)}</span><div class="sub">${weak(mb)}</div></div></div></div>
+  <div class="card"><h3>Ventaja de tipo</h3><p class="dx">${typeEdge(a,b)}<br>${typeEdge(b,a)}</p></div>
+  <p class="note">Toca el nombre en la ficha de cualquier Pokémon y usa “Comparar” para cargarlo aquí.</p></div>`}
+function typeEdge(a,b){const mm=defMult(b.t);const best=Math.max(...a.t.map(t=>mm[t]));
+  const txt=best===0?"no le hace daño con sus tipos":best>=4?"le hace daño ×4 con su tipo":best>=2?"le hace daño ×2 con su tipo":best<1?"solo le hace daño reducido con su tipo":"le hace daño neutro con su tipo";
+  return `<b>${esc(a.n)}</b> ${txt} (STAB).`}
+
+// ---------- stack sheet ----------
+const stack=[];
+function openView(v){stack.push(v);renderSheet()}
+function back(){stack.pop();renderSheet()}
+function renderSheet(){
+  const sh=$("sheet");
+  if(!stack.length){sh.hidden=true;return}
+  sh.hidden=false; const v=stack[stack.length-1];
+  $("sheetIn").innerHTML=`<div class="bar"><button class="back" data-back><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m15 18-6-6 6-6"/></svg>${stack.length>1?"Atrás":"Volver"}</button><span class="t">${v.k==="p"?"Nº "+pad(P[v.i].id):v.k==="a"?"Habilidad":"Movimiento"}</span></div><div class="body" id="sbody">${v.k==="p"?pokeView(v):v.k==="a"?abilView(v):moveView(v)}</div>`;
+  $("sbody").scrollTop=v.scroll||0;
+  updateSim();
+}
+function pokeView(v){
+  const p=P[v.i]; v.tab=v.tab||"lv"; v.ft=v.ft||"";
+  const flags=p.fl.map(f=>FLG[f]).filter(Boolean);if(p.fk)flags.unshift(FKN[p.fk]);
+  const sibs=P.map((q,i)=>[q,i]).filter(([q,i])=>q.id===p.id&&i!==v.i);
+  const mm=defMult(p.t); const grp={};Object.entries(mm).forEach(([t,m])=>{if(m!==1)(grp[m]=grp[m]||[]).push(t)});
+  const effRows=[[4,"×4","w"],[2,"×2","w"],[.5,"×½","s"],[.25,"×¼","s"],[0,"×0","s"]].filter(r=>grp[r[0]]).map(r=>`<div class="r"><span class="x ${r[2]}">${r[1]}</span><div class="sub">${grp[r[0]].map(tchip).join("")}</div></div>`).join("");
+  // evolution
+  const evoBtns=[]; const pr=pre[p.c];
+  if(pr){const q=P[pr[0]];evoBtns.push(`<button data-p="${pr[0]}">${disc(q)}<span><b>${esc(q.n)}</b><small>Evoluciona desde · ${evoText(pr[1],pr[2])}</small></span></button>`)}
+  p.ev.forEach(e=>{const i=byCode[e[0]];if(i==null)return;const q=P[i];evoBtns.push(`<button data-p="${i}">${disc(q)}<span><b>${esc(q.n)}</b><small>Evoluciona a · ${evoText(e[1],e[2])}</small></span></button>`)});
+  let list=v.tab==="lv"?p.lv.map(([l,c])=>[c,l]):(v.tab==="tm"?p.tm:p.em).map(c=>[c,null]);
+  if(v.tab!=="lv")list.sort((a,b)=>mname(a[0]).localeCompare(mname(b[0])));
+  if(v.ft)list=list.filter(([c])=>M[c]&&M[c][1]===v.ft);
+  const ab=[...p.a.map(c=>[c,0]),...p.ha.map(c=>[c,1])];
+  return `<div class="hero">${disc(p)}<div><h2>${esc(p.n)}</h2><div class="cat">Pokémon ${esc(p.cat||"")}${p.fn&&p.fn!==p.n?" · "+esc(p.fn):""}</div><div class="sub" style="margin-top:6px">${p.t.map(tchip).join("")}${flags.map(f=>`<span class="flag">${f}</span>`).join("")}</div></div></div>
+  ${p.dx?`<p class="dx">${esc(p.dx)}</p>`:""}
+  <div class="card"><h3>Estadísticas base</h3>${statBars(p.st,p.b)}<div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap"><button class="link" data-cmp="A">Comparar como A</button><button class="link" data-cmp="B">Comparar como B</button><a class="link" href="batalla.html?add=${encodeURIComponent(p.c)}" style="text-decoration:none">Agregar a mi equipo de batalla</a></div></div>
+  ${simCard(v,p)}
+  <div class="card"><h3>Debilidades y resistencias</h3><div class="eff">${effRows}</div></div>
+  <div class="card"><h3>Habilidades</h3><div class="abil">${ab.map(([c,h])=>`<button class="abbtn" data-ab="${c}"><b>${esc(aname(c))}</b>${h?"<em>Oculta</em>":""}${A[c]&&A[c][2]?`<span class="en">${esc(A[c][2])}</span>`:""}<p>${esc((A[c]&&A[c][1])||"")}</p>${afxShort(c)}</button>`).join("")||"—"}</div></div>
+  ${sibs.length?`<div class="card"><h3>Formas · ${sibs.length+1}</h3><div class="evo">${sibs.map(([q,i])=>`<button data-p="${i}">${disc(q)}<span><b>${esc(q.n)}</b><small>${q.fk?FKN[q.fk]:"Forma base"}${q.fn&&q.fn!==q.n&&q.fn!==FKN[q.fk]&&q.fn!=="Gigamax"?" · "+esc(q.fn):""} · Total ${q.b}${q.b!==p.b?` (${q.b>p.b?"+":"−"}${Math.abs(q.b-p.b)})`:""}</small></span></button>`).join("")}</div>${p.fk==="mega"||p.fk==="gmax"?`<p class="note" style="margin:8px 0 0">${p.fk==="mega"?"Transformación solo en combate con su megapiedra.":"Transformación solo en combate con Gigamax."} Usa los movimientos de su especie.</p>`:""}</div>`:""}
+  ${evoBtns.length?`<div class="card"><h3>Evolución</h3><div class="evo">${evoBtns.join("")}</div></div>`:""}
+  <div class="card"><h3>Datos</h3><div class="kv">
+    <div><span>Altura</span><b>${nn(p.h)} m</b></div><div><span>Peso</span><b>${nn(p.w)} kg</b></div>
+    <div><span>Generación</span><b>${nn(p.g)}</b></div><div><span>Ratio de captura</span><b>${nn(p.cr)}</b></div>
+    <div><span>Género</span><b>${GEN[p.gr]||nn(p.gr)}</b></div><div><span>Crecimiento</span><b>${GROW[p.gw]||nn(p.gw)}</b></div>
+    <div><span>Grupos huevo</span><b>${p.eg.join(", ")||"—"}</b></div><div><span>Pasos eclosión</span><b>${p.hs?p.hs.toLocaleString("es-CL"):"—"}</b></div>
+    <div><span>Exp. base</span><b>${nn(p.be)}</b></div><div><span>Amistad base</span><b>${nn(p.hp)}</b></div>
+    <div><span>EVs que otorga</span><b>${evsText(p.evs)}</b></div><div><span>Hábitat · Color</span><b>${HAB[p.hab]||nn(p.hab)} · ${COL[p.col]||nn(p.col)}</b></div>
+  </div></div>
+  <div class="card"><h3>Movimientos</h3>
+    <div class="seg" role="tablist"><button data-mt="lv" aria-selected="${v.tab==="lv"}">Por nivel · ${p.lv.length}</button><button data-mt="tm" aria-selected="${v.tab==="tm"}">MT/Tutor · ${p.tm.length}</button><button data-mt="em" aria-selected="${v.tab==="em"}">Huevo · ${p.em.length}</button></div>
+    <div class="row" style="margin-top:10px"><select id="ft" aria-label="Filtrar por tipo"><option value="">Todos los tipos</option>${TK.map(t=>`<option value="${t}" ${v.ft===t?"selected":""}>${TY[t][0]}</option>`).join("")}</select></div>
+    <div class="mvlist">${list.length?list.map(([c,l])=>moveRow(c,l)).join(""):`<div class="empty">Sin movimientos en esta lista.</div>`}</div>
+  </div>`;
+}
+// ---------- IV / EV simulator ----------
+const NAT=[["Fuerte","Hardy",0,0],["Huraña","Lonely",1,2],["Audaz","Brave",1,5],["Firme","Adamant",1,3],["Pícara","Naughty",1,4],
+["Osada","Bold",2,1],["Dócil","Docile",0,0],["Plácida","Relaxed",2,5],["Agitada","Impish",2,3],["Floja","Lax",2,4],
+["Miedosa","Timid",5,1],["Activa","Hasty",5,2],["Seria","Serious",0,0],["Alegre","Jolly",5,3],["Ingenua","Naive",5,4],
+["Modesta","Modest",3,1],["Afable","Mild",3,2],["Mansa","Quiet",3,5],["Tímida","Bashful",0,0],["Alocada","Rash",3,4],
+["Serena","Calm",4,1],["Amable","Gentle",4,2],["Grosera","Sassy",4,5],["Cauta","Careful",4,3],["Rara","Quirky",0,0]];
+function calcStat(i,B,iv,ev,L,mod,p){
+  if(i===0){if(p.c==="SHEDINJA")return 1;return Math.floor((2*B+iv+Math.floor(ev/4))*L/100)+L+10}
+  return Math.floor((Math.floor((2*B+iv+Math.floor(ev/4))*L/100)+5)*mod)}
+function natMod(n,i){const x=NAT[n];if(!x||x[2]===x[3])return 1;return x[2]===i?1.1:x[3]===i?0.9:1}
+function simState(v){return v.sim||(v.sim={lv:50,nat:0,iv:[31,31,31,31,31,31],ev:[0,0,0,0,0,0]})}
+function simCard(v,p){
+  const s=simState(v);
+  const nat=NAT.map((n,i)=>`<option value="${i}" ${s.nat==i?"selected":""}>${n[0]} (${n[1]})${n[2]!==n[3]?` · +${SL[n[2]]} −${SL[n[3]]}`:" · neutra"}</option>`).join("");
+  const rows=SK.map((k,i)=>`<div class="nm2">${SL[i]}<small>base ${p.st[i]}</small></div>
+    <input id="sim-iv-${i}" type="number" inputmode="numeric" min="0" max="31" value="${s.iv[i]}" aria-label="IV ${SL[i]}">
+    <input id="sim-ev-${i}" type="number" inputmode="numeric" min="0" max="252" step="4" value="${s.ev[i]}" aria-label="EV ${SL[i]}">
+    <span class="fin" id="sim-f-${i}">0</span>
+    <div class="rng"><span id="sim-mn-${i}">0</span><span class="track"><span class="fill" id="sim-b-${i}" style="display:block;width:0"></span></span><span id="sim-mx-${i}">0</span></div>`).join("");
+  return `<div class="card" id="simcard"><h3>Simulador de IVs y EVs</h3>
+  <div class="sim-top"><div><label for="sim-lv">Nivel</label><input id="sim-lv" type="number" inputmode="numeric" min="1" max="100" value="${s.lv}"></div>
+  <div><label for="sim-nat">Naturaleza</label><select id="sim-nat">${nat}</select></div></div>
+  <div class="simg"><span class="h">Stat</span><span class="h">IV</span><span class="h">EV</span><span class="h" style="text-align:right">Final</span>${rows}</div>
+  <div class="evtot"><span>EVs usados</span><span class="track"><span class="fill" id="sim-evbar" style="display:block;width:0"></span></span><b id="sim-evt">0 / 510</b></div>
+  <div class="sim-btns"><button data-sim="iv31">IVs 31</button><button data-sim="iv0">IVs 0</button><button data-sim="ev0">EVs a 0</button><button data-sim="lv50">Nivel 50</button><button data-sim="lv100">Nivel 100</button></div>
+  <p class="note">La barra de cada stat muestra dónde queda tu valor entre el mínimo posible (IV 0, EV 0, naturaleza en contra) y el máximo (IV 31, EV 252, naturaleza a favor) a ese nivel. Máximo 252 EVs por stat y 510 en total.</p></div>`;
+}
+function updateSim(){
+  const v=stack[stack.length-1]; if(!v||v.k!=="p"||!$("sim-f-0"))return;
+  const p=P[v.i], s=simState(v); const L=s.lv;
+  const tot=s.ev.reduce((a,b)=>a+b,0);
+  SK.forEach((k,i)=>{
+    const B=p.st[i]||0, m=natMod(s.nat,i);
+    const f=calcStat(i,B,s.iv[i],s.ev[i],L,m,p);
+    const mn=calcStat(i,B,0,0,L,i?0.9:1,p), mx=calcStat(i,B,31,252,L,i?1.1:1,p);
+    const el=$("sim-f-"+i); el.textContent=f; el.className="fin"+(m>1?" up":m<1?" dn":"");
+    $("sim-mn-"+i).textContent=mn; $("sim-mx-"+i).textContent=mx;
+    $("sim-b-"+i).style.width=(mx>mn?Math.max(2,(f-mn)/(mx-mn)*100):100)+"%";
+  });
+  const t=$("sim-evt"); t.textContent=`${tot} / 510`; t.className=tot>510?"over":"";
+  $("sim-evbar").style.width=Math.min(100,tot/510*100)+"%";
+}
+function simInput(el){
+  const v=stack[stack.length-1]; if(!v||!v.sim)return; const s=v.sim; const id=el.id;
+  const raw=el.value.trim(); let n=raw===""?0:Math.floor(+raw)||0;
+  if(id==="sim-lv"){n=Math.max(1,Math.min(100,n));s.lv=n;if(raw!==""&&+raw!==n)el.value=n}
+  else if(id==="sim-nat"){s.nat=+el.value}
+  else{const [,kind,idx]=id.split("-");const i=+idx;
+    if(kind==="iv"){n=Math.max(0,Math.min(31,n));s.iv[i]=n}
+    else{const others=s.ev.reduce((a,b,j)=>j===i?a:a+b,0);n=Math.max(0,Math.min(252,n,510-others));s.ev[i]=n}
+    if(raw!==""&&+raw!==n)el.value=n}
+  updateSim();
+}
+function evoText(m,x){const lab=EVM[m]||m;if(!x)return lab;if(/^\d+$/.test(x))return `${lab} ${x}`;return `${lab} ${human(x)}`}
+function evsText(s){if(!s)return"—";const a=s.split(",");const L={HP:"PS",ATTACK:"Ataque",DEFENSE:"Defensa",SPECIAL_ATTACK:"At. Esp.",SPECIAL_DEFENSE:"Def. Esp.",SPEED:"Velocidad"};const o=[];for(let i=0;i<a.length;i+=2)o.push(`${a[i+1]} ${L[a[i]]||a[i]}`);return o.join(", ")}
+function moveView(v){
+  const x=M[v.c]; const ls=(learn[v.c]||[]); v.lt=v.lt||"lv";
+  const g={lv:[],tm:[],em:[]}; ls.forEach(r=>g[r[1]].push(r));
+  g.lv.sort((a,b)=>a[2]-b[2]||P[a[0]].id-P[b[0]].id); g.tm.sort((a,b)=>P[a[0]].id-P[b[0]].id); g.em.sort((a,b)=>P[a[0]].id-P[b[0]].id);
+  const cur=g[v.lt];
+  return `<div class="mhero"><h2>${esc(x[0])}</h2>${x[10]?`<div class="en-big"><span>EN</span>${esc(x[10])}</div>`:""}<div class="sub">${tchip(x[1])}<span class="catg">${CAT[x[2]]||""}</span>${x[7]?`<span class="flag">Prioridad ${x[7]>0?"+":""}${x[7]}</span>`:""}</div></div>
+  <div class="big"><div><b>${nn(x[3])}</b><span>Potencia</span></div><div><b>${nn(x[4])}</b><span>Precisión</span></div><div><b>${nn(x[5])}</b><span>PP</span></div><div><b>${x[8]?x[8]+"%":"—"}</b><span>Efecto</span></div></div>
+  <p class="dx">${esc(x[6]||"")}</p>
+  ${fxCard(x)}
+  <div class="card"><h3>Lo aprenden · ${new Set(ls.map(r=>r[0])).size} Pokémon</h3>
+  <div class="seg"><button data-lt="lv" aria-selected="${v.lt==="lv"}">Nivel · ${g.lv.length}</button><button data-lt="tm" aria-selected="${v.lt==="tm"}">MT/Tutor · ${g.tm.length}</button><button data-lt="em" aria-selected="${v.lt==="em"}">Huevo · ${g.em.length}</button></div>
+  <div class="learn">${cur.length?cur.map(r=>{const p=P[r[0]];return `<button class="item" data-p="${r[0]}">${disc(p)}<span><span class="nm">${esc(p.n)}</span><span class="sub">${p.t.map(tchip).join("")}</span></span><span class="metric">${r[1]==="lv"?`<b>${lvLab(r[2])}</b><span>NIVEL</span>`:""}</span></button>`}).join(""):`<div class="empty">Ningún Pokémon lo aprende por esta vía.</div>`}</div></div>`;
+}
+
+// ---------- events ----------
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button"); if(!t)return;
+  if(t.dataset.tab){S.tab=t.dataset.tab;document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b===t));save();renderTop();renderMain();$("main").scrollTop=0;return}
+  if(t.dataset.back!=null){back();return}
+  const top=stack[stack.length-1];
+  if(t.dataset.p!=null){if(top)top.scroll=$("sbody").scrollTop;openView({k:"p",i:+t.dataset.p});return}
+  if(t.dataset.ab){if(top)top.scroll=$("sbody").scrollTop;openView({k:"a",c:t.dataset.ab});return}
+  if(t.dataset.at&&top){top.at=t.dataset.at;top.scroll=$("sbody").scrollTop;renderSheet();return}
+  if(t.dataset.m){if(top)top.scroll=$("sbody").scrollTop;openView({k:"m",c:t.dataset.m});return}
+  if(t.dataset.sim&&top&&top.sim){const s=top.sim,a=t.dataset.sim;
+    if(a==="iv31")s.iv=[31,31,31,31,31,31];else if(a==="iv0")s.iv=[0,0,0,0,0,0];else if(a==="ev0")s.ev=[0,0,0,0,0,0];else if(a==="lv50")s.lv=50;else if(a==="lv100")s.lv=100;
+    top.scroll=$("sbody").scrollTop;renderSheet();return}
+  if(t.dataset.mt&&top){top.tab=t.dataset.mt;top.scroll=$("sbody").scrollTop;renderSheet();return}
+  if(t.dataset.lt&&top){top.lt=t.dataset.lt;top.scroll=$("sbody").scrollTop;renderSheet();return}
+  if(t.dataset.cmp&&top){S["c"+t.dataset.cmp]=top.i;S.tab="cmp";stack.length=0;renderSheet();document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab==="cmp"));save();renderTop();renderMain();return}
+  const chips=t.closest("[data-chips]");
+  if(chips){S[chips.dataset.chips]=t.dataset.v;chips.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",c===t));save();renderMain();$("main").scrollTop=0}
+});
+document.addEventListener("input",e=>{
+  const id=e.target.id;
+  if(id&&id.startsWith("sim-")){simInput(e.target);return}
+  if(id==="q"){S.q=e.target.value;renderMain()}
+  else if(id==="mq"){S.mq=e.target.value;renderMain()}
+  else if(id==="aq"){S.aq=e.target.value;renderMain()}
+});
+document.addEventListener("change",e=>{
+  const id=e.target.id,v=e.target.value;
+  if(id==="gen"){S.gen=v;save();renderMain()}
+  else if(id==="sort"){S.sort=v;save();renderMain()}
+  else if(id==="fk"){S.fk=v;save();renderMain()}
+  else if(id==="mcat"){S.mcat=v;save();renderMain()}
+  else if(id==="af"){S.af=v;save();renderMain()}
+  else if(id==="cA"||id==="cB"){S[id]=+v;save();renderMain()}
+  else if(id==="ft"){const top=stack[stack.length-1];top.ft=v;top.scroll=$("sbody").scrollTop;renderSheet()}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&stack.length)back()});
+document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===S.tab));
+renderTop();renderMain();
+</script>
+<div id="zoom" hidden><img alt=""></div>
+<script>
+{const st=document.createElement("style");st.textContent=`#zoom{position:fixed;z-index:50;pointer-events:none;width:240px;height:240px;border-radius:20px;background:var(--surface);border:1px solid var(--line);box-shadow:0 10px 40px rgba(0,0,0,.25);display:grid;place-items:center;padding:12px;opacity:0;transform:scale(.85);transition:opacity .12s,transform .12s}
+#zoom.on{opacity:1;transform:none}
+#zoom img{width:100%;height:100%;object-fit:contain}
+#zoom.full{pointer-events:auto;inset:0;width:auto;height:auto;border-radius:0;background:rgba(10,12,20,.82);border:0;padding:24px;cursor:zoom-out}
+#zoom.full img{max-width:min(92vw,560px);max-height:80vh;filter:drop-shadow(0 8px 30px rgba(0,0,0,.5))}
+.hero .disc.im{cursor:zoom-in}
+@media (hover:hover){.disc.im{transition:transform .12s}.disc.im:hover{transform:scale(1.08)}}
+`;document.head.appendChild(st)}
+(()=>{const Z=document.getElementById('zoom'),ZI=Z.querySelector('img');let cur=null;
+const hide=()=>{Z.classList.remove('on','full');Z.hidden=true;cur=null};
+const place=el=>{const r=el.getBoundingClientRect(),w=240,m=12;let x=r.right+m,y=r.top+r.height/2-w/2;
+ if(x+w>innerWidth-m)x=r.left-w-m; if(x<m)x=Math.min(innerWidth-w-m,Math.max(m,r.left));
+ if(x===Math.max(m,r.left)||x===innerWidth-w-m){y=r.bottom+m;if(y+w>innerHeight-m)y=r.top-w-m}
+ y=Math.max(m,Math.min(innerHeight-w-m,y));Z.style.left=x+'px';Z.style.top=y+'px'};
+if(matchMedia('(hover:hover)').matches){
+ document.addEventListener('mouseover',e=>{const d=e.target.closest&&e.target.closest('.disc.im');if(!d||d===cur||Z.classList.contains('full'))return;
+  const i=d.querySelector('img');if(!i)return;cur=d;ZI.src=i.src;Z.hidden=false;Z.style.inset='';place(d);requestAnimationFrame(()=>Z.classList.add('on'))});
+ document.addEventListener('mouseout',e=>{if(!cur||Z.classList.contains('full'))return;const t=e.relatedTarget;if(!t||!cur.contains(t))hide()});
+ addEventListener('scroll',()=>{if(!Z.classList.contains('full'))hide()},true);}
+document.addEventListener('click',e=>{const d=e.target.closest&&e.target.closest('.hero .disc.im');
+ if(Z.classList.contains('full')){hide();return}
+ if(!d)return;const i=d.querySelector('img');if(!i)return;e.stopPropagation();
+ ZI.src=i.src;Z.hidden=false;Z.style.left=Z.style.top='';Z.classList.add('full','on')},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&Z.classList.contains('full')){hide();e.stopPropagation()}},true);
+})();
+</script>
+<script>
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
+</script>
+</body>
+</html>
