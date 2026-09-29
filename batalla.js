@@ -516,7 +516,7 @@ function showControls(me) {
     const mv = Dex.moves.get(m.id); const t = TY[toID(mv.type).toUpperCase()] || TY.NORMAL;
     let eff = "";
     if (mv.category !== "Status" && foeTypes.length) { const x = typeMult(mv.type, foeTypes); eff = x === 0 ? "No afecta" : x > 1 ? "Muy eficaz" : x < 1 ? "Poco eficaz" : "Eficaz"; }
-    return `<button class="mv" data-move="${i + 1}" style="--c:${t[1]};--ct:${t[2]}" ${m.disabled || m.pp === 0 ? "disabled" : ""} title="${esc(esMoveDesc(m.id))}"><span class="mvh"><b>${esc(esMove(m.id))}</b><span class="pp">${m.pp ?? "—"}/${m.maxpp ?? "—"}</span></span><small><span>${t[0]} · <span class="cat">${catTxt(mv)}</span></span>${myTypes.includes(mv.type) && mv.category !== "Status" ? "<span>STAB</span>" : ""}</small><small><span>${mv.category !== "Status" ? "Pot. " + (mv.basePower || "—") + " · " : ""}Prec. ${accTxt(mv)}</span></small>${eff ? `<small><span class="eff">${eff}</span></small>` : ""}${ST.showFx ? `<span class="fx">${esc(esMoveDesc(m.id))}</span>` : ""}</button>`;
+    return `<button class="mv" data-move="${i + 1}" style="--c:${t[1]};--ct:${t[2]}" ${m.disabled || m.pp === 0 ? "disabled" : ""} title="${esc(esMoveDesc(m.id))}"><span class="minfo" data-info="${esc(m.id)}" role="button" aria-label="Ver efecto">i</span><span class="mvh"><b>${esc(esMove(m.id))}</b><span class="pp">${m.pp ?? "—"}/${m.maxpp ?? "—"}</span></span><small><span>${t[0]} · <span class="cat">${catTxt(mv)}</span></span>${myTypes.includes(mv.type) && mv.category !== "Status" ? "<span>STAB</span>" : ""}</small><small><span>${mv.category !== "Status" ? "Pot. " + (mv.basePower || "—") + " · " : ""}Prec. ${accTxt(mv)}</span></small>${eff ? `<small><span class="eff">${eff}</span></small>` : ""}${ST.showFx ? `<span class="fx">${esc(esMoveDesc(m.id))}</span>` : ""}</button>`;
   }).join("");
   const tera = a.canTerastallize, mega = a.canMegaEvo, dmax = a.canDynamax;
   const tt = tera ? TY[toID(tera).toUpperCase()] || TY.NORMAL : null;
@@ -532,11 +532,22 @@ function showControls(me) {
     ${ST.showFx && cur ? `<div class="card fxcard"><p><b>${esc(esAb(cur.ability || cur.baseAbility))}</b> (habilidad): ${esc(esAbDesc(cur.ability || cur.baseAbility))}</p>${cur.item ? `<p><b>${esc(esItem(cur.item))}</b> (objeto): ${esc(esItemDesc(cur.item))}</p>` : ""}</div>` : ""}
     <div id="partyBox" hidden style="margin-top:10px">${partyHTML(me, party, false)}</div>`;
 }
+function moveInfo(id) {
+  const mv = Dex.moves.get(id), t = TY[toID(mv.type).toUpperCase()] || TY.NORMAL;
+  const rows = [["Tipo", tchip(mv.type)], ["Categoría", catTxt(mv)], ["Potencia", mv.category === "Status" ? "—" : (mv.basePower || "Variable")], ["Precisión", accTxt(mv)], ["PP", mv.pp || "—"]];
+  if (mv.priority) rows.push(["Prioridad", (mv.priority > 0 ? "+" : "") + mv.priority]);
+  if (mv.flags && mv.flags.contact) rows.push(["Contacto", "Sí"]);
+  let el = $("minfo"); if (!el) { el = document.createElement("div"); el.id = "minfo"; document.body.appendChild(el); }
+  el.innerHTML = `<div class="mbox" role="dialog" aria-modal="true" style="--c:${t[1]}"><h3>${esc(esMove(id))}</h3>
+    <div class="mrows">${rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join("")}</div>
+    <p>${esc(esMoveDesc(id)) || "Sin descripción."}</p><button class="btn pri" data-closeinfo>Cerrar</button></div>`;
+  el.hidden = false;
+}
 function partyHTML(me, party, forced) {
   return `<div class="party">${party.map((p, i) => { const sp = p.details.split(",")[0], hp = parseHP(p.condition), pct = hp.max ? hp.hp / hp.max * 100 : 0;
     const dis = p.active || hp.hp <= 0;
     const types = p.terastallized ? [p.terastallized] : Dex.species.get(sp).types;
-    const mvs = (p.moves || []).map(id => { const mv = Dex.moves.get(id), x = TY[toID(mv.type).toUpperCase()] || TY.NORMAL; return `<span class="pmv" style="--c:${x[1]};--ct:${x[2]}" title="${esc(esType(mv.type) + (mv.category !== "Status" ? " · Pot. " + (mv.basePower || "—") : " · Estado") + " · Prec. " + accTxt(mv) + ". " + esMoveDesc(id))}">${esc(esMove(id))}</span>`; }).join("");
+    const mvs = (p.moves || []).map(id => { const mv = Dex.moves.get(id), x = TY[toID(mv.type).toUpperCase()] || TY.NORMAL; return `<span class="pmv" data-info="${esc(id)}" style="--c:${x[1]};--ct:${x[2]}" title="${esc(esType(mv.type) + (mv.category !== "Status" ? " · Pot. " + (mv.basePower || "—") : " · Estado") + " · Prec. " + accTxt(mv) + ". " + esMoveDesc(id))}">${esc(esMove(id))}</span>`; }).join("");
     return `<button class="pm ${p.active ? "active" : ""}" data-switch="${i + 1}" ${dis ? "disabled" : ""}><img src="${esc(img(sp))}" alt=""><span><b>${esc(esSp(sp))}</b><span class="pmt">${types.map(tchip).join("")}${p.terastallized ? '<span class="tp" style="--c:var(--surface2);--ct:var(--ink2)">Tera</span>' : ""}</span><span class="hpt" style="display:block;margin:3px 0"><span class="hpf ${pct <= 20 ? "low" : pct <= 50 ? "mid" : ""}" style="width:${pct}%;display:block"></span></span><small>${hp.hp <= 0 ? "Debilitado" : `${hp.hp}/${hp.max}`}${hp.status ? " · " + hp.status.toUpperCase() : ""}${p.active ? " · En combate" : ""}</small></span>${mvs ? `<span class="pmvs">${mvs}</span>` : ""}</button>`; }).join("")}</div>
     ${forced ? "" : '<p class="note">Cambiar de Pokémon usa tu turno.</p>'}`;
 }
@@ -658,6 +669,7 @@ let RSEL = null;
 if (!ST.reto) ST.reto = {beaten: []};
 const retoCount = () => RETO.trainers.filter(x => ST.reto.beaten.includes(x.id)).length;
 function retoUnlocked(i) {
+  return true;
   const T = RETO.trainers, tr = T[i];
   if (i === 0) return true;
   const gyms = T.filter(x => x.medal), beaten = id => ST.reto.beaten.includes(id);
@@ -718,6 +730,8 @@ function renderReto() {
 
 /* ---------- eventos ---------- */
 document.addEventListener("click", async e => {
+  const inf = e.target.closest("[data-info]"); if (inf) { e.preventDefault(); e.stopPropagation(); return moveInfo(inf.dataset.info); }
+  if (e.target.closest("[data-closeinfo]") || e.target.id === "minfo") { $("minfo").hidden = true; return; }
   const tb = e.target.closest("#tb"); if (tb) { skipWait && skipWait(); return; }
   const t = e.target.closest("button"); if (!t) return;
   const segEl = t.closest("[data-seg]");
