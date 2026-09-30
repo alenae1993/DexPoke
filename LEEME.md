@@ -74,6 +74,9 @@ Los efectos numéricos de las **habilidades** no vienen en tu modelo: están esc
 | `manifest.webmanifest` | Nombre, ícono y colores al instalarla |
 | `icons/` | Íconos de la app |
 | `herramientas/actualizar_datos.py` | Regenera `data.js` desde el `.pbix` |
+| `tiers.js` | Categoría competitiva (tier) de cada Pokémon para la Pokédex |
+| `batalla.html`, `batalla.js`, `ps.js`, `esx.js`, `reto.js` | Simulador de batallas y modo Desafío |
+| `competitivo.js`, `comp.js` | Modo Competitivo, validación de equipos, sets competitivos y fichas en batalla |
 
 ## Batalla (batalla.html)
 
@@ -83,3 +86,12 @@ Simulador de batallas con las mismas reglas y cálculos que los juegos (Gen 9), 
 - **Mi equipo vs CPU:** arma tu equipo (movimientos, habilidad, objeto, naturaleza, EVs, IVs, teratipo). Desde la ficha de cualquier Pokémon en la Pokédex: "Agregar a mi equipo de batalla".
 - **Importar / exportar:** acepta equipos en formato Pokémon Showdown (copiados desde Smogon o Showdown).
 - Los equipos se guardan en este dispositivo.
+- **Fichas en batalla:** botón **Fichas** (o “Ficha” en cada Pokémon de la pestaña Pokémon): stats reales, base, IVs, EVs, naturaleza, habilidad, objeto, teratipo, PP y efecto de cada movimiento, con los cambios de stats activos.
+
+## Competitivo
+
+- **Pokédex:** cada Pokémon muestra su tier de Smogon (Individual de Escarlata/Púrpura, National Dex y Dobles) y hay un filtro “Competitivo” (por ejemplo, “Permitido en OU”).
+- **Batalla → Competitivo:** formatos Combate Clasificatorio (BSS, nivel 50, elige 3 de 6), Ubers, OU, UU, RU, NU, PU, ZU y National Dex OU. Revisa si tu equipo es legal con el validador de Showdown, juega con tu equipo o con equipos de ejemplo del formato.
+- **Sets competitivos** en el editor de equipo: sets de Battle Factory / BSS Factory de Pokémon Showdown (licencia MIT).
+- Los tiers vienen del motor incluido (`@pkmn/sim` 0.10.11). Smogon los cambia cada pocos meses; para actualizarlos hay que regenerar `ps.js`, `comp.js` y `tiers.js`.
+

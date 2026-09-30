@@ -90,6 +90,15 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
 .hero .disc{width:88px;height:88px;font-size:16px}
 .hero h2{font-family:var(--display);font-size:30px;line-height:1.05;margin:0;text-wrap:balance}
 .hero .cat{color:var(--ink2);font-size:13px;margin-top:2px}
+.tier{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:1px 6px;border-radius:5px;background:var(--c,#888);color:var(--ct,#fff);font-family:var(--mono)}
+.tier.out{background:transparent;color:var(--ink3);border:1px dashed var(--line)}
+.comp .r{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
+.comp .r>span:first-child{grid-column:1/-1}
+.comp .r .tier{margin-top:1px}
+.comp .r:first-of-type{border-top:0}
+.comp .r>span:first-child{font-size:11px;color:var(--ink3);letter-spacing:.05em;text-transform:uppercase}
+.comp .r p{margin:0;font-size:13px;color:var(--ink2)}
+.tiers{width:100%;border-collapse:collapse;font-size:13px}.tiers td{padding:6px 4px;border-top:1px solid var(--line);vertical-align:top}.tiers td:first-child{white-space:nowrap}
 .flag{display:inline-block;font-size:11px;font-weight:600;border:1px solid var(--accent);color:var(--accent);border-radius:5px;padding:1px 6px;letter-spacing:.03em}
 .dx{margin:0;color:var(--ink2);font-size:14px;max-width:65ch}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
@@ -212,6 +221,7 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
 <div class="sheet" id="sheet" hidden><div class="sheet-in" id="sheetIn"></div></div>
 
 <script src="data.js"></script>
+<script src="tiers.js"></script>
 <script>
 const P=D.P, M=D.M, A=D.A;
 const TY={NORMAL:["Normal","#9FA19F","#111"],FIRE:["Fuego","#E62829","#fff"],WATER:["Agua","#2980EF","#fff"],GRASS:["Planta","#3FA129","#fff"],ELECTRIC:["Eléctrico","#FAC000","#111"],ICE:["Hielo","#3DCEF3","#111"],FIGHTING:["Lucha","#FF8000","#111"],POISON:["Veneno","#9141CB","#fff"],GROUND:["Tierra","#915121","#fff"],FLYING:["Volador","#81B9EF","#111"],PSYCHIC:["Psíquico","#EF4179","#fff"],BUG:["Bicho","#91A119","#fff"],ROCK:["Roca","#AFA981","#111"],GHOST:["Fantasma","#704170","#fff"],DRAGON:["Dragón","#5060E1","#fff"],DARK:["Siniestro","#624D4E","#fff"],STEEL:["Acero","#60A1B8","#fff"],FAIRY:["Hada","#EF70EF","#111"]};
@@ -256,13 +266,52 @@ P.forEach((p,i)=>p.ev.forEach(e=>{if(!pre[e[0]])pre[e[0]]=[i,e[1],e[2]]}));
 
 function defMult(types){const out={};TK.forEach(a=>{let m=1;types.forEach(d=>{const r=CH[a][d];if(r!=null)m*=r});out[a]=m});return out}
 
-const S={tab:"dex",q:"",type:"",gen:"",sort:"id",fk:"",mq:"",mtype:"",mcat:"",aq:"",af:"",cA:byCode.CHARIZARD??5,cB:byCode.BLASTOISE??8};
+const S={tab:"dex",q:"",type:"",gen:"",sort:"id",fk:"",tier:"",mq:"",mtype:"",mcat:"",aq:"",af:"",cA:byCode.CHARIZARD??5,cB:byCode.BLASTOISE??8};
 try{const s=JSON.parse(localStorage.getItem("pkdx")||"{}");Object.assign(S,s,{q:"",mq:"",aq:""})}catch(e){}
-function save(){try{const {tab,type,gen,sort,fk,mtype,mcat,af,cA,cB}=S;localStorage.setItem("pkdx",JSON.stringify({tab,type,gen,sort,fk,mtype,mcat,af,cA,cB}))}catch(e){}}
+function save(){try{const {tab,type,gen,sort,fk,tier,mtype,mcat,af,cA,cB}=S;localStorage.setItem("pkdx",JSON.stringify({tab,type,gen,sort,fk,tier,mtype,mcat,af,cA,cB}))}catch(e){}}
 
 const $=id=>document.getElementById(id);
 const searchSvg='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
 const typeChips=(cur,name)=>`<div class="chips" data-chips="${name}"><button class="chip" data-v="" aria-pressed="${cur===""}">Todos</button>${TK.map(t=>`<button class="chip" data-v="${t}" style="--c:${TY[t][1]};--ct:${TY[t][2]}" aria-pressed="${cur===t}">${TY[t][0]}</button>`).join("")}</div>`;
+
+/* ---------- competitivo (categorías de Smogon) ---------- */
+const TCOL={AG:["#1B1B1B","#fff"],Uber:["#6B3FC4","#fff"],OU:["#D6264F","#fff"],UUBL:["#E0674A","#fff"],UU:["#E8872C","#111"],RUBL:["#E3A92E","#111"],RU:["#E8C53A","#111"],NUBL:["#9CC23A","#111"],NU:["#4FAE4A","#fff"],PUBL:["#3BA88F","#fff"],PU:["#2E9AA6","#fff"],ZUBL:["#3F86C9","#fff"],ZU:["#4F6FD1","#fff"],NFE:["#8A8F8C","#fff"],LC:["#E46FB0","#111"],DUber:["#6B3FC4","#fff"],DOU:["#D6264F","#fff"],DUU:["#E8872C","#111"]};
+const TORD=["AG","Uber","OU","UUBL","UU","RUBL","RU","NUBL","NU","PUBL","PU","ZUBL","ZU","NFE","LC"];
+const TNAME={AG:"Anything Goes (todo vale)",Uber:"Ubers",OU:"OverUsed",UUBL:"Límite UU",UU:"UnderUsed",RUBL:"Límite RU",RU:"RarelyUsed",NUBL:"Límite NU",NU:"NeverUsed",PUBL:"Límite PU",PU:"PU",ZUBL:"Límite ZU",ZU:"ZeroUsed",NFE:"No totalmente evolucionado",LC:"Little Cup",DUber:"Dobles Ubers",DOU:"Dobles OU",DUU:"Dobles UU"};
+const TDESC={AG:"Sin restricciones: aquí van los que están prohibidos incluso en Ubers.",Uber:"Los más poderosos, sobre todo legendarios de portada. Están prohibidos en OU.",OU:"El formato estándar y más jugado. Solo se prohíbe lo que rompe el juego.",UUBL:"“BL” = borderline (límite): demasiado fuertes para UU, pero no tan usados en OU. Se pueden usar en OU.",UU:"Buenos, pero se usan poco en OU.",RUBL:"Demasiado fuertes para RU; se pueden usar en UU y OU.",RU:"Se usan poco en UU.",NUBL:"Demasiado fuertes para NU; se pueden usar en RU y superiores.",NU:"Se usan poco en RU.",PUBL:"Demasiado fuertes para PU; se pueden usar en NU y superiores.",PU:"Se usan poco en NU.",ZUBL:"Demasiado fuertes para ZU.",ZU:"El nivel más bajo de los totalmente evolucionados.",NFE:"Aún pueden evolucionar. Son legales en todos los tiers de arriba (a veces con Mineral Evolutivo).",LC:"Primera etapa evolutiva: juegan Little Cup a nivel 5.",DUber:"Los más poderosos en dobles.",DOU:"Formato estándar de dobles de Smogon.",DUU:"Dobles UU."};
+const tierOf=p=>{const x=(typeof TIER!=="undefined"&&TIER[p.c])||"";const [sv,nd,d]=x.split("|");return {sv:sv||"",nd:nd||"",d:d||""}};
+const cleanT=t=>(t||"").replace(/[()]/g,"").replace(/^ND /,"");
+const tbadge=(t,pre)=>{if(!t||t==="Illegal")return "";const k=cleanT(t),c=TCOL[k]||["#888","#fff"];return `<span class="tier ${/^\(/.test(t)?"out":""}" style="--c:${c[0]};--ct:${c[1]}" title="${esc(TNAME[k]||k)}">${pre||""}${esc(k==="Uber"?"Ubers":k)}</span>`};
+const allowedIn=t=>{const k=cleanT(t),i=TORD.indexOf(k);if(i<0)return [];if(k==="LC")return ["LC","ZU","PU","NU","RU","UU","OU","Ubers","AG"];return ["AG","Ubers","OU","UU","RU","NU","PU","ZU"].filter(x=>{const j=TORD.indexOf(x==="Ubers"?"Uber":x);return j<=i&&!(k.endsWith("BL")&&x===k.slice(0,-2))})};
+function tierMatch(p,f){if(!f)return true;const [src,val]=f.split(":"),t=tierOf(p);
+  if(src==="ok"){if(p.fk==="gmax")return false;const i=TORD.indexOf(t.sv);if(i<0)return false;if(val==="LC")return t.sv==="LC";return i>=TORD.indexOf(val)}
+  const x=src==="sv"?t.sv:src==="nd"?t.nd:cleanT(t.d);if(val==="Illegal")return !x||x==="Illegal";return cleanT(x)===val}
+function tierSelect(){
+  const o=(v,l)=>`<option value="${v}" ${S.tier===v?"selected":""}>${l}</option>`;
+  return `<select id="tier" aria-label="Competitivo"><option value="">Competitivo: todos</option>
+  <optgroup label="Se puede usar en… (Escarlata/Púrpura)">${["Uber","OU","UU","RU","NU","PU","ZU","LC"].map(k=>o("ok:"+k,"Permitido en "+(k==="Uber"?"Ubers":k))).join("")}</optgroup>
+  <optgroup label="Tier exacto · Individual (Escarlata/Púrpura)">${TORD.map(k=>o("sv:"+k,(k==="Uber"?"Ubers":k)+" · "+TNAME[k])).join("")}${o("sv:Illegal","No disponible en Escarlata/Púrpura")}</optgroup>
+  <optgroup label="National Dex (todas las gen., con Megas)">${["AG","Uber","OU","UUBL","UU","RUBL","RU","LC"].map(k=>o("nd:"+k,"ND "+(k==="Uber"?"Ubers":k)+(k==="RU"?" o inferior":""))).join("")}</optgroup>
+  <optgroup label="Dobles (Smogon)">${["DUber","DOU","DUU"].map(k=>o("d:"+k,TNAME[k])).join("")}</optgroup></select>`}
+function compCard(p){
+  const t=tierOf(p); if(!t.sv&&!t.nd)return "";
+  const row=(lab,tag,txt)=>`<div class="r"><span>${lab}</span>${tag||'<span class="tier out">—</span>'}<p>${txt}</p></div>`;
+  const svTxt=p.fk==="gmax"?"El Gigamax no existe en los formatos actuales de Escarlata/Púrpura.":t.sv==="Illegal"||!t.sv?"No está disponible en Escarlata/Púrpura, así que no entra en los tiers normales. Mira National Dex.":TDESC[cleanT(t.sv)]||"";
+  const ok=t.sv&&t.sv!=="Illegal"?allowedIn(t.sv):[];
+  const ndTxt=!t.nd||t.nd==="Illegal"?"No se permite en National Dex.":t.nd==="RU"?"RU o inferior en National Dex.":(TDESC[cleanT(t.nd)]||"");
+  const dTxt=!t.d||t.d==="Illegal"?"No disponible en dobles de Escarlata/Púrpura.":/^\(/.test(t.d)?"Sin tier propio en dobles (se usa poco); legal en DUU y superiores.":TDESC[cleanT(t.d)]||"";
+  const bf=ok.length?(ok.includes("OU")?"ou":ok.includes("UU")?"uu":ok.includes("RU")?"ru":ok.includes("NU")?"nu":ok.includes("PU")?"pu":ok.includes("ZU")?"zu":"ubers"):t.nd&&t.nd!=="Illegal"?"natdex":"";
+  return `<div class="card comp"><h3>Competitivo</h3>
+    ${row("Individual (SV)",p.fk==="gmax"?"":tbadge(t.sv),svTxt)}
+    ${row("National Dex",tbadge(t.nd,"ND "),ndTxt)}
+    ${row("Dobles",tbadge(t.d),dTxt)}
+    ${ok.length?`<p class="note" style="margin:8px 0 0">Se puede usar en: <b>${ok.join(", ")}</b>.</p>`:""}
+    <details class="ref" style="margin-top:8px"><summary>¿Qué son estas categorías?</summary>
+      <p class="note">En el competitivo de Smogon (el que se juega en Pokémon Showdown) cada Pokémon queda en un <b>tier</b> según cuánto se usa y qué tan fuerte es. En cada tier puedes usar los Pokémon de ese tier <b>y los de todos los tiers más bajos</b>. Los tiers se revisan cada pocos meses.</p>
+      <table class="tiers"><tbody>${TORD.map(k=>`<tr><td>${tbadge(k)}</td><td><b>${TNAME[k]}</b> — ${TDESC[k]}</td></tr>`).join("")}</tbody></table>
+      <p class="note"><b>National Dex:</b> formato que permite todos los Pokémon, incluidos los que no están en Escarlata/Púrpura, y las Megaevoluciones. <b>Dobles:</b> combates 2 contra 2; “(DUU)” significa que no tiene tier propio. Los formatos oficiales de Nintendo (VGC y Combate Clasificatorio) se juegan a nivel 50 con otras reglas.</p></details>
+    ${bf?`<a class="link" href="batalla.html?comp=${bf}" style="text-decoration:none;display:inline-block;margin-top:8px">Probar en una batalla competitiva ${bf==="natdex"?"National Dex":bf.toUpperCase()}</a>`:""}
+    <p class="note" style="margin:6px 0 0">Tiers de Smogon según el motor de Pokémon Showdown incluido en la app. Pueden haber cambiado desde entonces.</p></div>`}
 
 function renderTop(){
   const t=$("top");
@@ -272,7 +321,7 @@ function renderTop(){
     ${typeChips(S.type,"type")}
     <div class="row"><select id="gen" aria-label="Generación"><option value="">Todas las generaciones</option>${[1,2,3,4,5,6,7,8,9].map(g=>`<option value="${g}" ${S.gen==g?"selected":""}>Generación ${g}</option>`).join("")}</select>
     <select id="sort" aria-label="Ordenar"><option value="id">Nº Pokédex</option><option value="name">Nombre</option><option value="bst">Total stats</option>${SK.map((k,i)=>`<option value="${i}">${SL[i]}</option>`).join("")}</select>
-    <select id="fk" aria-label="Formas"><option value="">Todas las formas</option><option value="base">Solo especies</option><option value="mega">Megaevoluciones</option><option value="gmax">Gigamax</option><option value="regional">Formas regionales</option><option value="forma">Otras formas</option></select></div>`;
+    <select id="fk" aria-label="Formas"><option value="">Todas las formas</option><option value="base">Solo especies</option><option value="mega">Megaevoluciones</option><option value="gmax">Gigamax</option><option value="regional">Formas regionales</option><option value="forma">Otras formas</option></select>${tierSelect()}</div>`;
     $("sort").value=S.sort;$("fk").value=S.fk;
   }else if(S.tab==="moves"){
     t.innerHTML=`<div class="brand"><h1>Movimientos</h1><small>${Object.keys(M).length} en total</small></div>
@@ -297,6 +346,7 @@ function filteredDex(){
     if(S.type&&!p.t.includes(S.type))return false;
     if(S.gen&&p.g!=S.gen)return false;
     if(S.fk==="base"?p.fk:(S.fk&&p.fk!==S.fk))return false;
+    if(S.tier&&!tierMatch(p,S.tier))return false;
     if(q){if(/^\d+$/.test(q))return String(p.id).startsWith(String(+q));return norm(p.n).includes(q)}
     return true});
   const s=S.sort;
@@ -310,7 +360,7 @@ function renderMain(){
   if(S.tab==="dex"){
     const r=filteredDex(); const s=S.sort; const lab=s==="id"||s==="name"||s==="bst"?"TOTAL":SL[s].toUpperCase();
     m.innerHTML=`<div class="count">${r.length} resultado${r.length===1?"":"s"}</div>`+(r.length?`<div class="list">${r.map(i=>{const p=P[i];const v=(s==="id"||s==="name"||s==="bst")?p.b:p.st[s];
-      return `<button class="item" data-p="${i}">${disc(p)}<span><span class="nm">${esc(p.n)}</span>${p.fn&&p.fn!==p.n?`<span class="en">${esc(p.fn)}</span>`:""}<span class="sub">${p.t.map(tchip).join("")}</span></span><span class="metric"><b>${nn(v)}</b><span>${lab}</span></span></button>`}).join("")}</div>`:`<div class="empty">Ningún Pokémon coincide. Prueba otro nombre o quita un filtro.</div>`);
+      return `<button class="item" data-p="${i}">${disc(p)}<span><span class="nm">${esc(p.n)}</span>${p.fn&&p.fn!==p.n?`<span class="en">${esc(p.fn)}</span>`:""}<span class="sub">${p.t.map(tchip).join("")}${(t=>t.sv&&t.sv!=="Illegal"?tbadge(t.sv):p.fk!=="gmax"&&t.nd&&t.nd!=="Illegal"?tbadge(t.nd,"ND "):"")(tierOf(p))}</span></span><span class="metric"><b>${nn(v)}</b><span>${lab}</span></span></button>`}).join("")}</div>`:`<div class="empty">Ningún Pokémon coincide. Prueba otro nombre o quita un filtro.</div>`);
   }else if(S.tab==="moves"){
     const q=norm(S.mq).trim();
     const r=Object.keys(M).filter(c=>{const x=M[c];if(S.mtype&&x[1]!==S.mtype)return false;if(S.mcat==="fx"){if(!x[11])return false}else if(S.mcat==="fxu"){if(!(x[11]||[]).some(f=>f[2]>0))return false}else if(S.mcat==="fxd"){if(!(x[11]||[]).some(f=>f[2]<0))return false}else if(S.mcat&&x[2]!==S.mcat)return false;if(q)return norm(x[0]).includes(q)||norm(x[10]).includes(q)||norm(x[6]).includes(q)||norm(c).includes(q.replace(/\s/g,""));return true}).sort((a,b)=>mname(a).localeCompare(mname(b)));
@@ -609,6 +659,7 @@ function pokeView(v){
   <div class="card"><h3>Estadísticas base</h3>${statBars(p.st,p.b)}<div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap"><button class="link" data-cmp="A">Comparar como A</button><button class="link" data-cmp="B">Comparar como B</button><a class="link" href="batalla.html?add=${encodeURIComponent(p.c)}" style="text-decoration:none">Agregar a mi equipo de batalla</a></div></div>
   ${simCard(v,p)}
   <div class="card"><h3>Debilidades y resistencias</h3><div class="eff">${effRows}</div></div>
+  ${compCard(p)}
   <div class="card"><h3>Habilidades</h3><div class="abil">${ab.map(([c,h])=>`<button class="abbtn" data-ab="${c}"><b>${esc(aname(c))}</b>${h?"<em>Oculta</em>":""}${A[c]&&A[c][2]?`<span class="en">${esc(A[c][2])}</span>`:""}<p>${esc((A[c]&&A[c][1])||"")}</p>${afxShort(c)}</button>`).join("")||"—"}</div></div>
   ${sibs.length?`<div class="card"><h3>Formas · ${sibs.length+1}</h3><div class="evo">${sibs.map(([q,i])=>`<button data-p="${i}">${disc(q)}<span><b>${esc(q.n)}</b><small>${q.fk?FKN[q.fk]:"Forma base"}${q.fn&&q.fn!==q.n&&q.fn!==FKN[q.fk]&&q.fn!=="Gigamax"?" · "+esc(q.fn):""} · Total ${q.b}${q.b!==p.b?` (${q.b>p.b?"+":"−"}${Math.abs(q.b-p.b)})`:""}</small></span></button>`).join("")}</div>${p.fk==="mega"||p.fk==="gmax"?`<p class="note" style="margin:8px 0 0">${p.fk==="mega"?"Transformación solo en combate con su megapiedra.":"Transformación solo en combate con Gigamax."} Usa los movimientos de su especie.</p>`:""}</div>`:""}
   ${evoBtns.length?`<div class="card"><h3>Evolución</h3><div class="evo">${evoBtns.join("")}</div></div>`:""}
@@ -726,6 +777,7 @@ document.addEventListener("change",e=>{
   if(id==="gen"){S.gen=v;save();renderMain()}
   else if(id==="sort"){S.sort=v;save();renderMain()}
   else if(id==="fk"){S.fk=v;save();renderMain()}
+  else if(id==="tier"){S.tier=v;save();renderMain()}
   else if(id==="mcat"){S.mcat=v;save();renderMain()}
   else if(id==="af"){S.af=v;save();renderMain()}
   else if(id==="cA"||id==="cB"){S[id]=+v;save();renderMain()}

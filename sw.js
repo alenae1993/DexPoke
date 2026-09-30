@@ -1,10 +1,10 @@
 // Mi Dex — funciona sin internet.
 // La app y los datos se muestran desde la copia guardada y se actualizan en segundo plano:
 // al subir un data.js nuevo, los teléfonos lo ven la siguiente vez que abren la app.
-const APP = "midex-app-v6";
+const APP = "midex-app-v7";
 const IMG = "midex-img-v1";
 const FONTS = "midex-fonts-v1";
-const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js",
+const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js", "reto.js", "comp.js", "tiers.js", "competitivo.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 
 self.addEventListener("install", e => {
