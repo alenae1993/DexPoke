@@ -32,10 +32,33 @@ function mdOf(name) {
 }
 function exactMd(name) { const sp = Dex.species.get(name); return MD[toID(sp.exists ? sp.name : name).toUpperCase()]; }
 function img(name) { const p = mdOf(name); const sp = Dex.species.get(name); return p ? ART + (exactMd(name) ? (p.im || p.id) : (p.im || p.id)) + ".png" : (sp.num > 0 ? ART + sp.num + ".png" : ""); }
-/* ---------- sprites animados (carpeta Battlers de Pokémon Essentials) ---------- */
-const SPRSET = {};
-if (typeof SPR !== "undefined") for (const k in SPR.files) SPRSET[k] = new Map(SPR.files[k].split(",").map(n => [n.toLowerCase().replace(/\.png$/, ""), n]));
-const SPRBAD = new Set(), SPRDIM = {};
+/* ---------- sprites animados (carpeta Battlers de Pokémon Essentials, empaquetada en spr/*.bin) ---------- */
+const PACKFULL = {}, ABLOB = {};
+async function packSlice(file, off, len) { // pide solo los bytes del recurso (si el servidor no acepta rangos, baja el paquete una vez)
+  if (PACKFULL[file]) return (await PACKFULL[file]).slice(off, off + len);
+  const res = await fetch("spr/" + file, {headers: {Range: `bytes=${off}-${off + len - 1}`}});
+  if (!res.ok) throw new Error("sin paquete");
+  if (res.status === 206) return res.arrayBuffer();
+  const all = res.arrayBuffer(); PACKFULL[file] = all; return (await all).slice(off, off + len);
+}
+function packURL(ck, file, off, len, mime) {
+  if (ABLOB[ck]) return ABLOB[ck];
+  return (ABLOB[ck] = (async () => {
+    let blob = null;
+    try { const c = await caches.open("midex-spr"); const r = await c.match(ck); if (r) blob = await r.blob(); } catch (err) {}
+    if (!blob) {
+      blob = new Blob([await packSlice(file, off, len)], {type: mime});
+      try { const c = await caches.open("midex-spr"); await c.put(ck, new Response(blob)); } catch (err) {}
+    }
+    return URL.createObjectURL(blob);
+  })().catch(() => null));
+}
+const AMIME = {BG: "image/webp", Cry: "audio/mpeg"};
+function assetURL(group, key) {
+  const e = typeof ASSET !== "undefined" && ASSET.idx[group] && ASSET.idx[group][key];
+  if (!e) return Promise.resolve(null);
+  return packURL(`spr/a${ASSET.v}/${group}/${key}`, ASSET.packs[e[0]], e[1], e[2], AMIME[group] || "image/png");
+}
 function sprKey(name) {
   if (typeof SPR === "undefined") return null;
   const sp = Dex.species.get(name); if (!sp.exists || sp.num < 1 || sp.num > 905) return null;
@@ -45,27 +68,92 @@ function sprKey(name) {
   if (/Mega|Primal|Alola|Galar|Hisui|Paldea|Gmax|Totem/.test(sp.forme)) return null; // forma distinta sin sprite: usa la ilustración
   return pad; // formas cosméticas (gorras de Pikachu, motivos de Vivillon…): sprite base
 }
-function sprUrl(name, back, shiny, female) {
+function sprUrl(name, back, shiny, female) { // devuelve "Carpeta/clave" o null
   const key = sprKey(name); if (!key || ST.sprites === "off") return null;
   const dirs = shiny ? [back ? "BackShiny" : "FrontShiny", back ? "Back" : "Front"] : [back ? "Back" : "Front"];
-  for (const dir of dirs) { const set = SPRSET[dir]; if (!set) continue;
-    for (const c of female ? [key + "f", "female/" + key, key] : [key]) { const f = set.get(c); if (f) { const url = `Battlers/${dir}/${/\.png$/i.test(f) ? f : f + ".png"}`; if (!SPRBAD.has(url)) return url; } } }
+  for (const dir of dirs) { const ix = SPR.idx[dir]; if (!ix) continue;
+    for (const c of female ? [key + "f", "female/" + key, key] : [key]) if (ix[c]) return dir + "/" + c; }
   return null;
 }
-function setSprite(el, url, side) {
+const sprEntry = id => { const i = id.indexOf("/"); return SPR.idx[id.slice(0, i)][id.slice(i + 1)]; };
+function sprLoad(id) { const e = sprEntry(id); return packURL(`spr/s${SPR.v}/${id}`, SPR.packs[e[0]], e[1], e[2], "image/png"); }
+/* íconos animados del equipo y de objetos */
+function icoKey(name) { const sp = Dex.species.get(name); if (!sp.exists || sp.num < 1 || sp.num > 905 || typeof ASSET === "undefined") return "";
+  const k = (SPR.forme[sp.id]) || (sp.name === sp.baseSpecies || !/Mega|Primal|Alola|Galar|Hisui|Paldea/.test(sp.forme) ? String(sp.num).padStart(3, "0") : "");
+  return k && ASSET.idx.Ico[k] ? k : ""; }
+function pimg(name, extra) { const k = icoKey(name); return `<img src="${esc(img(name))}"${k ? ` data-ico="${k}"` : ""} ${extra || 'alt=""'}>`; }
+const itemIco = id => id && typeof ASSET !== "undefined" && ASSET.idx.Itm[toID(id)] ? `<span class="itm" data-itm="${toID(id)}" aria-hidden="true"></span>` : "";
+function hydrate(root) {
+  (root || document).querySelectorAll("img[data-ico]:not([data-icod])").forEach(im => { im.dataset.icod = 1;
+    assetURL("Ico", im.dataset.ico).then(u => { if (!u || !im.isConnected) return; const r = im.getBoundingClientRect(), s = Math.round(r.width || parseFloat(getComputedStyle(im).width) || 48);
+      const sp = document.createElement("span"); sp.className = "ico"; sp.style.cssText = `--isz:${s}px;background-image:url("${u}")`; sp.title = im.alt || ""; im.replaceWith(sp); }); });
+  (root || document).querySelectorAll(".itm:not([data-itmd])").forEach(el => { el.dataset.itmd = 1;
+    assetURL("Itm", el.dataset.itm).then(u => { if (u) { el.style.backgroundImage = `url("${u}")`; el.classList.add("ok"); } }); });
+}
+new MutationObserver(() => hydrate()).observe(document.documentElement, {childList: true, subtree: true});
+
+/* ---------- sonido ---------- */
+const SND = {bgm: null};
+const sndOn = kind => { const s = ST.sound || "all"; return s === "all" || (s === "sfx" && kind === "sfx"); };
+function sfx(name, vol) { if (!sndOn("sfx")) return; const a = new Audio(`audio/${name}.mp3`); a.volume = vol || .7; a.play().catch(() => {}); }
+async function cry(species, rate) {
+  if (!sndOn("sfx")) return; const sp = Dex.species.get(species); if (!sp.exists || sp.num < 1 || sp.num > 905) return;
+  const u = await assetURL("Cry", String(sp.num).padStart(3, "0")); if (!u) return;
+  const a = new Audio(u); a.volume = .8; if (rate) { a.preservesPitch = false; a.playbackRate = rate; } a.play().catch(() => {});
+}
+function bgmStop() { if (SND.bgm) { SND.bgm.pause(); SND.bgm = null; } }
+function bgm(name, loop) { bgmStop(); if (!name || !sndOn("music")) return; const a = new Audio(`audio/${name}.mp3`); a.loop = loop !== false; a.volume = .4; a.play().catch(() => {}); SND.bgm = a; }
+function pickBgm(me) {
+  if (me.trainer) { const r = me.trainer.r; return me.trainer.medal ? "bgm_leader" : r.startsWith("Campeón") ? "bgm_final" : "bgm_gym"; }
+  if (me.fmt) return "bgm_boss";
+  return me.fromMine ? "bgm_trainer" : "bgm_wild";
+}
+function sndHook(me, cmd, args) {
+  if (cmd === "switch" || cmd === "drag") { const det = args[1].split(", "); sfx("se_out", .5); setTimeout(() => cry(det[0]), 380); if (det.includes("shiny")) setTimeout(() => sfx("se_shiny"), 800); }
+  else if (cmd === "faint") { const m = mon(me, args[0]); sfx("se_faint"); if (m) cry(m.species, .78); }
+  else if (cmd === "-supereffective" || cmd === "-resisted") (me.eff = me.eff || {})[keyOf(args[0])] = cmd === "-resisted" ? "se_weak" : "se_super";
+  else if (cmd === "-damage" && !args.some(x => x.startsWith("[from]"))) { const k = keyOf(args[0]); const s = (me.eff && me.eff[k]) || "se_hit"; if (me.eff) delete me.eff[k]; sfx(s); }
+  else if (cmd === "-boost") sfx("se_up", .5); else if (cmd === "-unboost") sfx("se_down", .5);
+  else if (cmd === "-mega") sfx("se_mega");
+  else if (cmd === "-fieldstart" || cmd === "-fieldend") { const f = {electricterrain: "CampoElectrico", grassyterrain: "CampoHierba", mistyterrain: "CampoNiebla", psychicterrain: "CampoPsiquico"}[toID(args[0].replace(/^move:\s*/, ""))];
+    if (f && ST.bg !== "off") setBg(cmd === "-fieldstart" ? f : me.bg); }
+  else if (cmd === "win" || cmd === "tie") { bgmStop(); if (cmd === "win" && args[0] === "Tú") bgm(me.trainer && me.trainer.medal ? "me_gym" : me.trainer || me.fmt || me.fromMine ? "me_win" : "me_wild", false); }
+}
+
+/* ---------- fondos de combate ---------- */
+const BG_TYPE = {Water: ["Playa", "Mar", "Rio", "RutaPlaya", "Cascada"], Fire: ["MontañaVolcanica", "CuevaMagma", "ZonaArida"], Ice: ["MontañaNevada", "RutaNevada", "MarHelado", "CuevaHielo"],
+  Ghost: ["Cementerio", "CasaFantasma", "MansionAbandonada"], Grass: ["Bosque", "Bosque3", "Jungla", "CampoFlores", "RutaVegetacion"], Bug: ["Bosque", "Jungla", "RutaVegetacion"],
+  Ground: ["DesiertoArena", "CañonRocoso", "ZonaArida", "Mina"], Rock: ["CañonRocoso", "Cueva", "Cueva2", "Mina", "Ruinas"], Steel: ["Mina", "Cueva3", "Ciudad"], Electric: ["Ciudad", "Ciudad", "CampoElectrico"],
+  Psychic: ["Ruinas", "RutaCerezos", "Ultraumbral"], Fairy: ["RutaCerezos", "CampoFlores", "CampoNiebla"], Dragon: ["CuevaGemas", "MontañaNevada", "CañonRocoso", "Espacio"], Flying: ["Volando", "Pradera", "RutaGenerica"],
+  Dark: ["Ciudad", "ZonaNiebla", "Cementerio", "MundoDistorsion"], Poison: ["Cienaga", "CuevaMusgo", "ZonaNiebla"], Fighting: ["RutaGenerica", "Ruta", "Pradera"], Normal: ["Pradera", "RutaGenerica", "Ruta", "RutaOtoñal"]};
+function bgTime(base) { const h = new Date().getHours(), s = h >= 20 || h < 6 ? "Noche" : h >= 18 ? "Tarde" : ""; return s && ASSET.idx.BG[base + s] ? base + s : base; }
+function pickBg(me) {
+  if (typeof ASSET === "undefined" || ST.bg === "off") return null;
+  if (me.trainer) { const r = me.trainer.r; if (me.trainer.medal) return "Gimnasio"; if (r.startsWith("Campeón")) return "LigaAlolaCampeon";
+    const elite = RETO.trainers.filter(x => !x.medal && !x.r.startsWith("Campeón")); return "LigaAlola" + (1 + Math.max(0, elite.indexOf(me.trainer)) % 4); }
+  if (me.fmt) return me.fmt.id === "bss" ? "EstadioMundial" : ["Estadio", "Estadio2", "EstadioMundialFinal", "EstadioFuturista"][Math.floor(Math.random() * 4)];
+  const sp = Dex.species.get(me.t2[0] && me.t2[0].species), l = BG_TYPE[sp.exists ? sp.types[0] : "Normal"] || BG_TYPE.Normal;
+  return bgTime(l[Math.floor(Math.random() * l.length)]);
+}
+async function setBg(key) {
+  const sc = $("scene"); if (!sc) return;
+  if (!key) { sc.style.backgroundImage = ""; sc.classList.remove("bg"); return; }
+  const u = await assetURL("BG", key); const s2 = $("scene"); if (!u || !s2) return;
+  s2.style.backgroundImage = `url("${u}")`; s2.classList.add("bg");
+}
+function setSprite(el, id, side) {
   const box = el.querySelector(".spr");
-  if (!box || !url) { el.classList.remove("sp"); el.dataset.spr = ""; return; }
-  const size = () => { const d = SPRDIM[url]; if (!d) return; const sc = $("scene"); const W = sc ? sc.clientWidth : 512;
-    let px = d.h * W / 512 * (side === "p1" ? 2.1 : 2); const cap = el.clientHeight * 1.35; if (px > cap) px = cap;
-    box.style.setProperty("--s", Math.round(px) + "px"); box.style.setProperty("--n", d.n); box.style.setProperty("--d", Math.max(0.4, d.n / 26).toFixed(2) + "s"); };
-  if (el.dataset.spr === url) { size(); return; }
-  el.dataset.spr = url;
-  const show = () => { if (el.dataset.spr !== url) return; box.style.backgroundImage = `url("${url}")`; size(); el.classList.add("sp"); };
-  if (SPRDIM[url]) return show();
-  const im = new Image();
-  im.onload = () => { SPRDIM[url] = {h: im.naturalHeight, n: Math.max(1, Math.round(im.naturalWidth / im.naturalHeight))}; show(); };
-  im.onerror = () => { SPRBAD.add(url); if (el.dataset.spr === url) { el.dataset.spr = ""; el.classList.remove("sp"); } };
-  im.src = url;
+  if (!box || !id) { el.classList.remove("sp"); el.dataset.spr = ""; return; }
+  const e = sprEntry(id);
+  const size = () => { const sc = $("scene"); const W = sc ? sc.clientWidth : 512;
+    let px = e[5] * W / 512 * (side === "p1" ? 2.1 : 2); const cap = el.clientHeight * 1.35; if (px > cap) px = cap;
+    const fw = px * e[4] / e[5];
+    box.style.setProperty("--s", px.toFixed(1) + "px"); box.style.setProperty("--w", fw.toFixed(2) + "px"); box.style.setProperty("--n", e[3]);
+    box.style.setProperty("--d", Math.max(0.4, e[3] / 26).toFixed(2) + "s"); };
+  if (el.dataset.spr === id) { size(); return; }
+  el.dataset.spr = id;
+  sprLoad(id).then(u => { if (el.dataset.spr !== id) return; if (!u) { el.classList.remove("sp"); return; }
+    box.style.backgroundImage = `url("${u}")`; size(); el.classList.add("sp"); });
 }
 window.addEventListener("resize", () => { if (B) drawAll(B); });
 
@@ -187,7 +275,7 @@ async function autoMoves(set, formeName) {
 
 /* ---------- vistas ---------- */
 let VIEW = "menu", SEL = 0, B = null;
-function go(v) { VIEW = v; render(); window.scrollTo(0, 0); }
+function go(v) { VIEW = v; if (v !== "battle") bgmStop(); render(); window.scrollTo(0, 0); }
 function render() {
   if (VIEW === "menu") return renderMenu();
   if (VIEW === "team") return renderTeam();
@@ -199,7 +287,7 @@ const iconSword = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" s
 const iconDice = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>';
 const iconTrophy = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8M9.5 17h5"/></svg>';
 const iconEdit = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/></svg>';
-function strip(sets) { return `<div class="teamstrip">${sets.map(s => `<img src="${esc(img(s.species))}" alt="${esc(esSp(s.species))}" title="${esc(esSp(s.species))}" loading="lazy">`).join("")}</div>`; }
+function strip(sets) { return `<div class="teamstrip">${sets.map(s => pimg(s.species, `alt="${esc(esSp(s.species))}" title="${esc(esSp(s.species))}" loading="lazy"`)).join("")}</div>`; }
 function seg(id, val, opts) { return `<div class="seg" data-seg="${id}">${opts.map(([v, l]) => `<button data-v="${v}" aria-pressed="${val === v}">${l}</button>`).join("")}</div>`; }
 
 function renderMenu() {
@@ -220,6 +308,8 @@ function renderMenu() {
           <p class="note">“Equilibrado” usa niveles distintos por Pokémon para que los débiles puedan competir (como Random Battle). En “${esc(t.name)} vs CPU” tu equipo mantiene su nivel.</p></div>
         <div class="field"><label>Dinamax / Gigamax</label>${seg("dmax", ST.dmax || "on", [["on","Permitido"],["off","Desactivado"]])}<p class="note">Un Dinamax por combate para cada lado; dura 3 turnos. La megaevolución siempre está disponible si el Pokémon lleva su megapiedra.</p></div>
         <div class="field"><label>Sprites de combate</label>${seg("sprites", ST.sprites || "on", [["on","Animados"],["off","Ilustraciones"]])}<p class="note">Animados: los sprites de la carpeta <code>Battlers</code> (de frente y de espalda, con versión variocolor). Si un Pokémon no tiene sprite, se usa su ilustración.</p></div>
+        <div class="field"><label>Sonido</label>${seg("sound", ST.sound || "all", [["all","Música y efectos"],["sfx","Solo efectos"],["off","Silencio"]])}<p class="note">Gritos de cada Pokémon, golpes, cambios de stats y música de combate (distinta para líderes, Alto Mando, Campeón y competitivo).</p></div>
+        <div class="field"><label>Fondo de combate</label>${seg("bg", ST.bg || "auto", [["auto","Escenarios"],["off","Sin fondo"]])}<p class="note">El escenario depende del rival y de la hora (día, tarde o noche). Los líderes pelean en el gimnasio y la Liga en su estadio.</p></div>
         <div class="field"><label>CPU</label>${seg("diff", ST.diff, [["easy","Fácil"],["normal","Normal"],["hard","Difícil"]])}</div>
         <div class="field"><label>Velocidad del texto</label>${seg("speed", ST.speed, [["slow","Lenta"],["normal","Normal"],["fast","Rápida"]])}</div>
       </div>
@@ -243,7 +333,7 @@ async function renderTeam() {
     </div>
     <div class="slots">${Array.from({length: 6}, (_, i) => { const s = t.sets[i];
       if (!s && i > t.sets.length) return `<div class="slot" style="opacity:.35"></div>`;
-      return `<button class="slot" data-slot="${i}" aria-pressed="${i === SEL}">${s ? `<img src="${esc(img(s.species))}" alt=""><small>${esc(esSp(s.species))}</small><em>Nv. ${s.level}${s.item ? " · " + esc(esItem(s.item)) : ""}</em>` : `<small style="font-size:26px;color:var(--ink3)">+</small><em>Agregar</em>`}</button>`; }).join("")}</div>
+      return `<button class="slot" data-slot="${i}" aria-pressed="${i === SEL}">${s ? `${pimg(s.species)}<small>${esc(esSp(s.species))}</small><em>Nv. ${s.level}${s.item ? " · " + esc(esItem(s.item)) : ""}</em>` : `<small style="font-size:26px;color:var(--ink3)">+</small><em>Agregar</em>`}</button>`; }).join("")}</div>
     <div id="editor">${set ? '<div class="card"><p class="note">Cargando movimientos…</p></div>' : newSlotHTML()}</div>
   </div>`;
   if (set) $("editor").innerHTML = await editorHTML(set);
@@ -271,7 +361,7 @@ async function editorHTML(set) {
       <div class="field"><label>Objeto</label><select id="f-item">${itemOptions(set)}</select></div>
     </div>
     ${set.ability ? `<p class="note"><b>${esc(esAb(set.ability))}:</b> ${esc(esAbDesc(set.ability))}</p>` : ""}
-    ${set.item ? `<p class="note"><b>${esc(esItem(set.item))}:</b> ${esc(esItemDesc(set.item))}</p>` : ""}
+    ${set.item ? `<p class="note">${itemIco(set.item)}<b>${esc(esItem(set.item))}:</b> ${esc(esItemDesc(set.item))}</p>` : ""}
     <label class="sw" style="margin-top:10px"><input type="checkbox" id="f-shiny" ${set.shiny ? "checked" : ""}> Variocolor (shiny)</label>
     ${Dex.species.get(set.species + "-Gmax").exists ? `<label class="sw" style="margin-top:10px"><input type="checkbox" id="f-gmax" ${set.gigantamax ? "checked" : ""}> Puede Gigamaximizarse (factor Gigamax)</label>` : ""}
     <h3 style="margin-top:14px">Movimientos</h3><div class="grid4">${[0, 1, 2, 3].map(i => `<div class="field">${moveSel(i)}${set.moves[i] ? `<p class="note" style="margin:3px 0 0">${(mv => `<b>${esc(esType(mv.type))} · ${mv.category === "Status" ? "Estado" : (mv.category === "Physical" ? "Físico" : "Especial") + " · Pot. " + (mv.basePower || "—")} · Prec. ${accTxt(mv)} · PP ${mv.pp}</b><br>`)(Dex.moves.get(set.moves[i]))}${esc(esMoveDesc(set.moves[i]))}</p>` : ""}</div>`).join("")}</div>
@@ -315,9 +405,10 @@ function newBattle(t1, t2, opts) {
   const s = BattleStreams.getPlayerStreams(new BattleStreams.BattleStream());
   B = {s, t1, t2, mons: {}, act: {p1: null, p2: null}, weather: null, turn: 0, chunks: [], busy: false, req: null, reqReady: false,
        over: false, dead: false, choice: {tera: false, mega: false}, sideCount: {p1: t1.length, p2: t2.length}, fainted: {p1: 0, p2: 0},
-       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null};
+       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine};
   const me = B;
   VIEW = "battle"; render();
+  me.bg = pickBg(me); setBg(me.bg); bgm(pickBgm(me));
   (async () => { for await (const c of s.p1) { if (me.dead) return; me.chunks.push(c); pump(me); } })();
   aiLoop(me);
   if (me.trainer) { const r = me.trainer.r, pre = me.trainer.medal ? "El Líder de Gimnasio " : r.startsWith("Alto Mando") ? "El Alto Mando " : r.startsWith("Campeón") ? "El Campeón " : ""; me.chunks.push("|-intro|" + `¡${pre}${me.trainer.n} te desafía!`); pump(me); }
@@ -400,6 +491,7 @@ async function handle(me, ln) {
   if (!ln.startsWith("|")) return;
   const a = ln.slice(1).split("|"), cmd = a[0], args = a.slice(1);
   const X = (i = 0, s) => nameOf(me, args[i], s);
+  try { sndHook(me, cmd, args); } catch (err) {}
   switch (cmd) {
     case "poke": { if (!me.preview) me.preview = {p1: [], p2: []}; me.preview[args[0]].push(args[1].split(",")[0]); return; }
     case "teampreview": return;
@@ -595,14 +687,14 @@ function partyHTML(me, party, forced) {
     const dis = p.active || hp.hp <= 0;
     const types = p.terastallized ? [p.terastallized] : Dex.species.get(sp).types;
     const mvs = (p.moves || []).map(id => { const mv = Dex.moves.get(id), x = TY[toID(mv.type).toUpperCase()] || TY.NORMAL; return `<span class="pmv" data-info="${esc(id)}" style="--c:${x[1]};--ct:${x[2]}" title="${esc(esType(mv.type) + (mv.category !== "Status" ? " · Pot. " + (mv.basePower || "—") : " · Estado") + " · Prec. " + accTxt(mv) + ". " + esMoveDesc(id))}">${esc(esMove(id))}</span>`; }).join("");
-    return `<button class="pm ${p.active ? "active" : ""}" data-switch="${i + 1}" ${dis ? 'aria-disabled="true"' : ""}><img src="${esc(img(sp))}" alt=""><span><b>${esc(esSp(sp))}</b><span class="pmt">${types.map(tchip).join("")}${p.terastallized ? '<span class="tp" style="--c:var(--surface2);--ct:var(--ink2)">Tera</span>' : ""}</span><span class="hpt" style="display:block;margin:3px 0"><span class="hpf ${pct <= 20 ? "low" : pct <= 50 ? "mid" : ""}" style="width:${pct}%;display:block"></span></span><small>${hp.hp <= 0 ? "Debilitado" : `${hp.hp}/${hp.max}`}${hp.status ? " · " + hp.status.toUpperCase() : ""}${p.active ? " · En combate" : ""}</small><span class="pinfo" data-sheet="${i}" role="button" aria-label="Ver ficha completa">Ficha</span></span>${mvs ? `<span class="pmvs">${mvs}</span>` : ""}</button>`; }).join("")}</div>
+    return `<button class="pm ${p.active ? "active" : ""}" data-switch="${i + 1}" ${dis ? 'aria-disabled="true"' : ""}>${pimg(sp)}<span><b>${esc(esSp(sp))}</b><span class="pmt">${types.map(tchip).join("")}${p.terastallized ? '<span class="tp" style="--c:var(--surface2);--ct:var(--ink2)">Tera</span>' : ""}</span><span class="hpt" style="display:block;margin:3px 0"><span class="hpf ${pct <= 20 ? "low" : pct <= 50 ? "mid" : ""}" style="width:${pct}%;display:block"></span></span><small>${hp.hp <= 0 ? "Debilitado" : `${hp.hp}/${hp.max}`}${hp.status ? " · " + hp.status.toUpperCase() : ""}${p.active ? " · En combate" : ""}</small><span class="pinfo" data-sheet="${i}" role="button" aria-label="Ver ficha completa">Ficha</span></span>${mvs ? `<span class="pmvs">${mvs}</span>` : ""}</button>`; }).join("")}</div>
     ${forced ? "" : '<p class="note">Cambiar de Pokémon usa tu turno.</p>'}`;
 }
 function showPreview(me) {
   const ctl = $("ctl"); const mine = me.t1, foes = me.preview ? me.preview.p2 : me.t2.map(s => s.species);
   $("tb").textContent = "Elige al Pokémon que saldrá primero.";
   ctl.innerHTML = `<div class="card"><div class="preview">
-    <div><h3>Tu equipo</h3><div class="teamstrip">${mine.map((s, i) => `<button class="pick" data-lead="${i + 1}" title="${esc(esSp(s.species))}"><img src="${esc(img(s.species))}" alt="${esc(esSp(s.species))}"></button>`).join("")}</div></div>
+    <div><h3>Tu equipo</h3><div class="teamstrip">${mine.map((s, i) => `<button class="pick" data-lead="${i + 1}" title="${esc(esSp(s.species))}">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}</button>`).join("")}</div></div>
     <div><h3>Rival</h3>${strip(foes.map(s => ({species: s})))}</div></div>
     <p class="note">Toca a tu Pokémon inicial.</p><div class="btns" style="margin-top:8px"><button class="btn" data-act="sheet">Ver fichas de mi equipo</button></div></div>`;
 }
@@ -709,7 +801,7 @@ function startMine() {
   const mine = team().sets.map(cleanSet).filter(s => s.moves.length);
   if (!mine.length) { alert("Tu equipo necesita al menos un Pokémon con movimientos."); return; }
   const lv = Math.round(mine.reduce((a, s) => a + (s.level || 50), 0) / mine.length);
-  newBattle(mine, randomTeam(ST.lvl === "rand" ? lv : +ST.lvl || lv)); B.fromMine = true;
+  newBattle(mine, randomTeam(ST.lvl === "rand" ? lv : +ST.lvl || lv), {fromMine: true});
 }
 
 /* ---------- modo desafío ---------- */
@@ -759,7 +851,7 @@ function renderReto() {
       <span class="rtb">${un ? `<img src="${esc(img(x.team[x.team.length - 1]))}" alt="" loading="lazy">` : '<span class="lock">🔒</span>'}</span>
       <b>${esc(x.n)}</b><small>${ok ? "✓ Superado" : un ? esc(x.r.split(" · ")[0]) : "Bloqueado"}</small></button>`; };
   const sets = tr.team.map(sp => { const d = RETO.sets[Dex.species.get(sp).name]; const r = d && d.sets[0];
-    return `<div class="rs"><img src="${esc(img(sp))}" alt="" loading="lazy"><span><b>${esc(esSp(sp))}</b> <span style="display:inline-flex;gap:3px">${Dex.species.get(sp).types.map(tchip).join("")}</span>
+    return `<div class="rs">${pimg(sp, 'alt="" loading="lazy"')}<span><b>${esc(esSp(sp))}</b> <span style="display:inline-flex;gap:3px">${Dex.species.get(sp).types.map(tchip).join("")}</span>
       <small>${d ? `${d.sets.length} estrategia${d.sets.length > 1 ? "s" : ""} posibles${r ? " · p. ej. “" + esc(r.role) + "”" : ""}` : ""}</small></span></div>`; }).join("");
   $("app").innerHTML = `<div class="top"><button class="back" data-act="menu">‹ Menú</button><h1>Desafío Kanto</h1><span class="lv" style="font-family:var(--mono);font-size:12px;color:var(--ink3)">${retoCount()}/${T.length}</span></div>
   <div class="stack">

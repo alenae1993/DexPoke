@@ -91,9 +91,9 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 .mon.foe{right:9%;top:4%;width:34%;height:37%}
 .mon.me{left:6%;bottom:6%;width:42%;height:46%}
 .mon.me img{transform:scaleX(-1)}
-.mon .spr{display:none;width:var(--s,96px);height:var(--s,96px);flex:none;background-repeat:no-repeat;background-size:auto 100%;background-position:0 0;image-rendering:pixelated;image-rendering:crisp-edges;animation:sprA var(--d,3s) steps(var(--n,1)) infinite;filter:drop-shadow(0 4px 4px rgba(0,0,0,.18));transform-origin:50% 100%}
+.mon .spr{display:none;width:var(--w,96px);height:var(--s,96px);flex:none;background-repeat:no-repeat;background-size:auto 100%;background-position:0 0;image-rendering:pixelated;image-rendering:crisp-edges;animation:sprA var(--d,3s) steps(var(--n,1)) infinite;filter:drop-shadow(0 4px 4px rgba(0,0,0,.18));transform-origin:50% 100%}
 .mon.sp .spr{display:block}.mon.sp img{display:none}
-@keyframes sprA{from{background-position-x:0}to{background-position-x:calc(var(--n,1) * var(--s,96px) * -1)}}
+@keyframes sprA{from{background-position-x:0}to{background-position-x:calc(var(--n,1) * var(--w,96px) * -1)}}
 .mon.hit .spr{animation:sprA var(--d,3s) steps(var(--n,1)) infinite,hit .5s}
 .mon.dmax .spr{transform:scale(1.35);filter:drop-shadow(0 0 12px #FF2D55) drop-shadow(0 0 4px #FF2D55)}
 .tera .spr{filter:drop-shadow(0 0 10px var(--tc,#fff)) drop-shadow(0 4px 4px rgba(0,0,0,.18))}
@@ -238,6 +238,18 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 .smv small{display:block;font-size:12px;color:var(--ink2);margin-top:1px}
 .smd{display:block;font-size:12.5px;color:var(--ink3);margin-top:3px;line-height:1.35}
 .pick{position:relative}.pn{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font:700 12px/20px var(--body);text-align:center}
+
+/* fondos, íconos y fuente del juego */
+@font-face{font-family:"PkmnDP";src:url("fonts/pkmndp.ttf") format("truetype");font-display:swap}
+.textbox{font-family:"PkmnDP",var(--body);font-size:24px;line-height:1.1;font-weight:400;letter-spacing:.02em}
+@media (max-width:460px){.textbox{font-size:21px}}
+.scene.bg{background-size:cover;background-position:center 75%}
+.scene.bg .plat{opacity:.55}
+.ico{display:inline-block;flex:none;width:var(--isz,48px);height:var(--isz,48px);background-repeat:no-repeat;background-size:200% 100%;image-rendering:pixelated;animation:icoA .5s steps(2,jump-none) infinite alternate}
+@keyframes icoA{from{background-position-x:0}to{background-position-x:100%}}
+.teamstrip .ico{background-color:var(--surface2);border-radius:10px}
+.itm{display:inline-block;width:0;height:24px;vertical-align:middle;background-size:contain;background-repeat:no-repeat;image-rendering:pixelated}
+.itm.ok{width:24px;margin-right:4px}
 </style>
 </head>
 <body>
@@ -248,6 +260,7 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 <script src="reto.js"></script>
 <script src="comp.js"></script>
 <script src="sprites.js"></script>
+<script src="assets.js"></script>
 <script src="batalla.js"></script>
 <script src="competitivo.js"></script>
 <script>

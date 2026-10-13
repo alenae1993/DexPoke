@@ -1,10 +1,10 @@
 // Mi Dex — funciona sin internet.
 // La app y los datos se muestran desde la copia guardada y se actualizan en segundo plano:
 // al subir un data.js nuevo, los teléfonos lo ven la siguiente vez que abren la app.
-const APP = "midex-app-v8";
+const APP = "midex-app-v10";
 const IMG = "midex-img-v1";
 const FONTS = "midex-fonts-v1";
-const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js", "reto.js", "comp.js", "tiers.js", "competitivo.js", "sprites.js",
+const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js", "reto.js", "comp.js", "tiers.js", "competitivo.js", "sprites.js", "assets.js", "fonts/pkmndp.ttf",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 
 self.addEventListener("install", e => {
@@ -12,7 +12,7 @@ self.addEventListener("install", e => {
 });
 
 self.addEventListener("activate", e => {
-  const keep = [APP, IMG, FONTS];
+  const keep = [APP, IMG, FONTS, "midex-spr"];
   e.waitUntil(caches.keys()
     .then(ks => Promise.all(ks.filter(k => !keep.includes(k)).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
@@ -22,6 +22,8 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  // Paquetes de sprites: los pide la página por rangos de bytes y los guarda ella misma.
+  if (req.headers.has("range") || url.pathname.includes("/spr/")) return;
 
   // Imágenes de Pokémon: se guardan la primera vez que se ven.
   if (url.hostname === "raw.githubusercontent.com") {

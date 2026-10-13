@@ -168,7 +168,7 @@ function renderComp() {
   const fmt = FMT(CSEL), t = team(), sets = t.sets.filter(s => (s.moves || []).some(Boolean));
   const errs = sets.length ? validate(t.sets, fmt) : [];
   CVAL = {fmt: fmt.id, errs};
-  const rows = t.sets.map(s => `<div class="rs"><img src="${esc(img(s.species))}" alt="" loading="lazy"><span><b>${esc(esSp(s.species))}</b> ${tierBadge(tierFor(s.species, fmt), fmt.nd ? "ND " : "")}
+  const rows = t.sets.map(s => `<div class="rs">${pimg(s.species, 'alt="" loading="lazy"')}<span><b>${esc(esSp(s.species))}</b> ${tierBadge(tierFor(s.species, fmt), fmt.nd ? "ND " : "")}
       <small>${esc((s.moves || []).filter(Boolean).map(esMove).join(" · ") || "Sin movimientos")}</small></span></div>`).join("");
   $("app").innerHTML = `<div class="top"><button class="back" data-act="menu">‹ Menú</button><h1>Competitivo</h1><span></span></div>
   <div class="stack">
@@ -277,14 +277,14 @@ function monSheet(me, idx) {
   const st = hp.status && hp.status !== "fnt" ? ({brn: "Quemado", par: "Paralizado", psn: "Envenenado", tox: "Gravemente envenenado", slp: "Dormido", frz: "Congelado"}[hp.status] || hp.status) : "";
   let el = $("msheet"); if (!el) { el = document.createElement("div"); el.id = "msheet"; document.body.appendChild(el); }
   el.innerHTML = `<div class="shbox" role="dialog" aria-modal="true" aria-label="Ficha de ${esc(esSp(spName))}">
-    <div class="shtabs">${party.map((q, i) => { const n = q.details.split(",")[0], h = parseHP(q.condition); return `<button data-sheet="${i}" aria-pressed="${i === idx}" class="${h.hp <= 0 ? "fnt" : ""}" title="${esc(esSp(n))}"><img src="${esc(img(n))}" alt="${esc(esSp(n))}"></button>`; }).join("")}</div>
+    <div class="shtabs">${party.map((q, i) => { const n = q.details.split(",")[0], h = parseHP(q.condition); return `<button data-sheet="${i}" aria-pressed="${i === idx}" class="${h.hp <= 0 ? "fnt" : ""}" title="${esc(esSp(n))}">${pimg(n, `alt="${esc(esSp(n))}"`)}</button>`; }).join("")}</div>
     <div class="shhead"><img src="${esc(img(spName))}" alt=""><div><h3>${esc(esSp(spName))}${p.details.includes(", M") ? " ♂" : p.details.includes(", F") ? " ♀" : ""} <span class="lv">Nv. ${lv}</span></h3>
       <div style="display:flex;gap:4px;flex-wrap:wrap;margin:4px 0">${types.map(tchip).join("")}${p.terastallized ? '<span class="tp" style="--c:var(--surface2);--ct:var(--ink2)">Tera</span>' : ""}</div>
       <span class="hpt" style="display:block;max-width:220px"><span class="hpf ${hp.max && hp.hp / hp.max <= .2 ? "low" : hp.max && hp.hp / hp.max <= .5 ? "mid" : ""}" style="width:${hp.max ? hp.hp / hp.max * 100 : 0}%;display:block"></span></span>
       <small class="note">${hp.hp <= 0 ? "Debilitado" : `PS ${hp.hp}/${hp.max}`}${st ? " · " + st : ""}${p.active ? " · En combate" : ""}</small></div></div>
     <div class="mrows" style="margin-top:10px">
       <span>Habilidad</span><b>${esc(esAb(ab))}<small class="shd">${esc(esAbDesc(ab))}</small></b>
-      <span>Objeto</span><b>${item ? esc(esItem(item)) + `<small class="shd">${esc(esItemDesc(item))}</small>` : lostItem ? `Ninguno <small class="shd">Tenía ${esc(esItem(lostItem))}; lo usó o lo perdió.</small>` : "Ninguno"}</b>
+      <span>Objeto</span><b>${item ? itemIco(item) + esc(esItem(item)) + `<small class="shd">${esc(esItemDesc(item))}</small>` : lostItem ? `Ninguno <small class="shd">Tenía ${esc(esItem(lostItem))}; lo usó o lo perdió.</small>` : "Ninguno"}</b>
       <span>Naturaleza</span><b>${esc(esNat(nat.name))}${nat.plus ? ` <small class="shd" style="display:inline">(+${STS[nat.plus]} −${STS[nat.minus]})</small>` : ' <small class="shd" style="display:inline">(neutra)</small>'}</b>
       ${p.teraType && !(me.fmt && me.fmt.nd) ? `<span>Teratipo</span><b>${tchip(p.teraType)}${p.terastallized ? ' <small class="shd" style="display:inline">(activo)</small>' : ""}</b>` : ""}
     </div>
@@ -304,7 +304,7 @@ function showPick(me) {
   me.picked = me.picked || [];
   $("tb").textContent = `Elige ${n} Pokémon (en orden: el primero sale primero).`;
   ctl.innerHTML = `<div class="card"><div class="preview">
-    <div><h3>Tu equipo</h3><div class="teamstrip">${mine.map((s, i) => { const k = me.picked.indexOf(i + 1); return `<button class="pick" data-pick="${i + 1}" aria-pressed="${k >= 0}" title="${esc(esSp(s.species))}"><img src="${esc(img(s.species))}" alt="${esc(esSp(s.species))}">${k >= 0 ? `<span class="pn">${k + 1}</span>` : ""}</button>`; }).join("")}</div></div>
+    <div><h3>Tu equipo</h3><div class="teamstrip">${mine.map((s, i) => { const k = me.picked.indexOf(i + 1); return `<button class="pick" data-pick="${i + 1}" aria-pressed="${k >= 0}" title="${esc(esSp(s.species))}">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}${k >= 0 ? `<span class="pn">${k + 1}</span>` : ""}</button>`; }).join("")}</div></div>
     <div><h3>Rival</h3>${strip(foes.map(s => ({species: s})))}</div></div>
     <div class="btns" style="margin-top:10px"><button class="btn pri" data-act="pickgo" ${me.picked.length === Math.min(n, mine.length) ? "" : "disabled"}>Confirmar (${me.picked.length}/${Math.min(n, mine.length)})</button><button class="btn" data-act="sheet">Ver fichas</button></div></div>`;
 }

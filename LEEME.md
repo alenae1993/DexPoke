@@ -97,9 +97,17 @@ Simulador de batallas con las mismas reglas y cálculos que los juegos (Gen 9), 
 - **Sets competitivos** en el editor de equipo: sets de Battle Factory / BSS Factory de Pokémon Showdown (licencia MIT).
 - Los tiers vienen del motor incluido (`@pkmn/sim` 0.10.11). Smogon los cambia cada pocos meses; para actualizarlos hay que regenerar `ps.js`, `comp.js` y `tiers.js`.
 
-## Sprites animados de combate
+## Sprites, fondos, sonidos e íconos de combate (de tu juego)
 
-La batalla usa los sprites animados de la carpeta `Battlers` (formato Pokémon Essentials: cada archivo es una tira de cuadros, `003_1.png` = forma 1, `003f.png` = hembra). Si falta un sprite (por ejemplo, los Pokémon de Paldea), se muestra la ilustración oficial. Se puede volver a las ilustraciones en Batalla → Opciones → Sprites de combate.
+Todo sale de la carpeta `JUEGO` (Pokémon Essentials):
 
-La carpeta debe quedar en la raíz del repositorio como `Battlers/Front`, `Battlers/Back`, `Battlers/FrontShiny` y `Battlers/BackShiny` (respetando mayúsculas). Son unos 4.600 archivos, así que hay que subirla con GitHub Desktop: la web de GitHub solo acepta 100 archivos por subida.
+| Qué | Dónde queda | De dónde sale |
+|---|---|---|
+| Sprites animados de frente/espalda, normal y variocolor | `spr/Front_*.bin`, `Back_*`, `FrontShiny_*`, `BackShiny_*` + índice `sprites.js` | `Graphics/Battlers` |
+| Fondos de combate (día, tarde y noche) | `spr/aBG_0.bin` + `assets.js` | `Graphics/Battlebacks` |
+| Gritos de los Pokémon | `spr/aCry_*.bin` | `Audio/SE/Cries` |
+| Íconos animados de Pokémon y de objetos | `spr/aIco_0.bin`, `spr/aItm_0.bin` | `Graphics/Icons` |
+| Música y efectos | `audio/*.mp3` | `Audio/BGM`, `Audio/ME`, `Audio/SE` |
+| Fuente del cuadro de texto | `fonts/pkmndp.ttf` | `Fonts` |
 
+Los archivos `.bin` son paquetes: la app descarga de cada uno solo el recurso que necesita y lo guarda para usarlo sin internet. Si falta algo (por ejemplo, Pokémon de Paldea), se usa la ilustración oficial. En Batalla → Opciones se puede cambiar el sonido (música y efectos / solo efectos / silencio), el fondo y volver a las ilustraciones.
