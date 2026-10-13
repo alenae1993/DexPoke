@@ -32,6 +32,43 @@ function mdOf(name) {
 }
 function exactMd(name) { const sp = Dex.species.get(name); return MD[toID(sp.exists ? sp.name : name).toUpperCase()]; }
 function img(name) { const p = mdOf(name); const sp = Dex.species.get(name); return p ? ART + (exactMd(name) ? (p.im || p.id) : (p.im || p.id)) + ".png" : (sp.num > 0 ? ART + sp.num + ".png" : ""); }
+/* ---------- sprites animados (carpeta Battlers de Pokémon Essentials) ---------- */
+const SPRSET = {};
+if (typeof SPR !== "undefined") for (const k in SPR.files) SPRSET[k] = new Map(SPR.files[k].split(",").map(n => [n.toLowerCase().replace(/\.png$/, ""), n]));
+const SPRBAD = new Set(), SPRDIM = {};
+function sprKey(name) {
+  if (typeof SPR === "undefined") return null;
+  const sp = Dex.species.get(name); if (!sp.exists || sp.num < 1 || sp.num > 905) return null;
+  if (SPR.forme[sp.id]) return SPR.forme[sp.id];
+  const pad = String(sp.num).padStart(3, "0");
+  if (sp.name === sp.baseSpecies) return pad;
+  if (/Mega|Primal|Alola|Galar|Hisui|Paldea|Gmax|Totem/.test(sp.forme)) return null; // forma distinta sin sprite: usa la ilustración
+  return pad; // formas cosméticas (gorras de Pikachu, motivos de Vivillon…): sprite base
+}
+function sprUrl(name, back, shiny, female) {
+  const key = sprKey(name); if (!key || ST.sprites === "off") return null;
+  const dirs = shiny ? [back ? "BackShiny" : "FrontShiny", back ? "Back" : "Front"] : [back ? "Back" : "Front"];
+  for (const dir of dirs) { const set = SPRSET[dir]; if (!set) continue;
+    for (const c of female ? [key + "f", "female/" + key, key] : [key]) { const f = set.get(c); if (f) { const url = `Battlers/${dir}/${/\.png$/i.test(f) ? f : f + ".png"}`; if (!SPRBAD.has(url)) return url; } } }
+  return null;
+}
+function setSprite(el, url, side) {
+  const box = el.querySelector(".spr");
+  if (!box || !url) { el.classList.remove("sp"); el.dataset.spr = ""; return; }
+  const size = () => { const d = SPRDIM[url]; if (!d) return; const sc = $("scene"); const W = sc ? sc.clientWidth : 512;
+    let px = d.h * W / 512 * (side === "p1" ? 2.1 : 2); const cap = el.clientHeight * 1.35; if (px > cap) px = cap;
+    box.style.setProperty("--s", Math.round(px) + "px"); box.style.setProperty("--n", d.n); box.style.setProperty("--d", Math.max(0.4, d.n / 26).toFixed(2) + "s"); };
+  if (el.dataset.spr === url) { size(); return; }
+  el.dataset.spr = url;
+  const show = () => { if (el.dataset.spr !== url) return; box.style.backgroundImage = `url("${url}")`; size(); el.classList.add("sp"); };
+  if (SPRDIM[url]) return show();
+  const im = new Image();
+  im.onload = () => { SPRDIM[url] = {h: im.naturalHeight, n: Math.max(1, Math.round(im.naturalWidth / im.naturalHeight))}; show(); };
+  im.onerror = () => { SPRBAD.add(url); if (el.dataset.spr === url) { el.dataset.spr = ""; el.classList.remove("sp"); } };
+  im.src = url;
+}
+window.addEventListener("resize", () => { if (B) drawAll(B); });
+
 function esSp(name) { const p = exactMd(name); if (p) return p.n; const sp = Dex.species.get(name); return sp.exists ? sp.name : name; }
 function esMove(id) { const k = toID(id), m = D.M[k.toUpperCase()]; if (m && !(m[0] === m[10] && ESX.M && ESX.M[k] && ESX.M[k] !== m[0])) return m[0]; if (k.startsWith("hiddenpower")) return "Poder Oculto"; if (ESX.M && ESX.M[k]) return ESX.M[k];
   const mv = Dex.moves.get(id);
@@ -182,6 +219,7 @@ function renderMenu() {
         <div class="field"><label>Nivel</label>${seg("lvl", ST.lvl, [["50","Nivel 50"],["100","Nivel 100"],["rand","Equilibrado"]])}
           <p class="note">“Equilibrado” usa niveles distintos por Pokémon para que los débiles puedan competir (como Random Battle). En “${esc(t.name)} vs CPU” tu equipo mantiene su nivel.</p></div>
         <div class="field"><label>Dinamax / Gigamax</label>${seg("dmax", ST.dmax || "on", [["on","Permitido"],["off","Desactivado"]])}<p class="note">Un Dinamax por combate para cada lado; dura 3 turnos. La megaevolución siempre está disponible si el Pokémon lleva su megapiedra.</p></div>
+        <div class="field"><label>Sprites de combate</label>${seg("sprites", ST.sprites || "on", [["on","Animados"],["off","Ilustraciones"]])}<p class="note">Animados: los sprites de la carpeta <code>Battlers</code> (de frente y de espalda, con versión variocolor). Si un Pokémon no tiene sprite, se usa su ilustración.</p></div>
         <div class="field"><label>CPU</label>${seg("diff", ST.diff, [["easy","Fácil"],["normal","Normal"],["hard","Difícil"]])}</div>
         <div class="field"><label>Velocidad del texto</label>${seg("speed", ST.speed, [["slow","Lenta"],["normal","Normal"],["fast","Rápida"]])}</div>
       </div>
@@ -234,6 +272,7 @@ async function editorHTML(set) {
     </div>
     ${set.ability ? `<p class="note"><b>${esc(esAb(set.ability))}:</b> ${esc(esAbDesc(set.ability))}</p>` : ""}
     ${set.item ? `<p class="note"><b>${esc(esItem(set.item))}:</b> ${esc(esItemDesc(set.item))}</p>` : ""}
+    <label class="sw" style="margin-top:10px"><input type="checkbox" id="f-shiny" ${set.shiny ? "checked" : ""}> Variocolor (shiny)</label>
     ${Dex.species.get(set.species + "-Gmax").exists ? `<label class="sw" style="margin-top:10px"><input type="checkbox" id="f-gmax" ${set.gigantamax ? "checked" : ""}> Puede Gigamaximizarse (factor Gigamax)</label>` : ""}
     <h3 style="margin-top:14px">Movimientos</h3><div class="grid4">${[0, 1, 2, 3].map(i => `<div class="field">${moveSel(i)}${set.moves[i] ? `<p class="note" style="margin:3px 0 0">${(mv => `<b>${esc(esType(mv.type))} · ${mv.category === "Status" ? "Estado" : (mv.category === "Physical" ? "Físico" : "Especial") + " · Pot. " + (mv.basePower || "—")} · Prec. ${accTxt(mv)} · PP ${mv.pp}</b><br>`)(Dex.moves.get(set.moves[i]))}${esc(esMoveDesc(set.moves[i]))}</p>` : ""}</div>`).join("")}</div>
     <h3 style="margin-top:14px">Naturaleza, EVs e IVs</h3>
@@ -258,8 +297,8 @@ function renderBattleShell() {
   $("app").innerHTML = `<div class="top"><button class="back" data-act="quit">‹ Salir</button><h1 id="turnLbl">Batalla</h1><span></span></div>
   <div class="scene" id="scene">
     <div class="plat foe"></div><div class="plat me"></div>
-    <div class="mon foe out" id="mon-p2"><img alt=""></div>
-    <div class="mon me out" id="mon-p1"><img alt=""></div>
+    <div class="mon foe out" id="mon-p2"><img alt=""><div class="spr" aria-hidden="true"></div></div>
+    <div class="mon me out" id="mon-p1"><img alt=""><div class="spr" aria-hidden="true"></div></div>
     <div class="hud foe" id="hud-p2" hidden></div>
     <div class="hud me" id="hud-p1" hidden></div>
     <div class="balls foe" id="balls-p2"></div><div class="balls me" id="balls-p1"></div>
@@ -333,12 +372,13 @@ function drawSide(me, side) {
   if (!el) return;
   if (!m) { hud.hidden = true; return; }
   const im = el.querySelector("img"); const gsp = m.gmax && Dex.species.get(m.species + "-Gmax"); const src = gsp && gsp.exists && exactMd(gsp.name) ? img(gsp.name) : img(m.species); if (im.getAttribute("src") !== src) im.src = src;
+  setSprite(el, gsp && gsp.exists ? null : sprUrl(m.species, side === "p1", m.shiny, m.gender === "F"), side);
   el.classList.toggle("dmax", !!m.dmax);
   el.classList.toggle("tera", !!m.tera); if (m.tera) el.style.setProperty("--tc", (TY[toID(m.tera).toUpperCase()] || TY.NORMAL)[1]);
   hud.hidden = false;
   const pct = m.max ? Math.max(0, m.hp / m.max * 100) : 0;
   const bst = Object.entries(m.boosts || {}).filter(([, v]) => v).map(([k, v]) => `<span style="color:${v > 0 ? "var(--good)" : "var(--bad)"}">${STS[k] || (k === "accuracy" ? "Prec" : k === "evasion" ? "Eva" : k)} ${v > 0 ? "+" : ""}${v}</span>`).join("");
-  hud.innerHTML = `<div class="nm"><span>${esc(esSp(m.species))}${m.gender === "M" ? " ♂" : m.gender === "F" ? " ♀" : ""}</span><span class="lv">Nv. ${m.level}</span></div>
+  hud.innerHTML = `<div class="nm"><span>${esc(esSp(m.species))}${m.gender === "M" ? " ♂" : m.gender === "F" ? " ♀" : ""}${m.shiny ? ' <span title="Variocolor" style="color:#E0A800">★</span>' : ""}</span><span class="lv">Nv. ${m.level}</span></div>
     <div class="hts">${(m.tera ? [m.tera] : Dex.species.get(m.species).types).map(tchip).join("")}${m.tera ? '<span class="tp" style="--c:var(--surface2);--ct:var(--ink2)">Tera</span>' : ""}${m.dmax ? `<span class="tp" style="--c:#D6264F;--ct:#fff">${m.gmax ? "Gigamax" : "Dinamax"}</span>` : ""}</div>
     <div class="hpb"><i>PS</i><span class="hpt"><span class="hpf ${pct <= 20 ? "low" : pct <= 50 ? "mid" : ""}" style="width:${pct}%;display:block"></span></span></div>
     <div class="hpn"><span>${m.status && m.status !== "fnt" ? `<span class="sts ${m.status}">${{brn: "QUE", par: "PAR", psn: "ENV", tox: "ENV", slp: "DOR", frz: "CON"}[m.status] || m.status.toUpperCase()}</span>` : ""}</span><span>${side === "p1" ? `${Math.max(0, m.hp)}/${m.max}` : `${Math.round(pct)}%`}</span></div>
@@ -369,7 +409,7 @@ async function handle(me, ln) {
       const side = sideOf(args[0]), key = keyOf(args[0]), det = args[1].split(", ");
       const hp = parseHP(args[2] || "100/100");
       const old = me.mons[key] || {};
-      const m = me.mons[key] = Object.assign(old, {side, species: det[0], level: +((det.find(d => /^L\d+/.test(d)) || "L100").slice(1)), gender: det.includes("M") ? "M" : det.includes("F") ? "F" : "", hp: hp.hp, max: hp.max || 100, status: hp.status, boosts: {}, dmax: false, gmax: false, tera: det.find(d => d.startsWith("tera:"))?.slice(5) || old.tera || ""});
+      const m = me.mons[key] = Object.assign(old, {side, species: det[0], level: +((det.find(d => /^L\d+/.test(d)) || "L100").slice(1)), gender: det.includes("M") ? "M" : det.includes("F") ? "F" : "", shiny: det.includes("shiny"), hp: hp.hp, max: hp.max || 100, status: hp.status, boosts: {}, dmax: false, gmax: false, tera: det.find(d => d.startsWith("tera:"))?.slice(5) || old.tera || ""});
       const prev = me.act[side];
       if (prev && prev !== key && cmd !== "replace") {
         if (me.mons[prev] && me.mons[prev].hp > 0) { if (side === "p1") await say(me, `¡${esSp(me.mons[prev].species)}, vuelve!`, 0.6); else if (cmd === "switch") await say(me, `${me.foeName || "El rival"} retiró a ${esSp(me.mons[prev].species)}.`, 0.6); }
@@ -795,6 +835,7 @@ document.addEventListener("change", async e => {
   else if (el.id === "f-ability") s.ability = el.value;
   else if (el.id === "f-item") s.item = el.value;
   else if (el.id === "f-gmax") s.gigantamax = el.checked;
+  else if (el.id === "f-shiny") s.shiny = el.checked;
   else if (el.id === "f-nature") s.nature = el.value;
   else if (el.dataset.move != null) s.moves[+el.dataset.move] = el.value;
   else if (el.dataset.iv) s.ivs[el.dataset.iv] = Math.max(0, Math.min(31, +el.value || 0));

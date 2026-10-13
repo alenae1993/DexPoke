@@ -91,6 +91,13 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 .mon.foe{right:9%;top:4%;width:34%;height:37%}
 .mon.me{left:6%;bottom:6%;width:42%;height:46%}
 .mon.me img{transform:scaleX(-1)}
+.mon .spr{display:none;width:var(--s,96px);height:var(--s,96px);flex:none;background-repeat:no-repeat;background-size:auto 100%;background-position:0 0;image-rendering:pixelated;image-rendering:crisp-edges;animation:sprA var(--d,3s) steps(var(--n,1)) infinite;filter:drop-shadow(0 4px 4px rgba(0,0,0,.18));transform-origin:50% 100%}
+.mon.sp .spr{display:block}.mon.sp img{display:none}
+@keyframes sprA{from{background-position-x:0}to{background-position-x:calc(var(--n,1) * var(--s,96px) * -1)}}
+.mon.hit .spr{animation:sprA var(--d,3s) steps(var(--n,1)) infinite,hit .5s}
+.mon.dmax .spr{transform:scale(1.35);filter:drop-shadow(0 0 12px #FF2D55) drop-shadow(0 0 4px #FF2D55)}
+.tera .spr{filter:drop-shadow(0 0 10px var(--tc,#fff)) drop-shadow(0 4px 4px rgba(0,0,0,.18))}
+.mon.sp{overflow:visible}
 .mon.out{opacity:0;transform:translateY(22%) scale(.6)}
 .mon.faint{opacity:0;transform:translateY(40%)}
 .mon.hit img{animation:hit .5s}
@@ -240,6 +247,7 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 <script src="ps.js"></script>
 <script src="reto.js"></script>
 <script src="comp.js"></script>
+<script src="sprites.js"></script>
 <script src="batalla.js"></script>
 <script src="competitivo.js"></script>
 <script>

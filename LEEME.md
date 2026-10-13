@@ -76,6 +76,8 @@ Los efectos numéricos de las **habilidades** no vienen en tu modelo: están esc
 | `herramientas/actualizar_datos.py` | Regenera `data.js` desde el `.pbix` |
 | `tiers.js` | Categoría competitiva (tier) de cada Pokémon para la Pokédex |
 | `batalla.html`, `batalla.js`, `ps.js`, `esx.js`, `reto.js` | Simulador de batallas y modo Desafío |
+| `sprites.js` | Qué sprite de la carpeta `Battlers` corresponde a cada Pokémon y forma |
+| `Battlers/` (la subes tú) | Sprites animados de combate: `Front`, `Back`, `FrontShiny`, `BackShiny` |
 | `competitivo.js`, `comp.js` | Modo Competitivo, validación de equipos, sets competitivos y fichas en batalla |
 
 ## Batalla (batalla.html)
@@ -94,4 +96,10 @@ Simulador de batallas con las mismas reglas y cálculos que los juegos (Gen 9), 
 - **Batalla → Competitivo:** formatos Combate Clasificatorio (BSS, nivel 50, elige 3 de 6), Ubers, OU, UU, RU, NU, PU, ZU y National Dex OU. Revisa si tu equipo es legal con el validador de Showdown, juega con tu equipo o con equipos de ejemplo del formato.
 - **Sets competitivos** en el editor de equipo: sets de Battle Factory / BSS Factory de Pokémon Showdown (licencia MIT).
 - Los tiers vienen del motor incluido (`@pkmn/sim` 0.10.11). Smogon los cambia cada pocos meses; para actualizarlos hay que regenerar `ps.js`, `comp.js` y `tiers.js`.
+
+## Sprites animados de combate
+
+La batalla usa los sprites animados de la carpeta `Battlers` (formato Pokémon Essentials: cada archivo es una tira de cuadros, `003_1.png` = forma 1, `003f.png` = hembra). Si falta un sprite (por ejemplo, los Pokémon de Paldea), se muestra la ilustración oficial. Se puede volver a las ilustraciones en Batalla → Opciones → Sprites de combate.
+
+La carpeta debe quedar en la raíz del repositorio como `Battlers/Front`, `Battlers/Back`, `Battlers/FrontShiny` y `Battlers/BackShiny` (respetando mayúsculas). Son unos 4.600 archivos, así que hay que subirla con GitHub Desktop: la web de GitHub solo acepta 100 archivos por subida.
 
