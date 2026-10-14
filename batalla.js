@@ -53,7 +53,7 @@ function packURL(ck, file, off, len, mime) {
     return URL.createObjectURL(blob);
   })().catch(() => null));
 }
-const AMIME = {BG: "image/webp", Cry: "audio/mpeg"};
+const AMIME = {BG: "image/webp", Cry: "audio/mpeg", ASE: "audio/mpeg", Anim: "application/json"};
 function assetURL(group, key) {
   const e = typeof ASSET !== "undefined" && ASSET.idx[group] && ASSET.idx[group][key];
   if (!e) return Promise.resolve(null);
@@ -108,16 +108,33 @@ function pickBgm(me) {
   if (me.fmt) return "bgm_boss";
   return me.fromMine ? "bgm_trainer" : "bgm_wild";
 }
+const fxOn = () => typeof ANIMIDX !== "undefined" && ST.anims !== "off";
 function sndHook(me, cmd, args) {
-  if (cmd === "switch" || cmd === "drag") { const det = args[1].split(", "); sfx("se_out", .5); setTimeout(() => cry(det[0]), 380); if (det.includes("shiny")) setTimeout(() => sfx("se_shiny"), 800); }
+  if (cmd === "switch" || cmd === "drag") { const det = args[1].split(", "); sfx("se_out", .5); setTimeout(() => cry(det[0]), 380); if (det.includes("shiny") && !fxOn()) setTimeout(() => sfx("se_shiny"), 800); }
   else if (cmd === "faint") { const m = mon(me, args[0]); sfx("se_faint"); if (m) cry(m.species, .78); }
   else if (cmd === "-supereffective" || cmd === "-resisted") (me.eff = me.eff || {})[keyOf(args[0])] = cmd === "-resisted" ? "se_weak" : "se_super";
   else if (cmd === "-damage" && !args.some(x => x.startsWith("[from]"))) { const k = keyOf(args[0]); const s = (me.eff && me.eff[k]) || "se_hit"; if (me.eff) delete me.eff[k]; sfx(s); }
-  else if (cmd === "-boost") sfx("se_up", .5); else if (cmd === "-unboost") sfx("se_down", .5);
-  else if (cmd === "-mega") sfx("se_mega");
+  else if (cmd === "-boost" && !fxOn()) sfx("se_up", .5); else if (cmd === "-unboost" && !fxOn()) sfx("se_down", .5);
+  else if (cmd === "-mega" && !fxOn()) sfx("se_mega");
   else if (cmd === "-fieldstart" || cmd === "-fieldend") { const f = {electricterrain: "CampoElectrico", grassyterrain: "CampoHierba", mistyterrain: "CampoNiebla", psychicterrain: "CampoPsiquico"}[toID(args[0].replace(/^move:\s*/, ""))];
     if (f && ST.bg !== "off") setBg(cmd === "-fieldstart" ? f : me.bg); }
   else if (cmd === "win" || cmd === "tie") { bgmStop(); if (cmd === "win" && args[0] === "Tú") bgm(me.trainer && me.trainer.medal ? "me_gym" : me.trainer || me.fmt || me.fromMine ? "me_win" : "me_wild", false); }
+}
+
+/* ---------- animaciones comunes (estados, stats, clima…) ---------- */
+const STATUS_ANIM = {brn: "Burn", psn: "Poison", tox: "Poison", par: "Paralysis", slp: "Sleep", frz: "Frozen"};
+const WX_ANIM = {RainDance: "Rain", PrimordialSea: "HeavyRain", SunnyDay: "Sunny", DesolateLand: "Sunny", Sandstorm: "Sandstorm", Hail: "Hail", Snow: "Hail", Snowscape: "Hail"};
+async function fxHook(me, cmd, args) {
+  const from = (args.find(x => x.startsWith("[from]")) || "").slice(6).trim().toLowerCase();
+  if (cmd === "-boost") return playCommon(me, "StatUp", args[0]);
+  if (cmd === "-unboost") return playCommon(me, "StatDown", args[0]);
+  if (cmd === "-status" && STATUS_ANIM[args[1]]) return playCommon(me, STATUS_ANIM[args[1]], args[0]);
+  if (cmd === "-damage" && from) { const st = {brn: "Burn", psn: "Poison", tox: "Poison"}[from]; if (st) return playCommon(me, st, args[0]); if (from.includes("leech seed")) return playCommon(me, "LeechSeed", args[0]); }
+  if (cmd === "-heal" && from && !from.includes("drain")) return playCommon(me, "HealthUp", args[0]);
+  if (cmd === "-weather" && args.includes("[upkeep]") && WX_ANIM[args[0]]) return playCommon(me, WX_ANIM[args[0]], null);
+  if (cmd === "-start" && /confusion/i.test(args[1] || "")) return playCommon(me, "Confusion", args[0]);
+  if (cmd === "-mega") return playCommon(me, "MegaEvolution", args[0]);
+  if ((cmd === "switch" || cmd === "drag") && args[1].includes("shiny")) { await sleep(500); return playCommon(me, "Shiny", args[0]); }
 }
 
 /* ---------- fondos de combate ---------- */
@@ -309,6 +326,7 @@ function renderMenu() {
         <div class="field"><label>Dinamax / Gigamax</label>${seg("dmax", ST.dmax || "on", [["on","Permitido"],["off","Desactivado"]])}<p class="note">Un Dinamax por combate para cada lado; dura 3 turnos. La megaevolución siempre está disponible si el Pokémon lleva su megapiedra.</p></div>
         <div class="field"><label>Sprites de combate</label>${seg("sprites", ST.sprites || "on", [["on","Animados"],["off","Ilustraciones"]])}<p class="note">Animados: los sprites de la carpeta <code>Battlers</code> (de frente y de espalda, con versión variocolor). Si un Pokémon no tiene sprite, se usa su ilustración.</p></div>
         <div class="field"><label>Sonido</label>${seg("sound", ST.sound || "all", [["all","Música y efectos"],["sfx","Solo efectos"],["off","Silencio"]])}<p class="note">Gritos de cada Pokémon, golpes, cambios de stats y música de combate (distinta para líderes, Alto Mando, Campeón y competitivo).</p></div>
+        <div class="field"><label>Animaciones de ataques</label>${seg("anims", ST.anims || "on", [["on","Activadas"],["off","Desactivadas"]])}<p class="note">Las animaciones de tu juego (Pokémon Essentials): más de 700 ataques, estados, cambios de stats y clima. Con texto rápido se reproducen más rápido.</p></div>
         <div class="field"><label>Fondo de combate</label>${seg("bg", ST.bg || "auto", [["auto","Escenarios"],["off","Sin fondo"]])}<p class="note">El escenario depende del rival y de la hora (día, tarde o noche). Los líderes pelean en el gimnasio y la Liga en su estadio.</p></div>
         <div class="field"><label>CPU</label>${seg("diff", ST.diff, [["easy","Fácil"],["normal","Normal"],["hard","Difícil"]])}</div>
         <div class="field"><label>Velocidad del texto</label>${seg("speed", ST.speed, [["slow","Lenta"],["normal","Normal"],["fast","Rápida"]])}</div>
@@ -492,6 +510,7 @@ async function handle(me, ln) {
   const a = ln.slice(1).split("|"), cmd = a[0], args = a.slice(1);
   const X = (i = 0, s) => nameOf(me, args[i], s);
   try { sndHook(me, cmd, args); } catch (err) {}
+  if (typeof playCommon === "function" && ST.anims !== "off") { try { await fxHook(me, cmd, args); } catch (err) {} }
   switch (cmd) {
     case "poke": { if (!me.preview) me.preview = {p1: [], p2: []}; me.preview[args[0]].push(args[1].split(",")[0]); return; }
     case "teampreview": return;
@@ -523,7 +542,9 @@ async function handle(me, ln) {
       const side = sideOf(args[0]);
       const miss = args.some(x => x === "[miss]"), still = args.some(x => x === "[still]");
       await say(me, `¡${X(0, 1)} usó ${esMove(args[1])}!`, 0.8);
-      if (!still && !miss) anim(side, "lunge", 350);
+      if (!still) { const tg = args[2] && /^p\d/.test(args[2]) ? args[2] : null;
+        const played = typeof playMoveAnim === "function" && await playMoveAnim(me, args[0], tg, args[1]);
+        if (!played && !miss) anim(side, "lunge", 350); }
       return;
     }
     case "cant": {

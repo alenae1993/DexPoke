@@ -107,7 +107,8 @@ Todo sale de la carpeta `JUEGO` (Pokémon Essentials):
 | Fondos de combate (día, tarde y noche) | `spr/aBG_0.bin` + `assets.js` | `Graphics/Battlebacks` |
 | Gritos de los Pokémon | `spr/aCry_*.bin` | `Audio/SE/Cries` |
 | Íconos animados de Pokémon y de objetos | `spr/aIco_0.bin`, `spr/aItm_0.bin` | `Graphics/Icons` |
+| Animaciones de ataques (1072, con sus gráficos y sonidos) | `spr/aAnim_*.bin`, `spr/aAG_*.bin`, `spr/aASE_*.bin` + `anim.js`, `animidx.js` | `Data/PkmnAnimations.rxdata`, `Graphics/Animations`, `Audio/SE/Anim` |
 | Música y efectos | `audio/*.mp3` | `Audio/BGM`, `Audio/ME`, `Audio/SE` |
 | Fuente del cuadro de texto | `fonts/pkmndp.ttf` | `Fonts` |
 
-Los archivos `.bin` son paquetes: la app descarga de cada uno solo el recurso que necesita y lo guarda para usarlo sin internet. Si falta algo (por ejemplo, Pokémon de Paldea), se usa la ilustración oficial. En Batalla → Opciones se puede cambiar el sonido (música y efectos / solo efectos / silencio), el fondo y volver a las ilustraciones.
+Los archivos `.bin` son paquetes: la app descarga de cada uno solo el recurso que necesita y lo guarda para usarlo sin internet. Si falta algo (por ejemplo, Pokémon de Paldea), se usa la ilustración oficial. En Batalla → Opciones se puede cambiar el sonido (música y efectos / solo efectos / silencio), el fondo, apagar las animaciones de ataques y volver a las ilustraciones. Los ataques sin animación propia en tu juego usan una del mismo tipo y categoría.

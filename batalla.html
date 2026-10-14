@@ -250,6 +250,14 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 .teamstrip .ico{background-color:var(--surface2);border-radius:10px}
 .itm{display:inline-block;width:0;height:24px;vertical-align:middle;background-size:contain;background-repeat:no-repeat;image-rendering:pixelated}
 .itm.ok{width:24px;margin-right:4px}
+
+/* animaciones de ataques */
+.scene .plat{z-index:0}.scene .mon{z-index:3}.scene .hud,.scene .balls,.scene .weather{z-index:6}
+.fxc{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#fxB{z-index:2}#fxF{z-index:4}
+.fxl{position:absolute;inset:0;pointer-events:none;display:none;background-repeat:repeat;background-size:100% 100%}
+#fxBG{z-index:1}#fxFG{z-index:5}#fxFlash{z-index:7}
+.mon{transition:opacity .35s,transform .35s,translate 0s}
 </style>
 </head>
 <body>
@@ -263,6 +271,8 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 <script src="assets.js"></script>
 <script src="batalla.js"></script>
 <script src="competitivo.js"></script>
+<script src="animidx.js"></script>
+<script src="anim.js"></script>
 <script>
 if("serviceWorker" in navigator&&location.protocol.startsWith("http")){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
 </script>
