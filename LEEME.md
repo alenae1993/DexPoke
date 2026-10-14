@@ -112,3 +112,16 @@ Todo sale de la carpeta `JUEGO` (Pokémon Essentials):
 | Fuente del cuadro de texto | `fonts/pkmndp.ttf` | `Fonts` |
 
 Los archivos `.bin` son paquetes: la app descarga de cada uno solo el recurso que necesita y lo guarda para usarlo sin internet. Si falta algo (por ejemplo, Pokémon de Paldea), se usa la ilustración oficial. En Batalla → Opciones se puede cambiar el sonido (música y efectos / solo efectos / silencio), el fondo, apagar las animaciones de ataques y volver a las ilustraciones. Los ataques sin animación propia en tu juego usan una del mismo tipo y categoría.
+
+## Pokémon Champions (estrategias de Smogon)
+
+`champions.js` trae los datos de la [Strategy Pokédex de Smogon para Pokémon Champions](https://www.smogon.com/dex/champions/pokemon/):
+
+- El **tier de Champions** de 349 Pokémon (Ubers, OU, UUBL, UU, RU), que también sirve como filtro en la Pokédex.
+- **253 sets** de 88 Pokémon en cinco formatos: OU individual, Battle Stadium Singles y VGC 2026 (Reg. M-A, M-B y M-C).
+
+En la ficha de cada Pokémon aparece la tarjeta **Pokémon Champions** con cada set: movimientos (con alternativas), objeto, habilidad, naturaleza, puntos de stats (SP) y un resumen en español. El resumen lo arma la app a partir de los movimientos y objetos del set; no es una traducción del análisis. Cada set da crédito a sus autores y enlaza al análisis completo en Smogon.
+
+En **Batalla → Mi equipo → Cargar un set competitivo** también aparecen los sets de Champions que el motor de batalla reconoce. Champions usa 66 SP (máx. 32 por stat) en vez de EVs, así que la app los convierte de forma proporcional (SP × 8, ajustado al límite de 510 EVs). Las Megas nuevas de Champions (Mega-Garchomp Z, Mega-Starmie, etc.) solo se muestran en la Pokédex, porque el motor no las conoce.
+
+Para actualizar los datos: se descargan los sets desde la Pokédex de Smogon y se regenera `champions.js` con `build_champ.js`.

@@ -222,23 +222,35 @@ function compSetsFor(species) {
       pool[k].sets.forEach((s, j) => { const ssp = Dex.species.get(s.s); if (ssp.id === sp.id || (ssp.battleOnly && toID(ssp.baseSpecies) === sp.id)) out.push({src, k, j, s}); });
     }
   }
+  if (typeof CHAMP !== "undefined") {
+    for (const [k, list] of Object.entries(CHAMP.s)) list.forEach((x, j) => {
+      const xs = Dex.species.get(x.p); if (!xs.exists) return;
+      if (!(xs.id === sp.id || (xs.battleOnly && toID(xs.baseSpecies) === sp.id))) return;
+      const it = Dex.items.get(x.i[0][0]); if (x.i[0][0] !== "No Item" && !it.exists) return;
+      const moves = x.m.map(sl => sl.map(m => m[0]).find(m => Dex.moves.get(m).exists)).filter(Boolean); if (moves.length < x.m.length) return;
+      const tot = x.sp.reduce((a, b) => a + b, 0) * 8, k8 = tot > 508 ? 508 / tot : 1, ev = {};
+      ["hp", "atk", "def", "spa", "spd", "spe"].forEach((st, i) => ev[st] = Math.min(252, Math.floor(x.sp[i] * 8 * k8 / 4) * 4));
+      out.push({src: "CH", k, j, s: {s: xs.battleOnly ? xs.baseSpecies : x.p, m: moves.map(m => [m]), i: x.i[0][0] === "No Item" ? [] : [x.i[0][0]], a: x.a.length ? [x.a[0][0]] : [], n: [x.na[0][0]], e: ev, t: [], champ: x}});
+    });
+  }
   return out;
 }
 function compSetOptions(set) {
   const list = compSetsFor(set.species); if (!list.length) return "";
-  const lab = x => `${x.src === "BSS" ? "BSS (nv 50)" : x.src === "Uber" ? "Ubers" : x.src} · ${x.s.m.map(sl => esMove(toID(sl[0]))).join(" / ")}${x.s.i[0] ? " · " + esItem(toID(x.s.i[0])) : ""}`;
+  const lab = x => `${x.src === "CH" ? "Champions " + CHAMP.f[x.s.champ.f][0].replace("VGC 2026 ", "VGC ").replace("Battle Stadium Singles", "BSS") + " · " + (x.s.champ.r || x.s.champ.n) : x.src === "BSS" ? "BSS (nv 50)" : x.src === "Uber" ? "Ubers" : x.src} · ${x.s.m.map(sl => esMove(toID(sl[0]))).join(" / ")}${x.s.i[0] ? " · " + esItem(toID(x.s.i[0])) : ""}`;
   return `<div class="field" style="margin-top:10px"><label>Cargar un set competitivo (${list.length})</label><select id="f-cset"><option value="">Elige un set usado en competitivo…</option>${list.map(x => `<option value="${x.src}|${x.k}|${x.j}">${esc(lab(x))}</option>`).join("")}</select>
-    <p class="note" style="margin-top:3px">Sets de Battle Factory de Pokémon Showdown. Reemplaza movimientos, objeto, habilidad, naturaleza, EVs y teratipo.</p></div>`;
+    <p class="note" style="margin-top:3px">Sets de Battle Factory de Pokémon Showdown y de Pokémon Champions (Smogon; sus puntos de stats se convierten a EVs). Reemplaza movimientos, objeto, habilidad, naturaleza, EVs y teratipo.</p></div>`;
 }
 function applyCompSet(set, val) {
-  const [src, k, j] = val.split("|"), s = COMP.sets[src][k].sets[+j];
+  const [src, k, j] = val.split("|");
+  const s = src === "CH" ? compSetsFor(set.species).find(x => x.src === "CH" && x.k === k && x.j === +j).s : COMP.sets[src][k].sets[+j];
   const sp = Dex.species.get(s.s);
   set.moves = s.m.map(sl => toID(sl[0])).slice(0, 4);
   set.item = toID(s.i[0] || ""); set.ability = s.a[0] || set.ability; set.nature = s.n[0] || set.nature;
   set.evs = Object.assign({hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0}, s.e); set.ivs = Object.assign({hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31}, s.iv || {});
   if (s.t[0]) set.teraType = s.t[0];
   if (sp.battleOnly && sp.requiredItem) set.item = toID(sp.requiredItem);
-  if (src === "BSS") set.level = 50;
+  if (src === "BSS" || (src === "CH" && s.champ.f !== "ou")) set.level = 50;
 }
 
 /* ---------- ficha de un Pokémon del equipo (en batalla) ---------- */

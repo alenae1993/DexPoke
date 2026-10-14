@@ -98,6 +98,17 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
 .comp .r:first-of-type{border-top:0}
 .comp .r>span:first-child{font-size:11px;color:var(--ink3);letter-spacing:.05em;text-transform:uppercase}
 .comp .r p{margin:0;font-size:13px;color:var(--ink2)}
+.champ .fg{margin-top:10px}.champ .fg>b{display:block;font-size:12px;color:var(--ink2);margin:6px 0 4px}.champ .fg>b small{font-weight:400;color:var(--ink3)}
+.champ details.cs{border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--surface2)}
+.champ details.cs>summary{cursor:pointer;padding:9px 30px 9px 11px;position:relative;font-weight:600;font-size:14px;list-style:none}.champ details.cs>summary::-webkit-details-marker{display:none}
+.champ details.cs>summary::after{content:"›";position:absolute;right:12px;top:9px;color:var(--ink3);transition:transform .15s}.champ details.cs[open]>summary::after{transform:rotate(90deg)}
+.champ details.cs>summary small{display:block;font-weight:400;font-size:12px;color:var(--ink3)}
+.champ .cb{padding:0 11px 11px;font-size:13px}.champ .cb p{margin:6px 0;color:var(--ink2)}
+.champ .cmv{margin:6px 0;padding:0;list-style:none;display:grid;gap:3px}.champ .cmv li{padding:5px 8px;border-radius:7px;background:var(--surface);border:1px solid var(--line)}
+.champ .cmv li i{font-style:normal;color:var(--ink3)}
+.champ .spg{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin:6px 0;text-align:center;font-family:var(--mono);font-size:12px}
+.champ .spg div{border:1px solid var(--line);border-radius:6px;padding:3px 0;background:var(--surface)}.champ .spg span{display:block;font-size:10px;color:var(--ink3)}
+.champ .spg div.z{opacity:.45}
 .tiers{width:100%;border-collapse:collapse;font-size:13px}.tiers td{padding:6px 4px;border-top:1px solid var(--line);vertical-align:top}.tiers td:first-child{white-space:nowrap}
 .flag{display:inline-block;font-size:11px;font-weight:600;border:1px solid var(--accent);color:var(--accent);border-radius:5px;padding:1px 6px;letter-spacing:.03em}
 .dx{margin:0;color:var(--ink2);font-size:14px;max-width:65ch}
@@ -222,6 +233,7 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
 
 <script src="data.js"></script>
 <script src="tiers.js"></script>
+<script src="champions.js"></script>
 <script>
 const P=D.P, M=D.M, A=D.A;
 const TY={NORMAL:["Normal","#9FA19F","#111"],FIRE:["Fuego","#E62829","#fff"],WATER:["Agua","#2980EF","#fff"],GRASS:["Planta","#3FA129","#fff"],ELECTRIC:["Eléctrico","#FAC000","#111"],ICE:["Hielo","#3DCEF3","#111"],FIGHTING:["Lucha","#FF8000","#111"],POISON:["Veneno","#9141CB","#fff"],GROUND:["Tierra","#915121","#fff"],FLYING:["Volador","#81B9EF","#111"],PSYCHIC:["Psíquico","#EF4179","#fff"],BUG:["Bicho","#91A119","#fff"],ROCK:["Roca","#AFA981","#111"],GHOST:["Fantasma","#704170","#fff"],DRAGON:["Dragón","#5060E1","#fff"],DARK:["Siniestro","#624D4E","#fff"],STEEL:["Acero","#60A1B8","#fff"],FAIRY:["Hada","#EF70EF","#111"]};
@@ -285,6 +297,7 @@ const tbadge=(t,pre)=>{if(!t||t==="Illegal")return "";const k=cleanT(t),c=TCOL[k
 const allowedIn=t=>{const k=cleanT(t),i=TORD.indexOf(k);if(i<0)return [];if(k==="LC")return ["LC","ZU","PU","NU","RU","UU","OU","Ubers","AG"];return ["AG","Ubers","OU","UU","RU","NU","PU","ZU"].filter(x=>{const j=TORD.indexOf(x==="Ubers"?"Uber":x);return j<=i&&!(k.endsWith("BL")&&x===k.slice(0,-2))})};
 function tierMatch(p,f){if(!f)return true;const [src,val]=f.split(":"),t=tierOf(p);
   if(src==="ok"){if(p.fk==="gmax")return false;const i=TORD.indexOf(t.sv);if(i<0)return false;if(val==="LC")return t.sv==="LC";return i>=TORD.indexOf(val)}
+  if(src==="ch"){const c=typeof CHAMP!=="undefined"&&CHAMP.tiers[p.c];return val==="sets"?!!(typeof CHAMP!=="undefined"&&CHAMP.s[p.c]):c===val}
   const x=src==="sv"?t.sv:src==="nd"?t.nd:cleanT(t.d);if(val==="Illegal")return !x||x==="Illegal";return cleanT(x)===val}
 function tierSelect(){
   const o=(v,l)=>`<option value="${v}" ${S.tier===v?"selected":""}>${l}</option>`;
@@ -292,6 +305,7 @@ function tierSelect(){
   <optgroup label="Se puede usar en… (Escarlata/Púrpura)">${["Uber","OU","UU","RU","NU","PU","ZU","LC"].map(k=>o("ok:"+k,"Permitido en "+(k==="Uber"?"Ubers":k))).join("")}</optgroup>
   <optgroup label="Tier exacto · Individual (Escarlata/Púrpura)">${TORD.map(k=>o("sv:"+k,(k==="Uber"?"Ubers":k)+" · "+TNAME[k])).join("")}${o("sv:Illegal","No disponible en Escarlata/Púrpura")}</optgroup>
   <optgroup label="National Dex (todas las gen., con Megas)">${["AG","Uber","OU","UUBL","UU","RUBL","RU","LC"].map(k=>o("nd:"+k,"ND "+(k==="Uber"?"Ubers":k)+(k==="RU"?" o inferior":""))).join("")}</optgroup>
+  ${typeof CHAMP!=="undefined"?`<optgroup label="Pokémon Champions (Smogon)">${o("ch:sets","Con estrategias de Champions")}${["Uber","OU","UUBL","UU","RU"].map(k=>o("ch:"+k,"Champions "+(k==="Uber"?"Ubers":k))).join("")}</optgroup>`:""}
   <optgroup label="Dobles (Smogon)">${["DUber","DOU","DUU"].map(k=>o("d:"+k,TNAME[k])).join("")}</optgroup></select>`}
 function compCard(p){
   const t=tierOf(p); if(!t.sv&&!t.nd)return "";
@@ -312,6 +326,28 @@ function compCard(p){
       <p class="note"><b>National Dex:</b> formato que permite todos los Pokémon, incluidos los que no están en Escarlata/Púrpura, y las Megaevoluciones. <b>Dobles:</b> combates 2 contra 2; “(DUU)” significa que no tiene tier propio. Los formatos oficiales de Nintendo (VGC y Combate Clasificatorio) se juegan a nivel 50 con otras reglas.</p></details>
     ${bf?`<a class="link" href="batalla.html?comp=${bf}" style="text-decoration:none;display:inline-block;margin-top:8px">Probar en una batalla competitiva ${bf==="natdex"?"National Dex":bf.toUpperCase()}</a>`:""}
     <p class="note" style="margin:6px 0 0">Tiers de Smogon según el motor de Pokémon Showdown incluido en la app. Pueden haber cambiado desde entonces.</p></div>`}
+
+function champCard(p){
+  if(typeof CHAMP==="undefined")return "";
+  const t=CHAMP.tiers[p.c], base=p.c.replace(/MEGA[XYZ]?$/,"");
+  let sets=(CHAMP.s[p.c]||CHAMP.s[base]||[]);
+  if(p.fk==="mega"){const suf=(p.c.match(/MEGA([XYZ])$/)||[])[1];const ms=sets.filter(x=>/ite( [XYZ])?$/.test(x.i[0][0])&&(!suf||x.i[0][0].endsWith(" "+suf)||x.pc===p.c));if(ms.length)sets=ms}
+  if(!t&&!sets.length)return "";
+  const k=t||"",c=TCOL[k]||["#888","#fff"];
+  const SPL=["PS","Atq","Def","AtE","DfE","Vel"];
+  const alt=sl=>sl.map((m,j)=>j?`<i> / ${esc(m[1])}</i>`:esc(m[1])).join("");
+  const one=x=>`<details class="cs"><summary>${esc(x.r||x.n)}${x.r&&x.r!==x.n?` <small>${esc(x.n)}</small>`:""}${x.p!==p.n&&x.pc!==p.c?`<small>Set de ${esc(x.p)}</small>`:""}</summary><div class="cb">
+    <p>${esc(x.d)}</p>
+    <ul class="cmv">${x.m.map(sl=>`<li>${alt(sl)}</li>`).join("")}</ul>
+    <p><b>Objeto:</b> ${x.i.map(i=>esc(i[1])).join(" / ")}${x.a.length?` · <b>Habilidad:</b> ${x.a.map(a=>esc(a[1])).join(" / ")}`:""} · <b>Naturaleza:</b> ${x.na.map(n=>esc(n[1])).join(" / ")}</p>
+    <div class="spg">${x.sp.map((v,i)=>`<div class="${v?"":"z"}"><span>${SPL[i]}</span>${v}</div>`).join("")}</div>
+    <p class="note" style="margin:6px 0 0">${x.by?"Análisis de "+esc(x.by)+" · ":""}<a class="link" href="https://www.smogon.com/dex/champions/pokemon/${x.u}" target="_blank" rel="noopener" style="text-decoration:none">Leer el análisis completo en Smogon ↗</a></p></div></details>`;
+  const groups=Object.keys(CHAMP.f).map(f=>[f,sets.filter(x=>x.f===f)]).filter(g=>g[1].length);
+  return `<div class="card comp champ"><h3>Pokémon Champions</h3>
+    <div class="r"><span>Tier de Smogon en Champions</span>${t?tbadge(k):'<span class="tier out">—</span>'}<p>${t?esc(TDESC[k]||""):"Sin tier en Champions."}</p></div>
+    ${groups.length?groups.map(([f,l])=>`<div class="fg"><b>${esc(CHAMP.f[f][0])} <small>· ${esc(CHAMP.f[f][1])}</small></b>${l.map(one).join("")}</div>`).join(""):`<p class="note" style="margin:6px 0 0">Smogon todavía no tiene estrategias escritas para este Pokémon en Champions.</p>`}
+    ${groups.length?`<details class="ref" style="margin-top:8px"><summary>Cómo leer estos sets</summary><p class="note">En Pokémon Champions no hay EVs: cada Pokémon reparte <b>66 puntos de stats (SP)</b>, con un máximo de <b>32 por stat</b>. Los movimientos con “/” son alternativas para ese espacio. El resumen en español se arma con los movimientos y objetos del set; el análisis completo (compañeros, rivales difíciles y cómo jugarlo) está en Smogon, en inglés.</p></details>`:""}
+  </div>`}
 
 function renderTop(){
   const t=$("top");
@@ -660,6 +696,7 @@ function pokeView(v){
   ${simCard(v,p)}
   <div class="card"><h3>Debilidades y resistencias</h3><div class="eff">${effRows}</div></div>
   ${compCard(p)}
+  ${champCard(p)}
   <div class="card"><h3>Habilidades</h3><div class="abil">${ab.map(([c,h])=>`<button class="abbtn" data-ab="${c}"><b>${esc(aname(c))}</b>${h?"<em>Oculta</em>":""}${A[c]&&A[c][2]?`<span class="en">${esc(A[c][2])}</span>`:""}<p>${esc((A[c]&&A[c][1])||"")}</p>${afxShort(c)}</button>`).join("")||"—"}</div></div>
   ${sibs.length?`<div class="card"><h3>Formas · ${sibs.length+1}</h3><div class="evo">${sibs.map(([q,i])=>`<button data-p="${i}">${disc(q)}<span><b>${esc(q.n)}</b><small>${q.fk?FKN[q.fk]:"Forma base"}${q.fn&&q.fn!==q.n&&q.fn!==FKN[q.fk]&&q.fn!=="Gigamax"?" · "+esc(q.fn):""} · Total ${q.b}${q.b!==p.b?` (${q.b>p.b?"+":"−"}${Math.abs(q.b-p.b)})`:""}</small></span></button>`).join("")}</div>${p.fk==="mega"||p.fk==="gmax"?`<p class="note" style="margin:8px 0 0">${p.fk==="mega"?"Transformación solo en combate con su megapiedra.":"Transformación solo en combate con Gigamax."} Usa los movimientos de su especie.</p>`:""}</div>`:""}
   ${evoBtns.length?`<div class="card"><h3>Evolución</h3><div class="evo">${evoBtns.join("")}</div></div>`:""}
