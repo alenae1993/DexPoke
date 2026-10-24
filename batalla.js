@@ -291,6 +291,7 @@ async function autoMoves(set, formeName) {
 }
 
 /* ---------- vistas ---------- */
+const iconStairs = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h5v-5h5v-5h5V5h3"/><path d="M3 20h18"/></svg>';
 let VIEW = "menu", SEL = 0, B = null;
 function go(v) { VIEW = v; if (v !== "battle") bgmStop(); render(); window.scrollTo(0, 0); }
 function render() {
@@ -299,6 +300,7 @@ function render() {
   if (VIEW === "battle") return renderBattleShell();
   if (VIEW === "reto") return renderReto();
   if (VIEW === "comp") return renderComp();
+  if (VIEW === "esc") return renderEsc();
 }
 const iconSword = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/></svg>';
 const iconDice = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>';
@@ -315,6 +317,7 @@ function renderMenu() {
       <button class="mode" data-act="quick"><span class="ic">${iconDice}</span><span><b>Batalla rápida</b><span>Tú y la CPU reciben 6 Pokémon al azar con sets competitivos.</span></span></button>
       <button class="mode" data-act="mine" ${t.sets.length ? "" : "disabled"}><span class="ic">${iconSword}</span><span><b>${esc(t.name)} vs CPU</b><span>${t.sets.length ? `Tu equipo de ${t.sets.length} contra un equipo al azar.` : "Primero arma tu equipo."}</span></span></button>
       <button class="mode" data-act="reto"><span class="ic">${iconBadge}</span><span><b>Modo Desafío · Kanto</b><span>Vence a los 8 Líderes de Gimnasio, al Alto Mando y al Campeón con tu equipo. ${retoCount()}/${RETO.trainers.length} superados.</span></span></button>
+      <button class="mode" data-act="esc"><span class="ic">${iconStairs}</span><span><b>Modo Escalada</b><span>Empieza 1 vs 1. Cada victoria te deja quedarte con un Pokémon del rival, hasta 6 vs 6. ${ST.esc && ST.esc.run ? `Escalada en curso: ${ST.esc.run.wins} victorias.` : `Récord: ${(ST.esc && ST.esc.best) || 0} victorias.`}</span></span></button>
       <button class="mode" data-act="comp"><span class="ic">${iconTrophy}</span><span><b>Competitivo</b><span>Formatos de Smogon (OU, UU, Ubers…) y el Combate Clasificatorio de los juegos. Revisa si tu equipo es legal.</span></span></button>
       <button class="mode" data-act="team"><span class="ic">${iconEdit}</span><span><b>Armar mi equipo</b><span>Elige Pokémon, movimientos, habilidad, objeto, naturaleza, EVs, IVs y teratipo.</span></span></button>
     </div>
@@ -423,7 +426,7 @@ function newBattle(t1, t2, opts) {
   const s = BattleStreams.getPlayerStreams(new BattleStreams.BattleStream());
   B = {s, t1, t2, mons: {}, act: {p1: null, p2: null}, weather: null, turn: 0, chunks: [], busy: false, req: null, reqReady: false,
        over: false, dead: false, choice: {tera: false, mega: false}, sideCount: {p1: t1.length, p2: t2.length}, fainted: {p1: 0, p2: 0},
-       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine};
+       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine, esc: !!opts.esc};
   const me = B;
   VIEW = "battle"; render();
   me.bg = pickBg(me); setBg(me.bg); bgm(pickBgm(me));
@@ -650,7 +653,8 @@ async function handle(me, ln) {
       if (me.trainer) {
         if (won) { await say(me, `¡Has derrotado a ${me.trainer.n}!`, 1.2); if (me.trainer.medal) await say(me, `¡Has obtenido la ${me.trainer.medal}!`, 1.4); retoWin(me.trainer.id); }
         else await say(me, `${me.trainer.n} te ha derrotado… ¡Ajusta tu equipo e inténtalo otra vez!`, 1.2);
-      } else await say(me, won ? "¡Has ganado la batalla!" : "Has perdido la batalla…", 1.2);
+      } else if (me.esc) { await say(me, won ? "¡Has ganado! Elige un Pokémon del rival." : "Has perdido… la escalada termina aquí.", 1.2); escResult(won); }
+      else await say(me, won ? "¡Has ganado la batalla!" : "Has perdido la batalla…", 1.2);
       showEnd(me, won); return; }
     case "tie": { me.over = true; await say(me, "¡La batalla terminó en empate!"); showEnd(me, null); return; }
     case "error": { await say(me, "Esa acción no es válida: " + (args[0] || "").replace(/^\[.*?\]\s*/, "")); if (!me.req && me.lastReq) { me.req = me.lastReq; me.shown = false; } return; }
@@ -722,6 +726,7 @@ function showPreview(me) {
 function choose(me, choice) { me.lastReq = me.req; me.req = null; me.shown = false; $("ctl").innerHTML = ""; me.s.p1.write(choice); }
 function showEnd(me, won) {
   const ctl = $("ctl"); if (!ctl) return;
+  if (me.esc) { ctl.innerHTML = escEndHTML(won); return; }
   if (me.trainer) { ctl.innerHTML = `<div class="card"><p class="result">${won ? "¡Victoria!" : "Derrota"}</p>
     <div class="btns" style="justify-content:center">${won ? "" : `<button class="btn pri" data-act="rematch">Reintentar</button>`}<button class="btn ${won ? "pri" : ""}" data-act="reto">Volver al desafío</button><button class="btn" data-act="team">Ajustar mi equipo</button></div></div>`; return; }
   if (me.fmt) { ctl.innerHTML = `<div class="card"><p class="result">${won === null ? "Empate" : won ? "¡Victoria!" : "Derrota"}</p>
@@ -903,7 +908,8 @@ document.addEventListener("click", async e => {
   if (act === "mine") return startMine();
   if (act === "team") { if (B) { B.dead = true; B = null; } SEL = 0; return go("team"); }
   if (act === "menu") { if (B) B.dead = true; B = null; return go("menu"); }
-  if (act === "quit") { if (B && !B.over && !confirmQuit()) return; if (B) B.dead = true; B = null; return go("menu"); }
+  if (act === "quit") { if (B && B.esc && !B.over) { if (!confirm("¿Salir del combate? Tu escalada se guarda y podrás repetir este combate.")) return; B.dead = true; B = null; return go("esc"); }
+    if (B && !B.over && !confirmQuit()) return; const wasEsc = B && B.esc; if (B) B.dead = true; B = null; return go(wasEsc ? "esc" : "menu"); }
   if (act === "again") return B && B.fmt ? startComp(B.compMode) : B && B.fromMine ? startMine() : startQuick();
   if (act === "rematch" && B) { const tr = B.trainer; if (tr) return startReto(tr.id); const f = B.fmt, m = B.compMode; newBattle(B.t1, B.t2, f ? {fmt: f, aiDiff: "hard"} : {}); if (f) B.compMode = m; return; }
   if (act === "reto") { if (B) B.dead = true; B = null; return go("reto"); }

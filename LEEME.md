@@ -125,3 +125,12 @@ En la ficha de cada Pokémon aparece la tarjeta **Pokémon Champions** con cada 
 En **Batalla → Mi equipo → Cargar un set competitivo** también aparecen los sets de Champions que el motor de batalla reconoce. Champions usa 66 SP (máx. 32 por stat) en vez de EVs, así que la app los convierte de forma proporcional (SP × 8, ajustado al límite de 510 EVs). Las Megas nuevas de Champions (Mega-Garchomp Z, Mega-Starmie, etc.) solo se muestran en la Pokédex, porque el motor no las conoce.
 
 Para actualizar los datos: se descargan los sets desde la Pokédex de Smogon y se regenera `champions.js` con `build_champ.js`.
+
+## Modo Escalada
+
+En **Batalla → Modo Escalada** (`escalada.js`) empiezas eligiendo 1 de 3 Pokémon al azar y peleas 1 vs 1 contra la CPU. Cada victoria te deja **elegir un Pokémon del equipo rival**, que se une al tuyo con su set completo, y el siguiente rival trae tantos Pokémon como tú: 1 vs 1, 2 vs 2… hasta 6 vs 6. Con el equipo completo puedes reemplazar a uno o dejar pasar la recompensa. No se pueden repetir especies.
+
+- Tus Pokémon se curan entre combates. Desde la ronda 5 la CPU deja de ser fácil, y desde la 10 juega en difícil.
+- Si pierdes, la escalada termina y queda tu récord de victorias seguidas.
+- La escalada se guarda sola. Si sales a mitad de un combate, al volver repites ese mismo combate contra el mismo rival.
+- El nivel (50, 100 o Equilibrado) se fija al empezar, con la opción Nivel del menú.
