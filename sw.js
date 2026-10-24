@@ -1,14 +1,15 @@
 // Mi Dex — funciona sin internet.
-// La app y los datos se muestran desde la copia guardada y se actualizan en segundo plano:
-// al subir un data.js nuevo, los teléfonos lo ven la siguiente vez que abren la app.
-const APP = "midex-app-v13";
+// Con internet, la app siempre pide la versión más reciente (si la red tarda más de 4 s, usa la copia guardada).
+// Sin internet, usa la copia guardada. Así, al subir archivos nuevos, se ven en cuanto se abre la app.
+const APP = "midex-app-v14";
 const IMG = "midex-img-v1";
 const FONTS = "midex-fonts-v1";
 const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js", "reto.js", "comp.js", "tiers.js", "champions.js", "competitivo.js", "escalada.js", "sprites.js", "assets.js", "animidx.js", "anim.js", "fonts/pkmndp.ttf",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: "reload" evita que se guarde una copia vieja que el navegador tuviera en su caché HTTP
+  e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL.map(u => new Request(u, {cache: "reload"})))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {
@@ -35,9 +36,9 @@ self.addEventListener("fetch", e => {
     e.respondWith(cacheFirst(req, FONTS));
     return;
   }
-  // La app (mismo sitio): copia guardada al instante + actualización en segundo plano.
+  // La app (mismo sitio): primero la red (versión nueva), si no hay red, la copia guardada.
   if (url.origin === location.origin) {
-    e.respondWith(staleWhileRevalidate(req));
+    e.respondWith(networkFirst(req));
   }
 });
 
@@ -54,12 +55,15 @@ async function cacheFirst(req, name) {
   }
 }
 
-async function staleWhileRevalidate(req) {
+async function networkFirst(req) {
   const cache = await caches.open(APP);
-  const hit = await cache.match(req, { ignoreSearch: true });
-  const net = fetch(req).then(res => {
+  const net = fetch(req, {cache: "no-cache"}).then(res => {
     if (res.ok) cache.put(req, res.clone());
     return res;
   }).catch(() => null);
+  const timeout = new Promise(r => setTimeout(() => r(null), 4000));
+  const res = await Promise.race([net, timeout]);
+  if (res && res.ok) return res;
+  const hit = await cache.match(req, { ignoreSearch: true });
   return hit || (await net) || (await cache.match("index.html")) || new Response("Sin conexión", { status: 503 });
 }

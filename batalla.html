@@ -277,6 +277,7 @@ textarea{height:auto;min-height:150px;padding:10px;font-family:var(--mono);font-
 <script src="anim.js"></script>
 <script>
 if("serviceWorker" in navigator&&location.protocol.startsWith("http")){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
+if("serviceWorker" in navigator&&navigator.serviceWorker.controller){let rl=0;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!rl){rl=1;location.reload()}})}
 </script>
 </body>
 </html>

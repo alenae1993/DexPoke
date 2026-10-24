@@ -854,6 +854,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&Z.classList.contain
 </script>
 <script>
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
+if("serviceWorker" in navigator&&navigator.serviceWorker.controller){let rl=0;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!rl){rl=1;location.reload()}})}
 </script>
 </body>
 </html>
