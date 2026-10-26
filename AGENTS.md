@@ -84,23 +84,18 @@ Todo es estático: no hay servidor, compilación ni dependencias npm en tiempo d
 ## Pendiente (en orden de prioridad)
 
 1. **Confirmar con el dueño que en su celular ya aparece el Modo Escalada** después de la actualización del service worker (v14). Si no aparece, revisa `sw.js` antes de tocar otra cosa.
-2. **Limpiar duplicados del repo**, que quedaron por subidas manuales:
-   - `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png` y `favicon-32.png` en la raíz. Los que se usan son los de `icons/`.
-   - `actualizar_datos.py` en la raíz. El que vale es `herramientas/actualizar_datos.py`.
-   - El archivo vacío `download`.
-   - Antes de borrar, comprueba con `grep` que nada los use.
-3. **Escalada más equilibrada**, pendiente de que el dueño elija una opción:
+2. **Escalada más equilibrada**, pendiente de que el dueño elija una opción:
    - (a) Sin legendarios ni míticos hasta cierta ronda.
    - (b) Rivales por tiers progresivos: RU/UU al principio y luego OU y Ubers.
    - Hoy los Pokémon salen de `gen9randombattle`, que incluye legendarios desde la ronda 1.
-4. **Leyendas de Sinnoh**, el proyecto grande. Plan detallado en `docs/sinnoh.md`. En resumen:
+3. **Leyendas de Sinnoh**, el proyecto grande. Plan detallado en `docs/sinnoh.md`. En resumen:
    1. Correr `extraer_mod.py` y copiar las 247 imágenes del mod.
    2. Crear `sinnoh.html` y `sinnoh.js` con el mapa hexagonal al estilo del mod, turnos, movimiento, búsqueda, Bonguri y crafteo.
    3. Usar las batallas de `batalla.js`, con PS y estados que persisten.
    4. Agregar EXP, niveles, evolución y movimientos aprendidos.
    5. Campaña Corazón de Sinnoh, legendarios, santuarios y cartas de Destino.
    6. Entrada en el menú y en `sw.js`.
-5. **Recuperar los generadores perdidos**, solo cuando haga falta actualizar esos datos: `champions.js` (desde Smogon), `comp.js` y `tiers.js` (desde una versión nueva de `@pkmn/sim`) y el empaquetador de `spr/`. Los formatos están descritos arriba.
+4. **Recuperar los generadores perdidos**, solo cuando haga falta actualizar esos datos: `champions.js` (desde Smogon), `comp.js` y `tiers.js` (desde una versión nueva de `@pkmn/sim`) y el empaquetador de `spr/`. Los formatos están descritos arriba.
 
 ## Decisiones de diseño
 
@@ -134,10 +129,9 @@ Todo es estático: no hay servidor, compilación ni dependencias npm en tiempo d
 
 - No se conservaron los generadores de `ps.js`, `esx.js`, `comp.js`, `tiers.js`, `champions.js`, `reto.js`, `sprites.js`, `assets.js`, `animidx.js` ni de los paquetes `spr/`. Para cambiar esos datos hay que rehacer el script correspondiente.
 - Los tiers de Smogon están congelados en `@pkmn/sim` 0.10.11 y Smogon los cambia cada pocos meses.
-- En Escalada te pueden tocar legendarios, como Mewtwo o Miraidon, desde la primera ronda (ver Pendiente 3).
+- En Escalada te pueden tocar legendarios, como Mewtwo o Miraidon, desde la primera ronda (ver Pendiente 2).
 - Los Pokémon de Paldea y algunas formas no tienen sprite animado en el juego del dueño, así que muestran la ilustración oficial.
 - Las ilustraciones oficiales y los íconos se cargan desde `raw.githubusercontent.com` (PokeAPI). Sin internet solo se ven las que ya se vieron antes.
-- Hay duplicados en la raíz del repo (ver Pendiente 2).
 - `localStorage` es por navegador y por dispositivo: los equipos y el progreso no se sincronizan entre el PC y el celular.
 
 ## Reglas de código
