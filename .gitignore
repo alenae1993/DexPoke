@@ -1,0 +1,10 @@
+# Datos de trabajo locales (no se publican en GitHub Pages)
+sinnoh/datos/
+*.pbix
+__pycache__/
+.DS_Store
+Thumbs.db
+
+# Configuración local de Claude Code (no se publica)
+CLAUDE.md
+.claude/

@@ -79,6 +79,10 @@ Los efectos numéricos de las **habilidades** no vienen en tu modelo: están esc
 | `sprites.js` | Qué sprite de la carpeta `Battlers` corresponde a cada Pokémon y forma |
 | `Battlers/` (la subes tú) | Sprites animados de combate: `Front`, `Back`, `FrontShiny`, `BackShiny` |
 | `competitivo.js`, `comp.js` | Modo Competitivo, validación de equipos, sets competitivos y fichas en batalla |
+| `champions.js` | Tiers y sets de Pokémon Champions (Smogon) |
+| `escalada.js` | Modo Escalada |
+| `assets.js`, `anim.js`, `animidx.js`, `spr/`, `audio/`, `fonts/` | Fondos, gritos, íconos, animaciones de ataques, música y fuente de combate |
+| `AGENTS.md`, `docs/`, `.tareas/` | Instrucciones y documentación para los agentes de código (Claude Code, Codex) |
 
 ## Batalla (batalla.html)
 
