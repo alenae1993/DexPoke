@@ -295,6 +295,8 @@ const iconStairs = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" 
 let VIEW = "menu", SEL = 0, B = null;
 function go(v) { VIEW = v; if (v !== "battle") bgmStop(); render(); window.scrollTo(0, 0); }
 function render() {
+  document.body.classList.toggle("sin-view", VIEW === "sin");
+  if (VIEW === "sin") return renderSin();
   if (VIEW === "menu") return renderMenu();
   if (VIEW === "team") return renderTeam();
   if (VIEW === "battle") return renderBattleShell();
@@ -306,6 +308,7 @@ const iconSword = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" s
 const iconDice = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>';
 const iconTrophy = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8M9.5 17h5"/></svg>';
 const iconEdit = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/></svg>';
+const iconMap = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6zM9 3v15M15 6v15"/></svg>';
 function strip(sets) { return `<div class="teamstrip">${sets.map(s => pimg(s.species, `alt="${esc(esSp(s.species))}" title="${esc(esSp(s.species))}" loading="lazy"`)).join("")}</div>`; }
 function seg(id, val, opts) { return `<div class="seg" data-seg="${id}">${opts.map(([v, l]) => `<button data-v="${v}" aria-pressed="${val === v}">${l}</button>`).join("")}</div>`; }
 
@@ -319,6 +322,7 @@ function renderMenu() {
       <button class="mode" data-act="reto"><span class="ic">${iconBadge}</span><span><b>Modo Desafío · Kanto</b><span>Vence a los 8 Líderes de Gimnasio, al Alto Mando y al Campeón con tu equipo. ${retoCount()}/${RETO.trainers.length} superados.</span></span></button>
       <button class="mode" data-act="esc"><span class="ic">${iconStairs}</span><span><b>Modo Escalada</b><span>Empieza 1 vs 1. Cada victoria te deja quedarte con un Pokémon del rival, hasta 6 vs 6. ${ST.esc && ST.esc.run ? `Escalada en curso: ${ST.esc.run.wins} victorias.` : `Récord: ${(ST.esc && ST.esc.best) || 0} victorias.`}</span></span></button>
       <button class="mode" data-act="comp"><span class="ic">${iconTrophy}</span><span><b>Competitivo</b><span>Formatos de Smogon (OU, UU, Ubers…) y el Combate Clasificatorio de los juegos. Revisa si tu equipo es legal.</span></span></button>
+      <button class="mode" data-act="sin"><span class="ic">${iconMap}</span><span><b>Leyendas de Sinnoh</b><span>Explora Sinnoh en un mapa de hexágonos al estilo del juego de mesa.</span></span></button>
       <button class="mode" data-act="team"><span class="ic">${iconEdit}</span><span><b>Armar mi equipo</b><span>Elige Pokémon, movimientos, habilidad, objeto, naturaleza, EVs, IVs y teratipo.</span></span></button>
     </div>
     ${t.sets.length ? `<div class="card"><h3>${esc(t.name)}</h3>${strip(t.sets)}</div>` : ""}
