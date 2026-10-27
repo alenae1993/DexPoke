@@ -425,7 +425,7 @@ function renderBattleShell() {
 }
 
 function newBattle(t1, t2, opts) {
-  opts = opts || {}; globalThis.ALLOW_DMAX = ST.dmax !== "off" && !opts.fmt;
+  opts = opts || {}; globalThis.ALLOW_DMAX = ST.dmax !== "off" && !opts.fmt && !opts.sin;
   if (B) B.dead = true;
   const s = BattleStreams.getPlayerStreams(new BattleStreams.BattleStream());
   B = {s, t1, t2, mons: {}, act: {p1: null, p2: null}, weather: null, turn: 0, chunks: [], busy: false, req: null, reqReady: false,
@@ -658,7 +658,7 @@ async function handle(me, ln) {
         if (won) { await say(me, `¡Has derrotado a ${me.trainer.n}!`, 1.2); if (me.trainer.medal) await say(me, `¡Has obtenido la ${me.trainer.medal}!`, 1.4); retoWin(me.trainer.id); }
         else await say(me, `${me.trainer.n} te ha derrotado… ¡Ajusta tu equipo e inténtalo otra vez!`, 1.2);
       } else if (me.esc) { await say(me, won ? "¡Has ganado! Elige un Pokémon del rival." : "Has perdido… la escalada termina aquí.", 1.2); escResult(won); }
-      else if (me.sin) { sinResult(won, me); await say(me, won ? "¡Has vencido al Pokémon salvaje!" : "Tu equipo ha sido derrotado. Vuelves a tu pueblo natal.", 1.2); }
+      else if (me.sin) { sinResult(won, me); await say(me, won ? (me.sinCaught ? "¡Has atrapado al Pokémon salvaje!" : "¡Has vencido al Pokémon salvaje!") : "Tu equipo ha sido derrotado. Vuelves a tu pueblo natal.", 1.2); }
       else await say(me, won ? "¡Has ganado la batalla!" : "Has perdido la batalla…", 1.2);
       showEnd(me, won); return; }
     case "tie": { me.over = true; await say(me, "¡La batalla terminó en empate!"); showEnd(me, null); return; }
@@ -686,10 +686,11 @@ function showControls(me) {
     if (mv.category !== "Status" && foeTypes.length) { const x = typeMult(mv.type, foeTypes); eff = x === 0 ? "No afecta" : x > 1 ? "Muy eficaz" : x < 1 ? "Poco eficaz" : "Eficaz"; }
     return `<button class="mv" data-move="${i + 1}" style="--c:${t[1]};--ct:${t[2]}" ${m.disabled || m.pp === 0 ? "disabled" : ""} title="${esc(esMoveDesc(m.id))}"><span class="minfo" data-info="${esc(m.id)}" role="button" aria-label="Ver efecto">i</span><span class="mvh"><b>${esc(esMove(m.id))}</b><span class="pp">${m.pp ?? "—"}/${m.maxpp ?? "—"}</span></span><small><span>${t[0]} · <span class="cat">${catTxt(mv)}</span></span>${myTypes.includes(mv.type) && mv.category !== "Status" ? "<span>STAB</span>" : ""}</small><small><span>${mv.category !== "Status" ? "Pot. " + (mv.basePower || "—") + " · " : ""}Prec. ${accTxt(mv)}</span></small>${eff ? `<small><span class="eff">${eff}</span></small>` : ""}${ST.showFx ? `<span class="fx">${esc(esMoveDesc(m.id))}</span>` : ""}</button>`;
   }).join("");
-  const tera = a.canTerastallize, mega = a.canMegaEvo, dmax = a.canDynamax;
+  const tera = !me.sin && a.canTerastallize, mega = a.canMegaEvo, dmax = !me.sin && a.canDynamax;
   const tt = tera ? TY[toID(tera).toUpperCase()] || TY.NORMAL : null;
   ctl.innerHTML = `<div class="moves">${moves}</div>
     <div class="act">
+      ${me.sin && typeof sinBallsHTML === "function" ? sinBallsHTML(me) : ""}
       ${tera ? `<button class="btn toggle" data-tog="tera" aria-pressed="${me.choice.tera}" style="--c:${tt[1]}">Teracristalizar (${tt[0]})</button>` : ""}
       ${mega ? `<button class="btn toggle" data-tog="mega" aria-pressed="${me.choice.mega}" style="--c:#7A4FCF">Megaevolucionar</button>` : ""}
       ${dmax ? `<button class="btn toggle" data-tog="dmax" aria-pressed="${!!me.choice.dmax}" style="--c:#D6264F">${a.maxMoves && a.maxMoves.gigantamax ? "Gigamax" : "Dinamax"}</button>` : ""}

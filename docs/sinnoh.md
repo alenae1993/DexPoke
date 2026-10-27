@@ -13,7 +13,31 @@ Objetivo del dueño, en sus palabras: *"basicamente quiero el juego pero con bat
 
 Se mantiene el juego actual: mapa, movimiento, búsqueda en árboles y arrecifes con las cartas del mod, combates, pueblos y turnos. Los niveles de los salvajes y la curación siguen iguales. La progresión de los Pokémon usa EXP, curvas de crecimiento, ataques por nivel, EVs, amistad y evolución como en los videojuegos.
 
-Bonguri, Puntos de Viaje, captura con cartas, Destino, santuarios, campaña y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
+Se incorporan los Bonguri y las recetas de Balls del mod, con captura durante el combate como en los videojuegos. Puntos de Viaje, captura con cartas, Destino, santuarios, campaña y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
+
+**Bonguri, Bolsa y captura (tarea 9):** Sinnoh no permite Teracristalización ni Dinamax; los demás modos conservan sus controles. Cada partida nueva empieza con **3 Poké Balls**, ninguna Super/Ultra Ball y todos los Bonguri en 0. La misma migración que completa EXP, sexo y amistad agrega este inventario a partidas antiguas sin él, una sola vez. Todo queda dentro de `ST.sin.run`: `bag` por color (`red`, `yellow`, `blue`, `pink`, `green`, `white`, `black`), `balls` por tipo (`poke`, `great`, `ultra`) y `box` para las capturas que excedan los seis integrantes del equipo.
+
+Vencer o capturar al salvaje de un árbol entrega **3 Bonguri de su color**. En un arrecife entrega **3 colores sorteados por separado** entre rojo, amarillo, azul, rosa, verde y blanco; pueden repetirse y nunca sale negro. El negro solo se obtiene de árboles negros. La oferta y el combate guardan el token de origen; los encuentros antiguos lo recuperan de la casilla y el lugar de la oferta. Perder o empatar no entrega Bonguri. El resultado guarda los colores recibidos para mostrarlos también después de recargar, sin volver a entregarlos.
+
+El botón **Bolsa** de la barra de turno muestra colores, cantidades y recetas. Se puede fabricar en cualquier momento en el mapa, incluso después de combatir, sin consumir movimiento ni turno. Cada fabricación descuenta los ingredientes y entrega una Ball; si faltan ingredientes, el botón queda deshabilitado:
+
+| Ball | Receta del mod | Bono de captura |
+|---|---|---|
+| Poké Ball | 1 Bonguri Rojo | 1 |
+| Super Ball | 1 Azul + 1 Verde + 1 Rojo | 1,5 |
+| Ultra Ball | 1 Negro + 1 Amarillo | 2 |
+
+Los botones de Balls aparecen al elegir ataque, con su cantidad; no permiten lanzar durante la elección inicial, un cambio forzoso o un combate terminado. Lanzar descuenta y guarda la Ball antes de resolver la captura. Se usa `cr` de `sinSpeciesData` y la fórmula solicitada de generaciones VI–VII: `a = floor(((3·M − 2·H)·ratio·bonoBall)/(3·M))·bonoEstado`. `M` y `H` son los PS máximos y actuales del salvaje; basta el porcentaje que recibe el cliente. El bono de estado es **2,5** para sueño o congelación, **1,5** para parálisis, quemadura o veneno (también tóxico), y **1** sin estado. El redondeo se aplica antes del bono de estado.
+
+Con `a ≥ 255` la captura es segura. En otro caso, `b = floor(65536/(255/a)^0,1875)` y deben superar **cuatro comprobaciones**: cada entero independiente entre 0 y 65.535 debe ser menor que `b`. Con `a = 0`, `b = 0` y no hay captura. Se muestra «La Ball se movió…» por cada comprobación superada, hasta tres mensajes. No se agregan capturas críticas ni otros bonos.
+
+Si falla, se pierde el turno y el salvaje ataca. Antes de los mensajes se bloquean los controles igual que en `choose`: `lastReq = req`, `req = null`, `shown = false` y se vacía `ctl`. Después del fallo se envía al stream omnisciente:
+
+```js
+>eval const sd=battle.sides[0]; sd.clearChoice(); sd.choice.actions=[{choice:"pass",pokemon:sd.active[0],index:0}]; sd.choice.forcedPassesLeft=0; if (battle.allChoicesDone()) battle.commitChoices();
+```
+
+Si acierta, `sinCaught` marca la captura y `>forcewin p1` termina el combate. El set original del salvaje conserva sexo, IVs, ataques, nivel, EXP y amistad. Sus PS máximos se calculan con `calcStat`, y los actuales quedan en `ceil((H/M)·hpMax)`, con mínimo 1 y máximo `hpMax`; conserva su estado. Se incorpora al equipo si hay espacio o se envía a la Caja con aviso. Los Pokémon previos del equipo reciben EXP, EVs y amistad como al vencer; el recién capturado no recibe la recompensa de su propia captura. El resultado, la captura, la Bolsa y la Caja persisten al recargar.
 
 **EXP y constantes:** `sinExpForLevel(gw, n)` devuelve EXP total, con nivel máximo 100 y 0 EXP en nivel 1. `floor` significa redondear hacia abajo. Curvas contrastadas con las [tablas de crecimiento de Pokémon Essentials](https://github.com/Maruno17/pokemon-essentials/blob/master/Data/Scripts/010_Data/001_Hardcoded%20data/001_GrowthRate.rb):
 
