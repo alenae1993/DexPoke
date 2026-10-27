@@ -432,8 +432,10 @@ function newBattle(t1, t2, opts) {
        over: false, dead: false, choice: {tera: false, mega: false}, sideCount: {p1: t1.length, p2: t2.length}, fainted: {p1: 0, p2: 0},
        trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine, esc: !!opts.esc, sin: !!opts.sin};
   const me = B;
+  if (opts.foeName) me.foeName = opts.foeName;
   VIEW = "battle"; render();
-  me.bg = pickBg(me); setBg(me.bg); bgm(pickBgm(me));
+  if (opts.intro) { me.chunks.push("|-intro|" + opts.intro); pump(me); }
+  me.bg = opts.bg || pickBg(me); setBg(me.bg); bgm(opts.bgm || pickBgm(me));
   (async () => { for await (const c of s.p1) { if (me.dead) return; me.chunks.push(c); pump(me); } })();
   aiLoop(me);
   if (me.trainer) { const r = me.trainer.r, pre = me.trainer.medal ? "El Líder de Gimnasio " : r.startsWith("Alto Mando") ? "El Alto Mando " : r.startsWith("Campeón") ? "El Campeón " : ""; me.chunks.push("|-intro|" + `¡${pre}${me.trainer.n} te desafía!`); pump(me); }
@@ -658,7 +660,7 @@ async function handle(me, ln) {
         if (won) { await say(me, `¡Has derrotado a ${me.trainer.n}!`, 1.2); if (me.trainer.medal) await say(me, `¡Has obtenido la ${me.trainer.medal}!`, 1.4); retoWin(me.trainer.id); }
         else await say(me, `${me.trainer.n} te ha derrotado… ¡Ajusta tu equipo e inténtalo otra vez!`, 1.2);
       } else if (me.esc) { await say(me, won ? "¡Has ganado! Elige un Pokémon del rival." : "Has perdido… la escalada termina aquí.", 1.2); escResult(won); }
-      else if (me.sin) { sinResult(won, me); await say(me, won ? (me.sinCaught ? "¡Has atrapado al Pokémon salvaje!" : "¡Has vencido al Pokémon salvaje!") : "Tu equipo ha sido derrotado. Vuelves a tu pueblo natal.", 1.2); }
+      else if (me.sin) { sinResult(won, me); await say(me, me.foeName ? (won ? `¡Has derrotado a ${me.foeName}!` : `${me.foeName} te ha derrotado. Vuelves a tu pueblo natal.`) : (won ? (me.sinCaught ? "¡Has atrapado al Pokémon salvaje!" : "¡Has vencido al Pokémon salvaje!") : "Tu equipo ha sido derrotado. Vuelves a tu pueblo natal."), 1.2); }
       else await say(me, won ? "¡Has ganado la batalla!" : "Has perdido la batalla…", 1.2);
       showEnd(me, won); return; }
     case "tie": { me.over = true; await say(me, me.sin && me.sinFled ? "¡El Pokémon salvaje huyó!" : "¡La batalla terminó en empate!"); showEnd(me, null); return; }
