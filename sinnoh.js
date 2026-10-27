@@ -14,6 +14,22 @@ const SIN_VILLAGES = [
 const SIN_PLAYER_COLORS = {Pink: "#dc71ac", Yellow: "#e6bf36", Purple: "#9565cf", Teal: "#2dada8", Orange: "#db8532", Red: "#d95252", White: "#dce5ec", Green: "#459c65", Blue: "#447fd2"};
 const SIN_CARDS = SIN.decks.flatMap(d => d.cards);
 const SIN_FATE = SIN_CARDS.filter(c => (c.tags || []).includes("Change of Fate Card"));
+const SIN_GINKGO = SIN.decks.find(d => d.cards.length === 9 && d.cards.every(c => !c.n && !c.tags?.length)).cards;
+const SIN_TRADES = [
+  [[{yellow: 1, red: 1}, {pink: 1}], [{green: 1, white: 1}, {black: 1}]],
+  [[{blue: 1, yellow: 1}, {green: 1}], [{white: 1, pink: 1}, {black: 1}]],
+  [[{red: 1, blue: 1}, {white: 1}], [{pink: 1, green: 1}, {black: 1}]],
+  [[{pink: 1}, {red: 1, blue: 1, yellow: 1}], [{black: 1}, {pink: 1, green: 1, white: 1}]],
+  [[{green: 1}, {red: 1, blue: 1, yellow: 1}], [{black: 1}, {pink: 1, green: 1, white: 1}]],
+  [[{white: 1}, {red: 1, blue: 1, yellow: 1}], [{black: 1}, {pink: 1, green: 1, white: 1}]],
+  [[{red: 2}, {blue: 1, yellow: 1}], [{pink: 2}, {green: 1, white: 1}]],
+  [[{blue: 2}, {yellow: 1, red: 1}], [{green: 2}, {white: 1, pink: 1}]],
+  [[{yellow: 2}, {red: 1, blue: 1}], [{white: 2}, {pink: 1, green: 1}]]
+];
+const sinNextGinkgo = previous => {
+  const choices = SIN_GINKGO.map((_, i) => i).filter(i => i !== previous);
+  return choices[Math.floor(Math.random() * choices.length)] ?? previous;
+};
 const SIN_ARTIFACTS = {
   "Seafarer Egg": {name: "Huevo Marino", types: ["Psychic", "Water"]},
   "Odd Keystone": {name: "Piedra Espíritu", types: ["Dark", "Ghost"]},
@@ -81,10 +97,27 @@ const SIN_BONGURI = {
 const SIN_BALLS = {
   poke: {name: "Poké Ball", bonus: 1, recipe: {red: 1}},
   great: {name: "Super Ball", bonus: 1.5, recipe: {blue: 1, green: 1, red: 1}},
-  ultra: {name: "Ultra Ball", bonus: 2, recipe: {black: 1, yellow: 1}}
+  ultra: {name: "Ultra Ball", bonus: 2, recipe: {black: 1, yellow: 1}},
+  spirit: {name: "Spirit Ball", bonus: 2.5, recipe: {black: 2, pink: 1, white: 1}}
 };
+const SIN_STEWS = {
+  restoring: {name: "Estofado Restaurador", recipe: {yellow: 1, blue: 1}, effect: "Cura por completo a todo tu equipo."},
+  captivating: {name: "Estofado Cautivador", recipe: {green: 1, red: 1}, effect: "El primer intento de captura del próximo combate salvaje recibe bono de estado ×1,5 si no tiene estado."},
+  tasty: {name: "Estofado Sabroso", recipe: {white: 1, yellow: 1}, effect: "+3 movimientos este turno. Los Alfa revelados este turno no obligan a combatir."},
+  infused: {name: "Estofado Infundido", recipe: {pink: 1, white: 1}, effect: "Un Pokémon del equipo sube 1 nivel y puede aprender ataques y evolucionar."}
+};
+const SIN_CRAFT_ITEMS = {
+  rockyhelmet: {name: "Cristal Explosivo", recipe: {red: 3, yellow: 2, black: 1}},
+  focussash: {name: "Escudo Estrella", recipe: {blue: 3, pink: 2, black: 1}},
+  luckyegg: {name: "Huevo Suerte", recipe: {yellow: 3, green: 2, black: 1}},
+  eviolite: {name: "Mineral Evol", recipe: {pink: 3, white: 2, black: 1}},
+  quickclaw: {name: "Cinta Veloz", recipe: {green: 3, blue: 2, black: 1}},
+  choiceband: {name: "Cinta Elección", recipe: {white: 3, red: 2, black: 1}}
+};
+// Showdown omite este objeto sin efecto en combate; la EXP se calcula en Sinnoh.
+if (!Dex.data.Items.luckyegg) Dex.data.Items.luckyegg = {name: "Lucky Egg", num: 231, gen: 2};
 const sinEmptyBag = () => Object.fromEntries(Object.keys(SIN_BONGURI).map(k => [k, 0]));
-const sinStartingBalls = () => ({poke: 3, great: 0, ultra: 0});
+const sinStartingBalls = () => ({poke: 3, great: 0, ultra: 0, spirit: 0});
 const SIN_EXP_SHARE = .5;
 const SIN_FRIEND_WIN = 1;
 const SIN_EV_STATS = {HP: "hp", ATTACK: "atk", DEFENSE: "def", SPECIAL_ATTACK: "spa", SPECIAL_DEFENSE: "spd", SPEED: "spe"};
@@ -148,6 +181,13 @@ function sinMigrateTeam(run) {
   let changed = false;
   if (!run.bag) { run.bag = sinEmptyBag(); changed = true; }
   if (!run.balls) { run.balls = sinStartingBalls(); changed = true; }
+  if (run.balls.spirit == null) { run.balls.spirit = 0; changed = true; }
+  if (!Number.isInteger(run.ginkgo) || !SIN_GINKGO[run.ginkgo]) { run.ginkgo = sinNextGinkgo(); changed = true; }
+  for (const key of ["traded", "flown", "captivating"]) {
+    if (run[key] == null) { run[key] = false; changed = true; }
+  }
+  if (!run.stews) { run.stews = {}; changed = true; }
+  if (!run.grunts) { run.grunts = []; changed = true; }
   if (!run.box) { run.box = []; changed = true; }
   if (run.pv == null) { run.pv = 0; changed = true; }
   if (!run.hidden) { run.hidden = sinShuffleHidden(); changed = true; }
@@ -202,7 +242,7 @@ function sinGainExp(run, wild, me) {
     s.friendship = Math.min(255, s.friendship + SIN_FRIEND_WIN);
     const sp = Dex.species.get(s.species), gw = sinSpeciesData(s.species)?.gw, oldMax = calcStat(sp, s, "hp");
     const m = me.mons["p1:Sinnoh" + (index + 1)], participated = m && m.side === "p1";
-    const gain = Math.floor(sinWildExp(rival?.be || 0, wild.level, s.level) * (participated ? 1 : SIN_EXP_SHARE));
+    const gain = Math.floor(sinWildExp(rival?.be || 0, wild.level, s.level) * (participated ? 1 : SIN_EXP_SHARE) * (toID(s.item) === "luckyegg" ? 1.5 : 1));
     const before = s.exp; s.exp = Math.min(sinExpForLevel(gw, 100), s.exp + gain); reward.exp = s.exp - before;
     sinGainEVs(s, rival?.evs);
     const moves = sinLevelMoves(s.species);
@@ -317,6 +357,8 @@ sinStyle.textContent = `
   .sin-recipes{display:grid;gap:10px}
   .sin-recipe{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .sin-recipe small{display:block;color:var(--ink2)}
+  .sin-recipe .btn,.sin-recipes>.btn{min-height:44px;white-space:normal}
+  .sin-ginkgo{display:block;width:min(100%,300px);height:auto;margin:10px auto}
   .sin-objects{display:grid;gap:10px;padding:0;list-style:none}
   .sin-objects li{border:1px solid var(--line);border-radius:8px;padding:8px}
   .sin-objects .btn{min-height:44px;white-space:normal}
@@ -397,7 +439,8 @@ async function sinBegin() {
     const set = await sinInitialSet(species);
     ST.sin.run = {v: 1, village: v.village, color: v.color, pos: [...token.cell], team: [set], turn: 1, moved: 0, frag: 0,
       bag: sinEmptyBag(), balls: sinStartingBalls(), box: [], pv: 0, hidden: sinShuffleHidden(),
-      items: [], stars: 0, fate: [], fateDeck: shuffle(SIN_FATE.map(c => c.img))};
+      items: [], stars: 0, fate: [], fateDeck: shuffle(SIN_FATE.map(c => c.img)),
+      ginkgo: sinNextGinkgo(), traded: false, flown: false, stews: {}, captivating: false, grunts: []};
     // La cámara del antiguo visor no se hereda a una partida nueva.
     ST.sin.cam = null; save(); renderSin();
   } catch (err) {
@@ -419,7 +462,7 @@ function sinReachable(pos, remaining, parents = null) {
   }
   dist.delete(start); return dist;
 }
-const sinMaxMoves = run => 3 + run.frag;
+const sinMaxMoves = run => 3 + run.frag + (run.stews?.tasty ? 3 : 0);
 function sinTeamHTML(run) {
   return run.team.map(s => {
     const healthy = s.hpNow == null, pct = healthy ? 100 : s.hpMax ? Math.max(0, Math.min(100, s.hpNow / s.hpMax * 100)) : 0;
@@ -442,24 +485,64 @@ function sinUpdateTurn() {
     <button class="btn" data-act="sinbag">Bolsa</button>
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
     ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}`;
-  sinFillImages(); if (SIN_VIEW.box) sinShowBox(); else if (SIN_VIEW.bag) sinShowBag(); else if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
+  sinFillImages(); if (SIN_VIEW.panel === "ginkgo") sinShowGinkgo(); else if (SIN_VIEW.panel === "fly") sinShowFlight();
+  else if (SIN_VIEW.box) sinShowBox(); else if (SIN_VIEW.bag) sinShowBag(); else if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
 }
-const sinCanCraft = (run, key) => !!SIN_BALLS[key] && Object.entries(SIN_BALLS[key].recipe).every(([k, n]) => run.bag[k] >= n);
-function sinCraft(key) {
+const sinCanPay = (run, recipe) => Object.entries(recipe).every(([k, n]) => run.bag[k] >= n);
+const sinPay = (run, recipe) => Object.entries(recipe).forEach(([k, n]) => { run.bag[k] -= n; });
+const sinRecipeText = recipe => Object.entries(recipe).map(([k, n]) => `${n} Bonguri ${SIN_BONGURI[k][0]}`).join(" + ");
+const sinMapAction = run => !!(VIEW === "sin" && SIN_VIEW && run && !run.battle && !run.progress && !run.revive && !(run.offer && !run.offer.closed));
+const sinRecipe = (key, kind) => (kind === "stew" ? SIN_STEWS : kind === "item" ? SIN_CRAFT_ITEMS : kind === "ball" ? SIN_BALLS : {})[key];
+const sinCanCraft = (run, key, kind = "ball") => {
+  const recipe = sinRecipe(key, kind);
+  return !!recipe && sinCanPay(run, recipe.recipe) && (kind !== "stew" || (!run.stews[key] && (key !== "infused" || run.team.some(s => s.level < 100))));
+};
+function sinCraft(key, kind = "ball", member = null) {
   const run = ST.sin.run;
-  if (VIEW !== "sin" || !SIN_VIEW || !run || run.battle || run.progress || !sinCanCraft(run, key)) return;
-  Object.entries(SIN_BALLS[key].recipe).forEach(([k, n]) => { run.bag[k] -= n; });
-  run.balls[key]++; save(); sinShowBag();
+  if (!sinMapAction(run) || !sinCanCraft(run, key, kind)) return;
+  if (kind === "stew" && key === "infused") {
+    if (member === null) { SIN_VIEW.bagStew = true; return sinShowBag(); }
+    if (!Number.isInteger(member) || !run.team[member] || run.team[member].level >= 100) return;
+  }
+  sinPay(run, sinRecipe(key, kind).recipe);
+  if (kind === "ball") run.balls[key]++;
+  else if (kind === "item") run.items.push(toID(key));
+  else {
+    run.stews[key] = true;
+    if (key === "restoring") run.team.forEach(s => { delete s.hpNow; delete s.status; });
+    if (key === "captivating") run.captivating = true;
+    if (key === "infused") { sinInfuse(run, member); save(); return renderSin(); }
+  }
+  run.notice = kind === "stew" ? `${SIN_STEWS[key].name}: ${SIN_STEWS[key].effect}` : `Fabricaste ${kind === "item" ? esItem(key) : SIN_BALLS[key].name}.`;
+  save(); sinUpdateTurn();
+}
+function sinInfuse(run, index) {
+  const s = run.team[index], sp = Dex.species.get(s.species), oldMax = calcStat(sp, s, "hp"), before = s.exp;
+  s.level++; s.exp = sinExpForLevel(sinSpeciesData(s.species)?.gw, s.level); s.friendship = sinFriendLevel(s.friendship);
+  s.hpMax = calcStat(sp, s, "hp");
+  if (s.hpNow != null && s.hpNow > 0) s.hpNow = Math.min(s.hpMax, s.hpNow + s.hpMax - oldMax);
+  run.progress = {kind: "stew", won: null, rewards: run.team.map((_, i) => ({index: i, exp: i === index ? s.exp - before : 0, levels: i === index ? [s.level] : [], events: []})),
+    pending: sinLevelMoves(s.species).filter(([n]) => n === s.level).map(([, move]) => ({index, move: toID(move), level: s.level}))};
+  run.progress.pending.push({index, kind: "evolution", hour: new Date().getHours()});
+  run.notice = `¡${esSp(s.species)} subió un nivel con el Estofado Infundido!`;
+  sinAdvanceMoves(run);
 }
 function sinShowBag() {
   const run = ST.sin.run; if (!run || !SIN_VIEW) return;
-  SIN_VIEW.bag = true; SIN_VIEW.box = false; SIN_VIEW.selected = null;
+  SIN_VIEW.bag = true; SIN_VIEW.box = false; SIN_VIEW.selected = null; SIN_VIEW.panel = null;
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Bolsa</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
     <ul class="sin-bag">${Object.entries(SIN_BONGURI).map(([k, [name, , color]]) =>
       `<li><span class="sin-bonguri" style="background:${color}" aria-hidden="true"></span>Bonguri ${esc(name)} ×${esc(run.bag[k])}</li>`).join("")}</ul>
-    <div class="sin-recipes">${Object.entries(SIN_BALLS).map(([key, ball]) => `<div class="sin-recipe"><span><b>${esc(ball.name)} ×${esc(run.balls[key])}</b>
+    <h2>Balls</h2><div class="sin-recipes">${Object.entries(SIN_BALLS).map(([key, ball]) => `<div class="sin-recipe"><span><b>${esc(ball.name)} ×${esc(run.balls[key])}</b>
       <small>${Object.entries(ball.recipe).map(([k, n]) => `${esc(n)} Bonguri ${esc(SIN_BONGURI[k][0])}`).join(" + ")}</small></span>
       <button class="btn" data-act="sincraft" data-ball="${key}" ${sinCanCraft(run, key) ? "" : "disabled"}>Fabricar</button></div>`).join("")}</div>
+    <h2>Estofados</h2><p>Cada estofado se puede elaborar una vez por turno y se consume al instante.</p>
+    <div class="sin-recipes">${Object.entries(SIN_STEWS).map(([key, stew]) => `<div><div class="sin-recipe"><span><b>${esc(stew.name)}</b><small>${esc(sinRecipeText(stew.recipe))}</small><small>${esc(stew.effect)}</small></span>
+      <button class="btn" data-act="sinstew" data-stew="${key}" ${sinCanCraft(run, key, "stew") ? "" : "disabled"}>${run.stews[key] ? "Usado" : "Elaborar"}</button></div>
+      ${key === "infused" && SIN_VIEW.bagStew && sinCanCraft(run, key, "stew") ? `<p>Elige el Pokémon que subirá de nivel:</p><div class="btns">${run.team.map((s, i) => `<button class="btn" data-act="sininfuse" data-member="${i}" ${s.level < 100 ? "" : "disabled"}>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>`).join("")}</div>` : ""}</div>`).join("")}</div>
+    ${run.captivating ? "<p>Estofado Cautivador preparado para el primer intento de captura del próximo combate salvaje.</p>" : ""}
+    <h2>Objetos de batalla</h2><div class="sin-recipes">${Object.entries(SIN_CRAFT_ITEMS).map(([key, item]) => `<div class="sin-recipe"><span><b>${esc(esItem(key))}</b><small>${esc(item.name)} · ${esc(sinRecipeText(item.recipe))}</small>${key === "luckyegg" ? "<small>Su portador recibe ×1,5 de EXP.</small>" : ""}</span>
+      <button class="btn" data-act="sincraftitem" data-item="${key}" ${sinCanCraft(run, key, "item") ? "" : "disabled"}>Fabricar</button></div>`).join("")}</div>
     <h2>Objetos</h2>${run.items.length ? `<ul class="sin-objects">${run.items.map((id, i) => `<li><b>${esc(sinItemName(id))}</b>
       <button class="btn" data-act="sinitemselect" data-item="${i}">Equipar</button>
       ${SIN_VIEW.bagItem === i ? `<p>Equipar a…</p><div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sinequip" data-item="${i}" data-member="${j}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.item ? " · Devolver " + esc(sinItemName(s.item)) : ""}</button>`).join("")}</div>` : ""}</li>`).join("")}</ul>` : "<p>No tienes objetos en el inventario.</p>"}
@@ -469,6 +552,50 @@ function sinShowBag() {
     <p>Por cada 4 estrellas robas una carta al terminar cada turno. Los efectos de las cartas estarán disponibles próximamente.</p>
     <div class="sin-fate">${run.fate.map((key, i) => sinCardImage(key, "Carta de Destino " + (i + 1))).join("") || "<p>No tienes cartas de Destino.</p>"}</div>`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
+}
+const sinVillage = run => SIN_BY_CELL.get(run.pos.join(","))?.tokens.find(t => SIN_VILLAGES.some(v => v.village === t.n));
+const sinAtGinkgo = run => sinCellTokens(SIN_BY_CELL.get(run.pos.join(","))).some(t =>
+  (t.tags || []).includes("Village Token") || (t.n === "Campsite" && t.hidden?.revealed));
+function sinShowGinkgo() {
+  const run = ST.sin.run;
+  if (!sinMapAction(run) || !sinAtGinkgo(run)) return;
+  SIN_VIEW.panel = "ginkgo"; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.selected = null;
+  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Comerciar con Ginkgo</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
+    <p>Un intercambio por turno, compartido entre pueblos y campamentos. Después cambia la carta.</p>
+    ${sinCardImage(SIN_GINKGO[run.ginkgo].img, "Intercambios Ginkgo: carta " + (run.ginkgo + 1), "sin-ginkgo")}
+    <div class="sin-recipes">${SIN_TRADES[run.ginkgo].map(([give, receive], i) => `<button class="btn" data-act="sintrade" data-trade="${i}" data-card="${run.ginkgo}" ${!run.traded && sinCanPay(run, give) ? "" : "disabled"}>Dar ${esc(sinRecipeText(give))} → Recibir ${esc(sinRecipeText(receive))}</button>`).join("")}</div>
+    ${run.traded ? "<p>Ya comerciaste este turno.</p>" : ""}`;
+  $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
+}
+function sinTrade(index, card) {
+  const run = ST.sin.run;
+  if (!sinMapAction(run) || !sinAtGinkgo(run) || run.traded || card !== run.ginkgo || !Number.isInteger(index)) return;
+  const trade = SIN_TRADES[run.ginkgo][index]; if (!trade || !sinCanPay(run, trade[0])) return;
+  sinPay(run, trade[0]); Object.entries(trade[1]).forEach(([k, n]) => { run.bag[k] += n; });
+  run.traded = true; run.ginkgo = sinNextGinkgo(run.ginkgo);
+  run.notice = `Comerciaste con Ginkgo: recibiste ${sinRecipeText(trade[1])}.`; save(); sinUpdateTurn();
+}
+const sinFlightBlocked = (run, village) => run.grunts.includes(village);
+function sinShowFlight() {
+  const run = ST.sin.run, origin = run && sinVillage(run);
+  if (!sinMapAction(run) || !origin) return;
+  SIN_VIEW.panel = "fly"; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.selected = null;
+  const blocked = sinFlightBlocked(run, origin.n), dest = SIN_VIEW.flyTo;
+  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Volar (1 Bonguri)</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
+    <p>Una vez por turno. No gasta movimientos. Elige destino y el Bonguri que descartarás.</p>
+    ${blocked ? "<p>Los Reclutas del Equipo Galaxia bloquean el vuelo desde este pueblo.</p>" : ""}${run.flown ? "<p>Ya volaste este turno.</p>" : ""}
+    <div class="btns">${SIN_VILLAGES.filter(v => v.village !== origin.n).map(v => `<button class="btn" data-act="sinflyselect" data-village="${esc(v.village)}" ${run.flown || blocked || sinFlightBlocked(run, v.village) ? "disabled" : ""}>${esc(v.name)}${dest === v.village ? " · Elegido" : ""}${sinFlightBlocked(run, v.village) ? " · Ocupado por Galaxia" : ""}</button>`).join("")}</div>
+    ${dest ? `<p>Descartar para volar a ${esc(SIN_VILLAGES.find(v => v.village === dest)?.name)}:</p><div class="btns">${Object.entries(SIN_BONGURI).map(([key, [name]]) => `<button class="btn" data-act="sinfly" data-village="${esc(dest)}" data-color="${key}" ${run.flown || blocked || sinFlightBlocked(run, dest) || run.bag[key] < 1 ? "disabled" : ""}>Bonguri ${esc(name)} ×${esc(run.bag[key])}</button>`).join("")}</div>` : ""}`;
+  $("sin-card").hidden = false; sinRequestDraw();
+}
+function sinFly(village, color) {
+  const run = ST.sin.run, origin = run && sinVillage(run);
+  const dest = SIN.tokens.find(t => t.n === village && (t.tags || []).includes("Village Token"));
+  if (!sinMapAction(run) || !origin || run.flown || !dest || origin.n === village || !SIN_VILLAGES.some(v => v.village === village) ||
+    sinFlightBlocked(run, origin.n) || sinFlightBlocked(run, village) || !SIN_BONGURI[color] || !(run.bag[color] > 0)) return;
+  run.bag[color]--; run.flown = true; run.pos = [...dest.cell];
+  run.notice = `Volaste a ${sinName(dest)} descartando 1 Bonguri ${SIN_BONGURI[color][0]}.`;
+  SIN_VIEW.panel = null; SIN_VIEW.flyTo = null; save(); sinCenter(); sinShowCell(SIN_BY_CELL.get(run.pos.join(","))); sinUpdateTurn();
 }
 function sinEquip(index, member, remove = false) {
   const run = ST.sin.run, set = run?.team[member];
@@ -518,8 +645,8 @@ function sinOnFaint(me) {
   if (!alive) return;
   me.sinFled = true; me.s.omniscient.write(">forcetie");
 }
-function sinCaptureRoll(hp, max, ratio, bonus, status) {
-  const state = status === "slp" || status === "frz" ? 2.5 : ["par", "brn", "psn", "tox"].includes(status) ? 1.5 : 1;
+function sinCaptureRoll(hp, max, ratio, bonus, status, captivating = false) {
+  const state = status === "slp" || status === "frz" ? 2.5 : ["par", "brn", "psn", "tox"].includes(status) || captivating ? 1.5 : 1;
   const a = Math.floor((3 * max - 2 * hp) * ratio * bonus / (3 * max)) * state;
   if (a >= 255) return {a, b: 65536, checks: 4, caught: true};
   const b = a > 0 ? Math.floor(65536 / (255 / a) ** .1875) : 0;
@@ -538,9 +665,10 @@ async function sinThrowBall(me, key) {
   if (me !== B || !ball || !sinCanThrow(me) || !(run.balls[key] > 0)) return;
   const wild = me.mons[me.act.p2];
   me.sinThrowing = true; me.lastReq = me.req; me.req = null; me.shown = false; $("ctl").innerHTML = "";
-  run.balls[key]--; save();
+  const captivating = !!run.battle.captivating;
+  run.balls[key]--; run.battle.captivating = false; save();
   const ratio = (sinSpeciesData(run.battle.wild.species)?.cr ?? 3) * (run.battle.wild.alpha ? .5 : 1);
-  const result = sinCaptureRoll(wild.hp, wild.max, ratio, ball.bonus, wild.status);
+  const result = sinCaptureRoll(wild.hp, wild.max, ratio, ball.bonus, wild.status, captivating);
   try {
     await say(me, `¡Lanzaste una ${ball.name}!`, 1);
     for (let i = 0; i < Math.min(3, result.checks); i++) {
@@ -584,10 +712,10 @@ function sinRevealHidden(run, key, messages) {
     run.stars++; hidden.present = false;
     messages.push(`¡Encontraste una estrella caída! Estrellas: ${run.stars}. ${sinDrawFate(run, 2)}`);
   } else if (t.n === "Alpha Pokémon") {
-    const c = shuffle(sinWildCards({...t, tier: "S"}).slice())[0], [lo, hi] = SIN_WILD_LEVELS.S;
-    run.searched = true;
-    run.offer = {cards: c ? [{species: c.d.sp, img: c.img, level: lo + Math.floor(Math.random() * (hi - lo + 1)) + 5, alpha: true}] : [],
-      token: hidden.token, hidden: key, alpha: true, place: "Pokémon Alfa", meta: sinMeta(t), closed: false};
+    if (run.stews.tasty) {
+      messages.push("¡Revelaste un Pokémon Alfa! El Estofado Sabroso te permite seguir; puedes buscarlo aquí después."); return false;
+    }
+    sinAlphaOffer(run, hidden, key);
     messages.push("¡Un Pokémon Alfa te corta el paso! Debes combatir.");
     return true;
   } else if (SIN_ARTIFACTS[t.n]) {
@@ -595,6 +723,12 @@ function sinRevealHidden(run, key, messages) {
     messages.push(`¡Encontraste ${item.name}! Puedes equiparlo desde la Bolsa.`);
   }
   return false;
+}
+function sinAlphaOffer(run, hidden, key) {
+  const t = SIN.tokens[hidden.token], c = shuffle(sinWildCards({...t, tier: "S"}).slice())[0], [lo, hi] = SIN_WILD_LEVELS.S;
+  run.searched = true;
+  run.offer = {cards: c ? [{species: c.d.sp, img: c.img, level: lo + Math.floor(Math.random() * (hi - lo + 1)) + 5, alpha: true}] : [],
+    token: hidden.token, hidden: key, alpha: true, place: "Pokémon Alfa", meta: sinMeta(t), closed: false};
 }
 function sinCellTokens(h) {
   const run = ST.sin.run;
@@ -606,7 +740,12 @@ function sinCellTokens(h) {
 }
 function sinSearch(index) {
   const run = ST.sin.run, t = SIN.tokens[index];
-  if (!run || run.searched || run.fought || run.battle || run.revive || !run.team.some(sinAlive) || !t || !sinSearchToken(t) || t.cell.join(",") !== run.pos.join(",")) return;
+  if (!run || run.searched || run.fought || run.battle || run.progress || (run.offer && !run.offer.closed) || run.revive || !run.team.some(sinAlive) || !t) return;
+  const key = run.pos.join(","), hidden = run.hidden[key];
+  if (t.n === "Alpha Pokémon" && hidden?.token === index && hidden.revealed && hidden.present) {
+    sinAlphaOffer(run, hidden, key); save(); return renderSin();
+  }
+  if (!sinSearchToken(t) || t.cell.join(",") !== key) return;
   const [lo, hi] = SIN_WILD_LEVELS[t.tier];
   const cards = shuffle(sinWildCards(t).slice()).slice(0, SIN_OFFER_COUNT[t.tier]).map(c =>
     ({species: c.d.sp, img: c.img, level: lo + Math.floor(Math.random() * (hi - lo + 1))}));
@@ -647,7 +786,8 @@ async function sinFight(index) {
       // El índice original y un apodo único mantienen la asociación aunque cambie el orden o la forma.
       const indices = run.team.map((s, i) => sinAlive(s) ? i : -1).filter(i => i >= 0);
       const token = SIN.tokens.indexOf(sinEncounterToken(run));
-      run.battle = {wild, indices, token, tier: wild.alpha ? "L" : SIN.tokens[token]?.tier, card: s.img, hidden: run.offer.hidden}; run.offer.closed = true; save();
+      run.battle = {wild, indices, token, tier: wild.alpha ? "L" : SIN.tokens[token]?.tier, card: s.img, hidden: run.offer.hidden, captivating: !!run.captivating};
+      run.captivating = false; run.offer.closed = true; save();
     }
     if (!run.battle.tier) { run.battle.tier = sinEncounterToken(run)?.tier; save(); }
     const mine = run.battle.indices.map(i => ({...run.team[i], name: "Sinnoh" + (i + 1)}));
@@ -718,7 +858,7 @@ function sinEndHTML(won) {
 function sinProgressHTML(won) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
   if (p) won = p.won;
-  return `<div class="card"><p class="result">${p?.escaped ? "Huiste del combate" : p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
+  return `<div class="card"><p class="result">${p?.kind === "stew" ? "Estofado Infundido" : p?.escaped ? "Huiste del combate" : p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
     <p class="note">${esc(run ? run.notice : "El combate terminó.")}</p>
     ${p?.caught ? `<p>${esc(esSp(p.caught.species))} ${p.caught.boxed ? "fue enviado a la Caja" : "se unió a tu equipo"}.</p>` : ""}
     ${p?.pv != null ? `<p>Ganaste ${esc(p.pv)} ${p.pv === 1 ? "Punto" : "Puntos"} de Viaje.</p>` : ""}
@@ -735,8 +875,8 @@ function sinProgressHTML(won) {
       <img src="${esc(img(run.team[q.index].species))}" alt="${esc(esSp(run.team[q.index].species))}">
       <div class="btns"><button class="btn primary" data-act="sinevolve">Evolucionar</button><button class="btn" data-act="sincancelevolution">Cancelar</button></div></div>` :
     q ? `<div class="sin-learn"><p><b>${esc(esSp(run.team[q.index].species))}</b> quiere aprender <b>${esc(esMove(q.move))}</b> (${q.kind === "signature" ? "movimiento de la carta" : q.level === 0 ? "al evolucionar" : "Nv. " + esc(q.level)}). Elige un ataque para olvidar.</p>
-      <div class="btns">${run.team[q.index].moves.map((move, i) => `<button class="btn" data-act="sinlearn" data-slot="${i}">Olvidar ${esc(esMove(move))}</button>`).join("")}
-      <button class="btn" data-act="sinlearn" data-slot="-1">No aprender</button></div></div>` :
+      <div class="btns">${run.team[q.index].moves.map((move, i) => `<button class="btn" data-act="sinlearn" data-sin-slot="${i}">Olvidar ${esc(esMove(move))}</button>`).join("")}
+      <button class="btn" data-act="sinlearn" data-sin-slot="-1">No aprender</button></div></div>` :
     p?.signature && !p.signature.done ? `<div class="sin-learn"><p>Enseñar <b>${esc(esMove(p.signature.move))}</b> a…</p><div class="btns">
       ${run.team.map((s, i) => sinAlive(s) && !s.moves.some(m => toID(m) === p.signature.move) ? `<button class="btn" data-act="sinsignature" data-member="${i}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>` : "").join("")}
       <button class="btn" data-act="sinsignature" data-member="-1">No enseñar</button></div></div>` :
@@ -753,7 +893,7 @@ function sinTeachSignature(index) {
   offer.done = true; sinAdvanceMoves(run); save(); sinRefreshProgress();
 }
 function sinProgressScreen() {
-  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Resultado del combate</h1>${sinProgressHTML()}</div></div>`;
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${ST.sin.run.progress?.kind === "stew" ? "Subida de nivel" : "Resultado del combate"}</h1>${sinProgressHTML()}</div></div>`;
 }
 function sinLearn(slot) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
@@ -815,7 +955,7 @@ function sinShowBox() {
   const run = ST.sin.run;
   if (!run || !SIN_VIEW || run.battle || run.progress || !sinAtVillage(run)) return;
   const selected = SIN_VIEW.boxMember;
-  SIN_VIEW.box = true; SIN_VIEW.bag = false; SIN_VIEW.selected = null;
+  SIN_VIEW.box = true; SIN_VIEW.bag = false; SIN_VIEW.selected = null; SIN_VIEW.panel = null;
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Caja (${esc(run.box.length)})</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
     <p>Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}. Debe quedar al menos un Pokémon vivo en el equipo.</p>
     <ul class="sin-tokens">${run.team.map((s, i) => `<li>${sinBoxMember(s)}<div class="btns">
@@ -838,6 +978,8 @@ function sinEndTurn() {
   const run = ST.sin.run; if (!run || run.battle || run.progress || (run.offer && !run.offer.closed)) return;
   if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
   run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
+  run.traded = false; run.flown = false; run.stews = {};
+  if (SIN_VIEW) SIN_VIEW.bagStew = false;
   run.offer = null; run.revive = false;
   run.notice = run.stars >= 4 ? sinDrawFate(run, Math.floor(run.stars / 4)) : ""; save(); sinUpdateTurn();
 }
@@ -1016,7 +1158,7 @@ function sinPick(px, py) {
   sinShowCell(h);
 }
 function sinShowCell(h) {
-  const v = SIN_VIEW, cost = v.reachable.get(h.c + "," + h.r); v.selected = h; v.bag = false; v.box = false; v.boxMember = null;
+  const v = SIN_VIEW, cost = v.reachable.get(h.c + "," + h.r); v.selected = h; v.bag = false; v.box = false; v.boxMember = null; v.panel = null;
   const run = ST.sin.run, here = run.pos.join(",") === h.c + "," + h.r;
   const tokens = sinCellTokens(h);
   const canSearch = !run.searched && !run.fought && !run.revive && run.team.some(sinAlive);
@@ -1028,8 +1170,10 @@ function sinShowCell(h) {
       const meta = sinMeta(t);
       return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.hidden ? "<small>Escondite revelado</small>" : ""}
         ${here && sinSearchToken(t) ? `<button class="btn primary sin-move" data-act="sinsearch" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Buscar Pokémon</button>` : ""}
-        ${here && t.n === "Campsite" && t.hidden?.revealed ? `<button class="btn primary sin-move" data-act="sinheal" ${run.healed || run.revive ? "disabled" : ""}>Curar equipo</button><button class="btn sin-move" disabled>Comerciar con Ginkgo (próximamente)</button>` : ""}
-        ${here && (t.tags || []).includes("Village Token") ? `<button class="btn primary sin-move" data-act="sinheal" ${run.healed || run.revive ? "disabled" : ""}>Curar equipo</button><button class="btn sin-move" data-act="sinbox">Caja (${esc(run.box.length)})</button>` : ""}</li>`;
+        ${here && t.n === "Alpha Pokémon" && t.hidden?.revealed ? `<button class="btn primary sin-move" data-act="sinsearch" data-token="${t.hidden.token}" ${canSearch ? "" : "disabled"}>Buscar Pokémon Alfa</button>` : ""}
+        ${here && ((t.n === "Campsite" && t.hidden?.revealed) || (t.tags || []).includes("Village Token")) ? `<button class="btn primary sin-move" data-act="sinheal" ${run.healed || run.revive ? "disabled" : ""}>Curar equipo</button><button class="btn sin-move" data-act="singinkgo" ${run.traded || run.revive ? "disabled" : ""}>Comerciar con Ginkgo</button>` : ""}
+        ${here && SIN_VILLAGES.some(v => v.village === t.n) ? `<button class="btn sin-move" data-act="sinflyopen" ${run.flown || run.revive || sinFlightBlocked(run, t.n) || !Object.values(run.bag).some(n => n > 0) ? "disabled" : ""}>Volar (1 Bonguri)</button>` : ""}
+        ${here && (t.tags || []).includes("Village Token") ? `<button class="btn sin-move" data-act="sinbox">Caja (${esc(run.box.length)})</button>` : ""}</li>`;
     }).join("")}</ul>` : '<p>No hay tokens en esta casilla.</p>'}`;
   $("sin-card").hidden = false; sinRequestDraw();
 }
@@ -1114,7 +1258,7 @@ document.addEventListener("click", e => {
     B.sinEscaped = true; sinResult(null, B); B.dead = true; B = null; return go("sin");
   }
   if (act === "sinthrow" && VIEW === "battle" && B && B.sin) return sinThrowBall(B, b.dataset.ball);
-  if (act === "sinlearn" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinLearn(+b.dataset.slot);
+  if (act === "sinlearn" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinLearn(+b.dataset.sinSlot);
   if (act === "sinsignature" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinTeachSignature(+b.dataset.member);
   if ((act === "sinevolve" || act === "sincancelevolution") && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinEvolve(act === "sinevolve");
   if (act === "sinmap") {
@@ -1157,11 +1301,19 @@ document.addEventListener("click", e => {
   }
   if (["sindeposit", "sinwithdraw", "sinexchange"].includes(act)) return sinBoxAction(act, +b.dataset.member, +b.dataset.box);
   if (act === "sincraft") return sinCraft(b.dataset.ball);
+  if (act === "sinstew") return sinCraft(b.dataset.stew, "stew");
+  if (act === "sininfuse") return sinCraft("infused", "stew", +b.dataset.member);
+  if (act === "sincraftitem") return sinCraft(b.dataset.item, "item");
+  if (act === "singinkgo") return sinShowGinkgo();
+  if (act === "sintrade") return sinTrade(+b.dataset.trade, +b.dataset.card);
+  if (act === "sinflyopen") { SIN_VIEW.flyTo = null; return sinShowFlight(); }
+  if (act === "sinflyselect") { SIN_VIEW.flyTo = b.dataset.village; return sinShowFlight(); }
+  if (act === "sinfly") return sinFly(b.dataset.village, b.dataset.color);
   if (act === "sinmove") return sinMoveTo(b.dataset.cell);
   if (act === "sinsearch") return sinSearch(+b.dataset.token);
   if (act === "sinheal") return sinHeal();
   if (act === "sinendturn") return sinEndTurn();
   if (act === "sincenter") return sinCenter();
-  if (act === "sinclose") { $("sin-card").hidden = true; SIN_VIEW.selected = null; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.boxMember = null; return sinRequestDraw(); }
+  if (act === "sinclose") { $("sin-card").hidden = true; SIN_VIEW.selected = null; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.boxMember = null; SIN_VIEW.panel = null; return sinRequestDraw(); }
   if (act === "sinin" || act === "sinout") { sinZoom(act === "sinin" ? 1.4 : 1 / 1.4, SIN_VIEW.w / 2, SIN_VIEW.h / 2); sinSaveCam(true); }
 }, true);

@@ -17,7 +17,35 @@ Se incorporan los Bonguri, las recetas de Balls, los Puntos de Viaje como moneda
 
 **Escondites y objetos equipables (tarea 11):** al empezar, o al cargar una partida antigua sin `run.hidden`, se barajan los contenidos entre las posiciones regulares y, por separado, entre las especiales de `SIN.tokens`. Se conserva el inventario real extraído: 21 alijos (3 por color), 6 campamentos, 8 estrellas, 6 Alfa y 11 artefactos. La asignación por casilla, su revelación y su permanencia se guardan; no se vuelven a sortear al recargar. Se revelan todas las casillas del camino en orden, incluidos los pasos intermedios. Antes de descubrirlos, la ficha no muestra su contenido.
 
-Cada color tiene un alijo de **1, 2 y 3 Bonguri**; se recibe la cantidad al pasar y el alijo desaparece. Los **campamentos** permanecen boca arriba y permiten curar al equipo en su casilla, con el mismo límite compartido de una curación por turno que los pueblos. Muestran **Comerciar con Ginkgo (próximamente)** deshabilitado; no son pueblos ni permiten usar la Caja o volar.
+Cada color tiene un alijo de **1, 2 y 3 Bonguri**; se recibe la cantidad al pasar y el alijo desaparece. Los **campamentos** permanecen boca arriba y permiten curar al equipo y comerciar con Ginkgo en su casilla, con los mismos límites compartidos por turno que los pueblos. No son pueblos ni permiten usar la Caja o volar.
+
+**Pueblos y elaboración (tarea 12):** en pueblos y campamentos se puede **comerciar con Ginkgo una vez por turno** (`run.traded`). La carta actual (`run.ginkgo`, índice de 0 a 8) se sortea al comenzar o migrar una partida y persiste al recargar. El panel muestra su imagen y sus dos intercambios, deshabilitados si faltan ingredientes. Al confirmar uno se descuentan los Bonguri, se entregan los recibidos y se sortea una carta distinta. Se contrastaron visualmente las cartas 0, 3 y 6 con sus imágenes; coinciden con la transcripción.
+
+En los **ocho pueblos iniciales** se puede **volar una vez por turno**, descartando un Bonguri del color elegido, hacia cualquiera de los otros siete. El vuelo mueve la ficha y centra el mapa sin gastar movimientos. `run.flown` guarda el uso y `run.grunts` guarda los nombres internos de los pueblos ocupados por Reclutas Galaxia: bloquean tanto salir como llegar. Por ahora la lista empieza vacía; los Reclutas se incorporan en la tarea 13. Los campamentos no permiten salir ni llegar por vuelo.
+
+La **Bolsa** separa Balls, estofados y objetos de batalla. Todo se elabora fuera de combate y se guarda dentro de `ST.sin`; no modifica otros modos. Se incorpora **Spirit Ball: 2 negros + 1 rosa + 1 blanco**, con bono de captura **2,5**, también disponible al lanzar Balls durante un combate.
+
+Cada estofado se consume al elaborarlo y solo puede elaborarse **una vez por turno por tipo** (`run.stews`):
+
+| Estofado | Bonguri | Efecto adaptado |
+|---|---|---|
+| Restaurador | 1 amarillo + 1 azul | Cura completamente los PS y estados de todo el equipo, sin gastar la curación de pueblo/campamento. |
+| Cautivador | 1 verde + 1 rojo | El primer intento de captura del próximo combate salvaje recibe bono de estado ×1,5 si el salvaje no tiene estado; si ya tiene, mantiene su bono habitual. No se acumula con él. Queda preparado entre turnos hasta comenzar ese combate; se gasta con el primer lanzamiento y caduca al terminar ese combate aunque no se lance ninguna Ball. |
+| Sabroso | 1 blanco + 1 amarillo | +3 movimientos durante este turno; los Alfa revelados durante él no interrumpen el camino ni obligan a combatir. Permanecen revelados y se pueden combatir con «Buscar Pokémon Alfa» después. |
+| Infundido | 1 rosa + 1 blanco | Permite elegir un Pokémon del equipo de nivel menor que 100: sube exactamente un nivel, actualiza EXP, amistad y PS y usa el flujo normal de aprendizaje y evolución, con decisiones persistentes. No da EVs ni recompensas de combate. |
+
+Al terminar el turno se reinician comercio, vuelo y estofados; desaparecen los +3 movimientos y la protección del Sabroso. El Cautivador pendiente se conserva para el próximo combate salvaje. Las partidas antiguas reciben las claves nuevas y 0 Spirit Balls sin alterar sus inventarios existentes.
+
+Los **seis objetos de batalla** fabricados van a `run.items` y se equipan o quitan con el mismo sistema de los artefactos. La interfaz usa `esItem()` para sus nombres oficiales y entrega los IDs reales al motor:
+
+| Nombre del mod | Bonguri | Objeto real y adaptación |
+|---|---|---|
+| Cristal Explosivo | 3 rojos + 2 amarillos + 1 negro | Casco Dentado (`rockyhelmet`). |
+| Escudo Estrella | 3 azules + 2 rosas + 1 negro | Banda Focus (`focussash`). |
+| Huevo Suerte | 3 amarillos + 2 verdes + 1 negro | Huevo Suerte (`luckyegg`): ×1,5 de EXP para su portador en Sinnoh, también con el reparto de EXP; se redondea hacia abajo al final. |
+| Mineral Evol | 3 rosas + 2 blancos + 1 negro | Mineral Evolutivo (`eviolite`). |
+| Cinta Veloz | 3 verdes + 2 azules + 1 negro | Garra Rápida (`quickclaw`). |
+| Cinta Elección | 3 blancos + 2 rojos + 1 negro | Cinta Elección (`choiceband`). |
 
 Cada **estrella caída** desaparece, suma uno a `run.stars` y roba dos cartas aleatorias del mazo de 42 cartas de Cambio de Destino. La mano `run.fate` tiene máximo **5 cartas**: las sobrantes se pierden con aviso. El orden restante del mazo también se guarda, sin repetir cartas; si se agota, se avisa. Al terminar el turno, cada grupo de cuatro estrellas da otra carta (una desde la cuarta, dos desde la octava), respetando el mismo límite. La Bolsa muestra las imágenes de la mano; sus efectos quedan para la tarea 18.
 
