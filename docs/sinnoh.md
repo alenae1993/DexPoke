@@ -7,7 +7,32 @@ Objetivo del dueño, en sus palabras: *"basicamente quiero el juego pero con bat
 - **Fuente:** el mod de Tabletop Simulator **"[1.4a]Pokémon: Leyendas de Sinnoh"**, Workshop `2880340481`, versión en español. El arte es de su autor, Levatius. El dueño pidió usar las imágenes del mod.
 - **Batallas:** con el motor de Mi Dex (Showdown, `batalla.js`), no con las cartas ni los dados del mod.
 - **Evolución, niveles y movimientos:** como en los juegos y Essentials, no con el sistema del juego de mesa.
-- **Estado:** solo se analizó el mod y se extrajeron sus datos. Todavía no hay nada jugable.
+- **Estado local:** mapa táctil, pueblos e iniciales, movimiento, turnos, búsqueda con cartas del mod y combates salvajes con PS y estados persistentes. Las victorias dan EXP y EVs, permiten subir de nivel y aprender ataques; la evolución queda para la tarea 8.
+
+## Decisión: juego actual + progresión real
+
+Se mantiene el juego actual: mapa, movimiento, búsqueda en árboles y arrecifes con las cartas del mod, combates, pueblos y turnos. Los niveles de los salvajes y la curación siguen iguales. La progresión de los Pokémon usa EXP, curvas de crecimiento, ataques por nivel y EVs como en los videojuegos; la evolución se implementará en la tarea 8.
+
+Bonguri, Puntos de Viaje, captura con cartas, Destino, santuarios, campaña y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
+
+**EXP y constantes:** `sinExpForLevel(gw, n)` devuelve EXP total, con nivel máximo 100 y 0 EXP en nivel 1. `floor` significa redondear hacia abajo. Curvas contrastadas con las [tablas de crecimiento de Pokémon Essentials](https://github.com/Maruno17/pokemon-essentials/blob/master/Data/Scripts/010_Data/001_Hardcoded%20data/001_GrowthRate.rb):
+
+| `gw` | EXP total para nivel `n` (redondeada hacia abajo) | Nivel 100 |
+|---|---|---|
+| `Fast` | `4·n³/5` | 800.000 |
+| `Medium` | `n³` | 1.000.000 |
+| `Parabolic` | `6·n³/5 − 15·n² + 100·n − 140` (mínimo 0) | 1.059.860 |
+| `Slow` | `5·n³/4` | 1.250.000 |
+| `Erratic` | Hasta 50: `n³·(100−n)/50`; 51–68: `n³·(150−n)/100`; 69–98: `n³·floor((1911−10·n)/3)/500`; 99–100: `n³·(160−n)/100` | 600.000 |
+| `Fluctuating` | Hasta 15: `n³·(floor((n+1)/3)+24)/50`; 16–35: `n³·(n+14)/50`; 36–100: `n³·(floor(n/2)+32)/50` | 1.640.000 |
+
+Al vencer al salvaje: `EXP = floor((be·Lr/5)·((2·Lr+10)/(Lr+Lp+10))^2.5)+1`, con `be` del rival en `data.js`, `Lr` su nivel y `Lp` el nivel del receptor antes de subir. Cada participante vivo recibe el 100 %; cada no participante vivo recibe `floor(EXP·SIN_EXP_SHARE)`, con `SIN_EXP_SHARE = 0,5`. Los debilitados no reciben EXP ni EVs; perder o empatar tampoco da recompensas. La EXP acumulada se limita a la necesaria para nivel 100. Ejemplo: Chimchar Nv. 5 contra Bidoof Nv. 4 (`be=50`): `floor(40·(18/19)^2.5)+1 = 35 EXP`; uno del mismo nivel en la banca recibe 17.
+
+Los receptores vivos suman los EVs del rival (`evs`, pares de stat y cantidad separados por comas), con máximo 252 por estadística y 510 en total. Se recalculan los PS con `calcStat`: los PS actuales aumentan en la diferencia de PS máximos por EVs y niveles, sin curar el daño previo ni los estados.
+
+Los sets nuevos tienen IVs independientes entre 0 y 31, EVs en 0, naturaleza al azar y sexo sorteado según `gr`. Usan los últimos cuatro ataques distintos de `lv` hasta su nivel, excluyendo el nivel 0 reservado para evolución. Se usa la especie base si falta la forma en `data.js`; si falta también la especie, los ataques iniciales recurren al learnset del motor. Al cargar partidas antiguas se inicializan solo `exp` y el sexo pendiente, conservando sus IVs y ataques.
+
+El resultado, los niveles ganados y la cola de ataques quedan en `ST.sin.run.progress`. Se aprenden automáticamente si hay espacio; con cuatro ataques se pregunta, de uno en uno, cuál olvidar o si no aprender. No se vuelve al mapa hasta responder; recargar recupera el resultado y las preguntas sin repetir recompensas. El equipo del mapa muestra nivel, sexo y barras de PS y EXP.
 
 ## Dónde están los archivos del mod (en el PC del dueño)
 
@@ -169,7 +194,7 @@ Las etiquetas de la carta dan su bioma y clima.
 **Otra campaña: Ultra Explosión**
 - Necrozma, 9 Ultraentes, porcentaje de brecha, armadura prisma y bendiciones de Arceus. Se deja para después de Corazón de Sinnoh.
 
-## Decisiones tomadas (por defecto; el dueño no las contradijo)
+## Propuestas anteriores (referencia; sujetas a la decisión actual)
 
 | Tema | Decisión |
 |---|---|
@@ -196,6 +221,6 @@ Las etiquetas de la carta dan su bioma y clima.
    - Bonguri y crafteo;
    - guardado en `localStorage` con una clave propia.
 5. Integrar las batallas: reutilizar `newBattle` sin duplicar código, con un archivo aparte como `escalada.js`, y devolver el resultado al mapa.
-6. Agregar EXP, niveles, evolución y aprendizaje de movimientos.
-7. Campaña, legendarios, santuarios, escondites, sellos y cartas de Destino (leyendo los textos desde las imágenes de las cartas).
+6. **Hecho (tarea 7):** EXP, curvas de crecimiento, niveles, EVs y aprendizaje de movimientos con preguntas persistentes. Evolución pendiente para la tarea 8.
+7. **Aparcado:** campaña, legendarios, santuarios, escondites, sellos y cartas de Destino (leyendo los textos desde las imágenes de las cartas).
 8. Botón en el menú, `SHELL` del service worker, `LEEME.md` y pruebas en pantalla de celular.
