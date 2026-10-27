@@ -91,8 +91,8 @@ Todo es estático: no hay servidor, compilación ni dependencias npm en tiempo d
 3. **Leyendas de Sinnoh**, el proyecto grande. Plan detallado en `docs/sinnoh.md`. En resumen:
    - **Solo local: Leyendas de Sinnoh vive solo en la rama `sinnoh` del PC del dueño. No se sube a GitHub y el sitio publicado no la incluye.**
    - **Decisión del dueño:** mantener el juego actual (mapa, movimiento, búsqueda en árboles/arrecifes con cartas del mod, combates, pueblos y turnos) y progresión como en los videojuegos.
-   - **Hecho en local:** recursos del mod, mapa táctil, iniciales, turnos, búsqueda y combates con PS y estados persistentes. La tarea 7 agrega EXP con las seis curvas, niveles, EVs, sexo fijo y ataques por nivel con decisiones de aprendizaje guardadas.
-   - **Siguiente:** evolución, en la tarea 8.
+   - **Hecho en local:** recursos del mod, mapa táctil, iniciales, turnos, búsqueda y combates con PS y estados persistentes. EXP con las seis curvas, niveles, EVs, sexo fijo y ataques por nivel con decisiones de aprendizaje guardadas. La tarea 8 agrega amistad y evolución por nivel, hora, sexo, amistad (umbral 160) o ataque conocido, con cancelación y aprendizaje de ataques de evolución persistentes.
+   - **Pendiente de evolución:** objetos, intercambio y demás métodos especiales (`LevelRain`, `LevelWalk`, `LevelCoins`, etc.), para cuando haya objetos.
    - **Aparcado:** Bonguri, Puntos de Viaje, captura con cartas, Destino, santuarios, campaña y demás mecánicas del juego de mesa. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual.
 4. **Recuperar los generadores perdidos**, solo cuando haga falta actualizar esos datos: `champions.js` (desde Smogon), `comp.js` y `tiers.js` (desde una versión nueva de `@pkmn/sim`) y el empaquetador de `spr/`. Los formatos están descritos arriba.
 

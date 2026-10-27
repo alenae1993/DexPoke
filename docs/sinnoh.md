@@ -11,7 +11,7 @@ Objetivo del dueño, en sus palabras: *"basicamente quiero el juego pero con bat
 
 ## Decisión: juego actual + progresión real
 
-Se mantiene el juego actual: mapa, movimiento, búsqueda en árboles y arrecifes con las cartas del mod, combates, pueblos y turnos. Los niveles de los salvajes y la curación siguen iguales. La progresión de los Pokémon usa EXP, curvas de crecimiento, ataques por nivel y EVs como en los videojuegos; la evolución se implementará en la tarea 8.
+Se mantiene el juego actual: mapa, movimiento, búsqueda en árboles y arrecifes con las cartas del mod, combates, pueblos y turnos. Los niveles de los salvajes y la curación siguen iguales. La progresión de los Pokémon usa EXP, curvas de crecimiento, ataques por nivel, EVs, amistad y evolución como en los videojuegos.
 
 Bonguri, Puntos de Viaje, captura con cartas, Destino, santuarios, campaña y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
 
@@ -30,9 +30,17 @@ Al vencer al salvaje: `EXP = floor((be·Lr/5)·((2·Lr+10)/(Lr+Lp+10))^2.5)+1`, 
 
 Los receptores vivos suman los EVs del rival (`evs`, pares de stat y cantidad separados por comas), con máximo 252 por estadística y 510 en total. Se recalculan los PS con `calcStat`: los PS actuales aumentan en la diferencia de PS máximos por EVs y niveles, sin curar el daño previo ni los estados.
 
-Los sets nuevos tienen IVs independientes entre 0 y 31, EVs en 0, naturaleza al azar y sexo sorteado según `gr`. Usan los últimos cuatro ataques distintos de `lv` hasta su nivel, excluyendo el nivel 0 reservado para evolución. Se usa la especie base si falta la forma en `data.js`; si falta también la especie, los ataques iniciales recurren al learnset del motor. Al cargar partidas antiguas se inicializan solo `exp` y el sexo pendiente, conservando sus IVs y ataques.
+Los sets nuevos tienen IVs independientes entre 0 y 31, EVs en 0, naturaleza al azar y sexo sorteado según `gr`. Usan los últimos cuatro ataques distintos de `lv` hasta su nivel, excluyendo el nivel 0 reservado para evolución. Se usa la especie base si falta la forma en `data.js`; si falta también la especie, los ataques iniciales recurren al learnset del motor. Al cargar partidas antiguas se inicializan `exp`, el sexo y la amistad pendientes, conservando sus IVs y ataques.
 
 El resultado, los niveles ganados y la cola de ataques quedan en `ST.sin.run.progress`. Se aprenden automáticamente si hay espacio; con cuatro ataques se pregunta, de uno en uno, cuál olvidar o si no aprender. No se vuelve al mapa hasta responder; recargar recupera el resultado y las preguntas sin repetir recompensas. El equipo del mapa muestra nivel, sexo y barras de PS y EXP.
+
+**Amistad y evolución (tarea 8):** cada set guarda `friendship`, inicialmente el valor base `hp` de `data.js` (70 si falta), también para salvajes y partidas antiguas. Ganar un combate suma `SIN_FRIEND_WIN = 1` a cada Pokémon vivo. Cada nivel ganado suma +5 con amistad 0–99, +3 con 100–199 o +2 con 200–255, aplicando el tramo de nuevo por cada nivel y con tope 255. Perder o empatar no da amistad ni evoluciones.
+
+Solo los Pokémon que subieron al menos un nivel revisan la primera evolución válida de `ev`, después de resolver los ataques del combate. Se implementan `Level`, `LevelDay`, `LevelNight`, `LevelFemale`, `LevelMale`, `Happiness`, `HappinessDay`, `HappinessNight` y `HasMove`. Los métodos de amistad exigen al menos **160**; los de sexo comprueban el sexo guardado y `HasMove` comprueba los ataques conocidos, incluidos los recién aprendidos. Se usa la hora local del dispositivo al ganar: día desde las 6:00 hasta las 19:59 y noche el resto. Se ignoran destinos inexistentes en Showdown.
+
+El resultado ofrece **Evolucionar** o **Cancelar**. Cancelar conserva la especie y permite ofrecerla otra vez en la siguiente subida de nivel válida. Evolucionar conserva nivel, EXP, EVs, IVs, naturaleza, sexo, amistad y ataques, y mantiene la ranura de habilidad (`0`, `1` o `H`; respaldo `0`). Recalcula los PS máximos con `calcStat` y suma la diferencia a los actuales sin quitar el daño previo. Encola los ataques de nivel 0 y del nivel actual del destino con las mismas preguntas de aprendizaje. No encadena otra evolución hasta una próxima subida de nivel. Tanto la evolución pendiente como las preguntas y el resultado persisten al recargar; no se vuelve al mapa mientras falte una decisión.
+
+Quedan pendientes hasta incorporar objetos las evoluciones por `Item`, `CableLinkItem` e intercambio, `TradeSpecies`, objetos equipados y los demás métodos especiales, incluidos `LevelRain`, `LevelWalk` y `LevelCoins`.
 
 ## Dónde están los archivos del mod (en el PC del dueño)
 

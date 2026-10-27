@@ -17,10 +17,39 @@ const SIN_WILD_LEVELS = {W: [3, 6], M: [8, 12], S: [15, 20]};
 const SIN_OFFER_COUNT = {W: 3, M: 2, S: 1};
 const SIN_STATUS = {par: "PAR", brn: "QUE", psn: "ENV", tox: "ENV", slp: "DOR", frz: "CON"};
 const SIN_EXP_SHARE = .5;
+const SIN_FRIEND_WIN = 1;
 const SIN_EV_STATS = {HP: "hp", ATTACK: "atk", DEFENSE: "def", SPECIAL_ATTACK: "spa", SPECIAL_DEFENSE: "spd", SPEED: "spe"};
 const SIN_SPECIES = new Map(D.P.map(p => [p.c, p]));
 function sinSpeciesData(species) {
   return SIN_SPECIES.get(toID(species).toUpperCase()) || SIN_SPECIES.get(toID(Dex.species.get(species).baseSpecies).toUpperCase());
+}
+const sinBaseFriendship = species => sinSpeciesData(species)?.hp ?? 70;
+const sinFriendLevel = friendship => Math.min(255, friendship + (friendship < 100 ? 5 : friendship < 200 ? 3 : 2));
+function sinEvolutionCondition(set, method, param, hour) {
+  const day = hour >= 6 && hour < 20, level = set.level >= +param, happy = set.friendship >= 160;
+  switch (method) {
+    case "Level": return level;
+    case "LevelDay": return level && day;
+    case "LevelNight": return level && !day;
+    case "LevelFemale": return level && set.gender === "F";
+    case "LevelMale": return level && set.gender === "M";
+    case "Happiness": return happy;
+    case "HappinessDay": return happy && day;
+    case "HappinessNight": return happy && !day;
+    case "HasMove": return set.moves.some(move => toID(move) === toID(param));
+    default: return false;
+  }
+}
+function sinEvolution(set, hour) {
+  for (const [target, method, param] of sinSpeciesData(set.species)?.ev || []) {
+    const sp = Dex.species.get(toID(target));
+    if (sp.exists && sinEvolutionCondition(set, method, param, hour)) return sp.name;
+  }
+  return null;
+}
+function sinEvolutionAbility(ability, before, after) {
+  const slot = ["0", "1", "H"].find(k => before.abilities[k] && toID(before.abilities[k]) === toID(ability));
+  return after.abilities[slot] || after.abilities["0"];
 }
 function sinExpForLevel(gw, n) {
   n = Math.max(1, Math.min(100, Math.floor(n)));
@@ -52,6 +81,7 @@ function sinMigrateTeam(run) {
   sets.forEach(s => {
     if (s.exp == null) { s.exp = sinExpForLevel(sinSpeciesData(s.species)?.gw, s.level); changed = true; }
     if (!s.gender) { s.gender = sinGender(s.species); changed = true; }
+    if (s.friendship == null) { s.friendship = sinBaseFriendship(s.species); changed = true; }
   });
   if (changed) save();
 }
@@ -72,6 +102,12 @@ function sinAdvanceMoves(run) {
   const p = run.progress;
   while (p.pending.length) {
     const q = p.pending[0], s = run.team[q.index];
+    if (q.kind === "evolution") {
+      // Se comprueba después de aprender los ataques, incluido el necesario para HasMove.
+      if (!q.target) q.target = sinEvolution(s, q.hour);
+      if (q.target) break;
+      p.pending.shift(); continue;
+    }
     if (!s.moves.includes(q.move)) {
       if (s.moves.length >= 4) break;
       s.moves.push(q.move); p.rewards[q.index].events.push({move: q.move});
@@ -85,6 +121,7 @@ function sinGainExp(run, wild, me) {
   run.team.forEach((s, index) => {
     const reward = {index, exp: 0, levels: [], events: []}; p.rewards.push(reward);
     if (!sinAlive(s)) return;
+    s.friendship = Math.min(255, s.friendship + SIN_FRIEND_WIN);
     const sp = Dex.species.get(s.species), gw = sinSpeciesData(s.species)?.gw, oldMax = calcStat(sp, s, "hp");
     const m = me.mons["p1:Sinnoh" + (index + 1)], participated = m && m.side === "p1";
     const gain = Math.floor(sinWildExp(rival?.be || 0, wild.level, s.level) * (participated ? 1 : SIN_EXP_SHARE));
@@ -93,11 +130,14 @@ function sinGainExp(run, wild, me) {
     const moves = sinLevelMoves(s.species);
     while (s.level < 100 && s.exp >= sinExpForLevel(gw, s.level + 1)) {
       s.level++; reward.levels.push(s.level);
+      s.friendship = sinFriendLevel(s.friendship);
       moves.filter(([n]) => n === s.level).forEach(([, move]) => p.pending.push({index, move: toID(move), level: s.level}));
     }
     s.hpMax = calcStat(sp, s, "hp");
     if (s.hpNow != null) s.hpNow = Math.min(s.hpMax, s.hpNow + s.hpMax - oldMax);
   });
+  const hour = new Date().getHours();
+  p.rewards.filter(r => r.levels.length).forEach(r => p.pending.push({index: r.index, kind: "evolution", hour}));
   sinAdvanceMoves(run);
 }
 const sinSearchToken = t => !!(SIN_OFFER_COUNT[t.tier] && t.b && t.k && /Apricorn (Tree|Reef)/.test(t.n));
@@ -184,6 +224,10 @@ sinStyle.textContent = `
   .sin-progress{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
   .sin-progress p{margin:6px 0}
   .sin-learn .btn{min-height:44px;white-space:normal}
+  .sin-evolution{text-align:center}
+  .sin-evolution img{display:block;width:160px;max-width:100%;height:160px;object-fit:contain;margin:12px auto;animation:sin-evolve 1s ease-in-out 2}
+  @keyframes sin-evolve{50%{opacity:.3;filter:brightness(2)}}
+  @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
   .sin-offer .btn{margin-top:8px;min-height:44px}
@@ -249,6 +293,7 @@ async function sinInitialSet(species, level = 5) {
   set.moves = learned.filter((move, i) => learned.lastIndexOf(move) === i).slice(-4);
   Object.keys(set.ivs).forEach(k => { set.ivs[k] = Math.floor(Math.random() * 32); });
   set.exp = sinExpForLevel(sinSpeciesData(species)?.gw, level); set.gender = sinGender(species);
+  set.friendship = sinBaseFriendship(species);
   const natures = Dex.natures.all(); set.nature = natures[Math.floor(Math.random() * natures.length)].name;
   return set;
 }
@@ -329,7 +374,7 @@ function sinOfferScreen() {
     <p>${esc(offer.place)} · ${esc(offer.meta)}</p>
     ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
       ${sinCardImage(s.img, "Carta de " + esSp(s.species))}<b>${esc(esSp(s.species))}</b><span>Nv. ${esc(s.level)}</span>
-      <div><button class="btn primary" data-act="sinfight" data-pick="${i}">Combatir</button></div></div>`).join("")}</div>` :
+      <div><button class="btn primary" data-act="sinfight" data-offer="${i}">Combatir</button></div></div>`).join("")}</div>` :
       '<p role="status">No hay cartas de Pokémon para este bioma, clima y nivel. La búsqueda de este turno ya fue usada.</p>'}
     <div class="sin-new-actions"><button class="btn" data-act="sinskip">No combatir</button></div>
     <div class="sin-team">${sinTeamHTML(run)}</div><p id="sin-offer-error" role="alert"></p></div></div>`;
@@ -409,10 +454,13 @@ function sinProgressHTML(won) {
       const name = esc(esSp(run.team[r.index].species));
       return `<div class="sin-progress"><b>${name}: +${esc(r.exp)} EXP</b>
         ${r.levels.map(n => `<p>¡${name} subió al nivel ${esc(n)}!</p>`).join("")}
-        ${r.events.map(e => `<p>${e.skip ? `${name} no aprendió ${esc(esMove(e.move))}.` : e.forgot ?
+        ${r.events.map(e => `<p>${e.evolved ? `¡Felicidades! Tu ${esc(esSp(e.from))} evolucionó en ${esc(esSp(e.evolved))}.` : e.skip ? `${name} no aprendió ${esc(esMove(e.move))}.` : e.forgot ?
           `${name} olvidó ${esc(esMove(e.forgot))} y aprendió ${esc(esMove(e.move))}.` : `${name} aprendió ${esc(esMove(e.move))}.`}</p>`).join("")}</div>`;
     }).join("") : ""}
-    ${q ? `<div class="sin-learn"><p><b>${esc(esSp(run.team[q.index].species))}</b> quiere aprender <b>${esc(esMove(q.move))}</b> (Nv. ${esc(q.level)}). Elige un ataque para olvidar.</p>
+    ${q && q.kind === "evolution" ? `<div class="sin-learn sin-evolution"><p><b>¿Qué? ¡${esc(esSp(run.team[q.index].species))} está evolucionando!</b></p>
+      <img src="${esc(img(run.team[q.index].species))}" alt="${esc(esSp(run.team[q.index].species))}">
+      <div class="btns"><button class="btn primary" data-act="sinevolve">Evolucionar</button><button class="btn" data-act="sincancelevolution">Cancelar</button></div></div>` :
+    q ? `<div class="sin-learn"><p><b>${esc(esSp(run.team[q.index].species))}</b> quiere aprender <b>${esc(esMove(q.move))}</b> (${q.level === 0 ? "al evolucionar" : "Nv. " + esc(q.level)}). Elige un ataque para olvidar.</p>
       <div class="btns">${run.team[q.index].moves.map((move, i) => `<button class="btn" data-act="sinlearn" data-slot="${i}">Olvidar ${esc(esMove(move))}</button>`).join("")}
       <button class="btn" data-act="sinlearn" data-slot="-1">No aprender</button></div></div>` :
       '<div class="btns"><button class="btn primary" data-act="sinmap">Volver al mapa</button></div>'}</div>`;
@@ -422,11 +470,32 @@ function sinProgressScreen() {
 }
 function sinLearn(slot) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
-  if (!q || !Number.isInteger(slot) || slot < -1 || slot >= run.team[q.index].moves.length) return;
+  if (!q || q.kind === "evolution" || !Number.isInteger(slot) || slot < -1 || slot >= run.team[q.index].moves.length) return;
   const s = run.team[q.index], event = {move: q.move};
   if (slot === -1) event.skip = true;
   else { event.forgot = s.moves[slot]; s.moves[slot] = q.move; }
   p.rewards[q.index].events.push(event); p.pending.shift(); sinAdvanceMoves(run); save();
+  sinRefreshProgress();
+}
+function sinEvolve(accept) {
+  const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
+  if (!q || q.kind !== "evolution" || !q.target) return;
+  const s = run.team[q.index], before = Dex.species.get(s.species), after = Dex.species.get(toID(q.target));
+  p.pending.shift();
+  if (accept && after.exists) {
+    const oldMax = calcStat(before, s, "hp"), from = s.species;
+    s.ability = sinEvolutionAbility(s.ability, before, after); s.species = after.name;
+    s.hpMax = calcStat(after, s, "hp");
+    if (s.hpNow != null) s.hpNow = Math.max(0, Math.min(s.hpMax, s.hpNow + s.hpMax - oldMax));
+    p.rewards[q.index].events.push({from, evolved: s.species});
+    const moves = (sinSpeciesData(s.species)?.lv || []).filter(([n]) => n === 0 || n === s.level)
+      .map(([level, move]) => ({index: q.index, move: toID(move), level}))
+      .filter((q, i, all) => all.findIndex(m => m.move === q.move) === i);
+    p.pending.unshift(...moves);
+  }
+  sinAdvanceMoves(run); save(); sinRefreshProgress();
+}
+function sinRefreshProgress() {
   if (VIEW === "battle" && $("ctl")) $("ctl").innerHTML = sinProgressHTML();
   else sinProgressScreen();
 }
@@ -705,6 +774,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const act = b.dataset.act;
   if (act === "sinlearn" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinLearn(+b.dataset.slot);
+  if ((act === "sinevolve" || act === "sincancelevolution") && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinEvolve(act === "sinevolve");
   if (act === "sinmap") {
     const run = ST.sin.run; if (!run || !run.progress || run.progress.pending.length) return;
     delete run.progress; save(); if (B) B.dead = true; B = null; return go("sin");
@@ -727,7 +797,7 @@ document.addEventListener("click", e => {
     if (!confirm("¿Abandonar esta partida de Leyendas de Sinnoh? Se perderá su progreso.")) return;
     sinLeave(); ST.sin.run = null; ST.sin.cam = null; SIN_NEW = {village: null, species: null, busy: false}; save(); return renderSin();
   }
-  if (act === "sinfight") return sinFight(+b.dataset.pick);
+  if (act === "sinfight") return sinFight(+b.dataset.offer);
   if (act === "sinresume") return sinFight();
   if (act === "sinskip" && ST.sin.run && ST.sin.run.offer && !ST.sin.run.battle) {
     ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; save(); return renderSin();
