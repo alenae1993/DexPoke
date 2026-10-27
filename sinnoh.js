@@ -1,6 +1,23 @@
 "use strict";
-/* ---------- Leyendas de Sinnoh: visor del mapa, sin reglas de juego ---------- */
+/* ---------- Leyendas de Sinnoh: preparación, movimiento y turnos ---------- */
 if (!ST.sin) { ST.sin = {cam: null}; save(); }
+const SIN_VILLAGES = [
+  {village: "Sinnome Village", name: "Pueblo Sinnome", color: "Pink", starters: ["Togepi", "Budew"]},
+  {village: "Sunyshore Village", name: "Pueblo Marina", color: "Yellow", starters: ["Shinx", "Pichu"]},
+  {village: "Eterna Village", name: "Ciudad Vetusta", color: "Purple", starters: ["Duskull", "Litwick"]},
+  {village: "Nesburgh Village", name: "Pueblo Nesburgh", color: "Orange", starters: ["Starly", "Machop"]},
+  {village: "Stark Village", name: "Pueblo Stark", color: "Red", starters: ["Chimchar", "Cyndaquil"]},
+  {village: "Snowpoint Village", name: "Ciudad Puntaneva", color: "White", starters: ["Swinub", "Spheal"]},
+  {village: "Celestic Village", name: "Pueblo Caelestis", color: "Green", starters: ["Turtwig", "Rowlet"]},
+  {village: "Canalave Village", name: "Ciudad Canal", color: "Blue", starters: ["Piplup", "Oshawott"]}
+];
+const SIN_PLAYER_COLORS = {Pink: "#dc71ac", Yellow: "#e6bf36", Purple: "#9565cf", Teal: "#2dada8", Orange: "#db8532", Red: "#d95252", White: "#dce5ec", Green: "#459c65", Blue: "#447fd2"};
+const SIN_CARDS = SIN.decks.flatMap(d => d.cards);
+const SIN_HOME = SIN.decks.find(d => d.n === "Home Village Cards").cards;
+const SIN_STARTERS = SIN_CARDS.filter(c => (c.tags || []).includes("Starter Card"));
+const SIN_PROLOGUE = SIN_CARDS.find(c => (c.tags || []).includes("Act Card") && String(c.cid).endsWith("00"));
+const sinStarterCard = sp => SIN_STARTERS.find(c => toID(c.d.sp) === toID(sp));
+let SIN_NEW = {village: null, species: null, busy: false};
 const SIN_S = 48, SIN_H = Math.sqrt(3) / 2 * SIN_S, SIN_LIFT = 6;
 const SIN_ES = {
   Plains: "Llanura", Forest: "Bosque", Mountain: "Montaña", Ocean: "Océano", Ruins: "Ruinas", Space: "Espacio",
@@ -33,7 +50,7 @@ const sinStyle = document.createElement("style");
 sinStyle.textContent = `
   body.sin-view{overflow:hidden;overscroll-behavior:none}
   .sin-view .wrap{max-width:none;padding:0}
-  .sin-layout{height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+  .sin-layout{height:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:grid;grid-template-rows:auto minmax(0,1fr) auto auto}
   .sin-top{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
   .sin-top h1{font:600 22px var(--display);margin:0;flex:1}
   .sin-tools{display:flex;gap:5px;align-items:center}
@@ -50,11 +67,32 @@ sinStyle.textContent = `
   .sin-tokens{display:flex;gap:8px;flex-wrap:wrap;margin:0;padding:0;list-style:none}
   .sin-tokens li{flex:1 1 220px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface2)}
   .sin-tokens small{display:block;color:var(--ink2);margin-top:3px}
+  .sin-new{height:100vh;height:100dvh;overflow:auto;overscroll-behavior:contain;padding:14px 16px 28px;box-sizing:border-box}
+  .sin-new-inner{max-width:850px;margin:auto}
+  .sin-new h1{font:600 26px var(--display);margin:14px 0 6px}
+  .sin-new h2{font:600 21px var(--display);margin:8px 0 16px}
+  .sin-new p{color:var(--ink2)}
+  .sin-choices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .sin-choice{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;min-width:0}
+  .sin-choice:hover,.sin-choice:focus-visible{border-color:var(--accent);outline:2px solid var(--accent)}
+  .sin-choice img{display:block;width:100%;aspect-ratio:4/7;object-fit:contain;background:var(--surface2);border-radius:7px}
+  .sin-choice b{display:block;padding:8px 0 2px}
+  .sin-starters{max-width:520px;grid-template-columns:repeat(2,minmax(0,1fr));margin:auto}
+  .sin-prologue{display:block;width:min(100%,300px);aspect-ratio:4/7;margin:12px auto;object-fit:contain;background:var(--surface2);border-radius:12px}
+  .sin-new-actions{display:flex;gap:12px;justify-content:center;margin:18px 0;flex-wrap:wrap}
+  .sin-turn{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px 16px;background:var(--surface);border-top:1px solid var(--line)}
+  .sin-turn-info{flex:1;min-width:185px;font-weight:600}
+  .sin-team{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:13px}
+  .sin-team img{width:40px;height:40px;object-fit:contain}
+  .sin-turn .btn{min-height:44px}
+  .sin-move{margin-top:10px;min-height:44px}
+  @media(max-width:650px){.sin-choices{grid-template-columns:repeat(2,minmax(0,1fr))}.sin-turn{padding:8px 12px;gap:6px 10px}.sin-turn-info{flex-basis:100%}.sin-team{flex:1}.sin-tools{flex-wrap:wrap}.sin-card{max-height:30dvh}}
   @media(max-width:540px){.sin-top{flex-wrap:wrap;gap:8px;padding:8px 12px}.sin-top h1{font-size:19px}.sin-tools{width:100%;justify-content:flex-end}.sin-tools .btn{min-width:44px}.sin-card{padding:10px 12px}.sin-hint{font-size:11px}}
 `;
 document.head.appendChild(sinStyle);
 
 function sinName(t) {
+  const village = SIN_VILLAGES.find(v => v.village === t.n); if (village) return village.name;
   const m = /^(Red|Blue|Yellow|Pink|White|Green|Black) Apricorn (Tree|Stash)$/.exec(t.n);
   if (m) return (m[2] === "Tree" ? "Árbol de Bonguri " : "Alijo de Bonguri ") + SIN_COLORS[m[1]];
   return SIN_NAMES[t.n] || t.n || "Token sin nombre";
@@ -63,12 +101,114 @@ function sinMeta(t) {
   const tags = t.tags || [], b = t.b || tags.find(s => ["Plains", "Forest", "Mountain", "Ocean", "Ruins", "Space"].includes(s));
   const k = t.k || tags.find(s => ["Cold", "Temperate", "Warm"].includes(s));
   const tier = t.tier || ({"Weak Encounter Card": "W", "Moderate Encounter Card": "M", "Strong Encounter Card": "S", "Legendary Encounter Card": "L", "Distortion Encounter Card": "D"})[tags.find(s => /Encounter Card$/.test(s))];
-  return ["Bioma: " + (SIN_ES[b] || "Sin especificar"), "Clima: " + (SIN_ES[k] || "Sin especificar"), "Encuentro: " + (SIN_ES[tier] || "Sin especificar")].join(" · ");
+  return [["Bioma", b], ["Clima", k], ["Encuentro", tier]].filter(([, value]) => value)
+    .map(([label, value]) => label + ": " + (SIN_ES[value] || value)).join(" · ");
+}
+function sinFillImages() {
+  document.querySelectorAll("img[data-sin-img]").forEach(el => {
+    const im = sinImage(el.dataset.sinImg); if (im && el.getAttribute("src") !== im.src) el.src = im.src;
+  });
+}
+function sinCardImage(key, name, cls = "") {
+  return `<img class="${esc(cls)}" data-sin-img="${esc(key)}" alt="${esc(name)}">`;
+}
+function sinNewScreen() {
+  const v = SIN_NEW.village, sp = SIN_NEW.species, step = sp ? 3 : v ? 2 : 1;
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><button class="back" data-act="sinback">‹ Batalla</button>
+    <h1>Nueva partida</h1><p>Leyendas de Sinnoh · Paso ${step} de 3</p>
+    ${step === 1 ? `<h2>Elige tu pueblo natal</h2><div class="sin-choices">${SIN_VILLAGES.map(v => {
+      const card = SIN_HOME.find(c => c.gm === v.color);
+      return `<button class="sin-choice" data-act="sinvillage" data-village="${esc(v.village)}">${sinCardImage(card.img, "Carta de " + v.name)}<b>${esc(v.name)}</b></button>`;
+    }).join("")}</div>` : step === 2 ? `<h2>${esc(v.name)} · Elige tu inicial</h2><div class="sin-choices sin-starters">${v.starters.map(s =>
+      `<button class="sin-choice" data-act="sinstarter" data-species="${esc(s)}">${sinCardImage(sinStarterCard(s).img, "Carta de " + esSp(s))}<b>${esc(esSp(s))}</b></button>`).join("")}</div>
+      <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los pueblos</button></div>` :
+      `<h2>Prólogo · La Incursión</h2><p>${esc(v.name)} · ${esc(esSp(sp))} · Nivel 5</p>${sinCardImage(SIN_PROLOGUE.img, "Prólogo: La Incursión", "sin-prologue")}
+      <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los iniciales</button><button class="btn primary" data-act="sinbegin">Comenzar</button></div><p id="sin-new-error" role="alert"></p>`}
+    </div></div>`;
+  sinFillImages();
+}
+async function sinInitialSet(species) {
+  const set = blankSet(species), data = await Dex.learnsets.get(toID(species));
+  const levels = Object.entries(data.learnset || {}).flatMap(([move, sources]) => sources.flatMap(source => {
+    const m = /^(\d+)L(\d+)$/.exec(source); return m ? [{move: toID(move), gen: +m[1], level: +m[2]}] : [];
+  }));
+  const gen = Math.max(...levels.map(m => m.gen));
+  const learned = levels.filter(m => m.gen === gen && m.level <= 5).sort((a, b) => a.level - b.level);
+  set.level = 5;
+  set.moves = [...new Set(learned.map(m => m.move))].slice(-4);
+  const natures = Dex.natures.all(); set.nature = natures[Math.floor(Math.random() * natures.length)].name;
+  return set;
+}
+async function sinBegin() {
+  if (SIN_NEW.busy || !SIN_NEW.village || !SIN_NEW.species || ST.sin.run) return;
+  const v = SIN_NEW.village, species = SIN_NEW.species;
+  const token = SIN.tokens.find(t => t.n === v.village && (t.tags || []).includes("Village Token"));
+  SIN_NEW.busy = true;
+  document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = true; });
+  try {
+    const set = await sinInitialSet(species);
+    ST.sin.run = {v: 1, village: v.village, color: v.color, pos: [...token.cell], team: [set], turn: 1, moved: 0, frag: 0};
+    // La cámara del antiguo visor no se hereda a una partida nueva.
+    ST.sin.cam = null; save(); renderSin();
+  } catch (err) {
+    if ($("sin-new-error")) $("sin-new-error").textContent = "No se pudo preparar el inicial. Intenta comenzar de nuevo.";
+  } finally {
+    SIN_NEW.busy = false; document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = false; });
+  }
+}
+function sinReachable(pos, remaining) {
+  const start = pos.join(","), dist = new Map([[start, 0]]), queue = [SIN_BY_CELL.get(start)];
+  if (!queue[0]) return new Map();
+  for (let i = 0; i < queue.length; i++) {
+    const h = queue[i], cost = dist.get(h.c + "," + h.r); if (cost >= remaining) continue;
+    [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 2], [0, -2]].forEach(([dc, dr]) => {
+      const key = (h.c + dc) + "," + (h.r + dr), next = SIN_BY_CELL.get(key);
+      if (!next || dist.has(key) || Math.abs(next.l - h.l) > 1) return;
+      dist.set(key, cost + 1); queue.push(next);
+    });
+  }
+  dist.delete(start); return dist;
+}
+const sinMaxMoves = run => 3 + run.frag;
+function sinUpdateTurn() {
+  const run = ST.sin.run; if (!run || !SIN_VIEW) return;
+  const max = sinMaxMoves(run), left = Math.max(0, max - run.moved);
+  SIN_VIEW.reachable = sinReachable(run.pos, left);
+  $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)}</div>
+    <div class="sin-team">${run.team.map(s => `${pimg(s.species)}<span>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</span>`).join("")}</div>
+    <button class="btn primary" data-act="sinendturn">Terminar turno</button>`;
+  sinFillImages(); if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
+}
+function sinMoveTo(key) {
+  const run = ST.sin.run; if (!run || !SIN_VIEW) return;
+  // Se vuelve a calcular al confirmar para no usar un coste de una ficha antigua.
+  const cost = sinReachable(run.pos, Math.max(0, sinMaxMoves(run) - run.moved)).get(key);
+  if (!cost) return;
+  const h = SIN_BY_CELL.get(key); run.pos = [h.c, h.r]; run.moved += cost;
+  save(); sinUpdateTurn();
 }
 function sinImage(key) {
   if (!key || !SIN.img[key]) return null;
   if (!SIN_IMAGES.has(key)) { SIN_IMAGES.set(key, null); SIN_QUEUE.push(key); sinLoadNext(); }
   return SIN_IMAGES.get(key);
+}
+const SIN_PLAYER_IMAGES = new Map();
+function sinPlayerImage(species) {
+  const key = toID(species);
+  if (!SIN_PLAYER_IMAGES.has(key)) {
+    SIN_PLAYER_IMAGES.set(key, null);
+    (async () => {
+      const icon = icoKey(species), url = icon && await assetURL("Ico", icon);
+      for (const [src, strip] of [[url, true], [img(species), false]]) {
+        if (!src) continue;
+        try {
+          const im = new Image(); im.src = src; await im.decode();
+          SIN_PLAYER_IMAGES.set(key, {im, strip}); sinRequestDraw(); return;
+        } catch (err) { /* Si falta el ícono, se intenta la ilustración oficial. */ }
+      }
+    })();
+  }
+  return SIN_PLAYER_IMAGES.get(key);
 }
 async function sinLoadNext() {
   if (SIN_LOADING || !SIN_QUEUE.length) return;
@@ -79,7 +219,7 @@ async function sinLoadNext() {
     if (url) {
       const im = new Image(); im.src = url; await im.decode(); SIN_IMAGES.set(key, im);
       if (key.startsWith("tex")) SIN_DIRTY = true;
-      sinRequestDraw();
+      sinFillImages(); sinRequestDraw();
     }
   } catch (err) { /* Un recurso ausente deja el color o el marcador de respaldo. */ }
   finally { SIN_LOADING = false; sinLoadNext(); }
@@ -132,8 +272,12 @@ function sinDraw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, v.w, v.h);
   ctx.translate(v.w / 2, v.h / 2); ctx.scale(z, z); ctx.translate(-x, -y);
   ctx.drawImage(SIN_TERRAIN, SIN_BOUNDS.x, SIN_BOUNDS.y);
+  const accent = getComputedStyle(v.canvas).getPropertyValue("--accent").trim() || "#66d9b3";
   SIN_CELLS.forEach(h => {
     if (Math.abs(h.x - x) > v.w / (2 * z) + SIN_S || Math.abs(h.y - y) > v.h / (2 * z) + SIN_S) return;
+    if (v.reachable.has(h.c + "," + h.r)) {
+      sinHex(ctx, h.x, h.y); ctx.fillStyle = "rgba(255,255,255,.3)"; ctx.fill(); ctx.strokeStyle = accent; ctx.lineWidth = 2.5 / z; ctx.stroke();
+    }
     if (h === v.selected) {
       sinHex(ctx, h.x, h.y); ctx.fillStyle = "#fff4"; ctx.fill(); ctx.strokeStyle = "#ffde75"; ctx.lineWidth = 3 / z; ctx.stroke();
     }
@@ -149,6 +293,26 @@ function sinDraw() {
       } else { ctx.beginPath(); ctx.arc(tx, ty, size / 3, 0, Math.PI * 2); ctx.fillStyle = "#eaf4e229"; ctx.fill(); }
     });
   });
+  // La ficha se dibuja al final para quedar siempre por encima de todos los tokens.
+  const run = ST.sin.run, h = run && SIN_BY_CELL.get(run.pos.join(","));
+  if (h) {
+    const radius = SIN_H * .8, picture = sinPlayerImage(run.team[0].species);
+    ctx.save(); ctx.beginPath(); ctx.arc(h.x, h.y, radius, 0, Math.PI * 2);
+    ctx.shadowColor = "#0008"; ctx.shadowBlur = 9; ctx.shadowOffsetY = 3;
+    ctx.fillStyle = SIN_PLAYER_COLORS[run.color] || "#447fd2"; ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(h.x, h.y, radius - 7, 0, Math.PI * 2); ctx.fillStyle = "#f4f8fc"; ctx.fill(); ctx.clip();
+    if (picture) {
+      const {im, strip} = picture, w = im.naturalWidth / (strip ? 2 : 1), ht = im.naturalHeight;
+      const scale = (radius - 7) * 2 / Math.max(w, ht);
+      ctx.imageSmoothingEnabled = !strip;
+      // Los íconos de Essentials tienen dos cuadros: se usa solo la mitad izquierda.
+      ctx.drawImage(im, 0, 0, w, ht, h.x - w * scale / 2, h.y - ht * scale / 2, w * scale, ht * scale);
+    }
+    else { ctx.fillStyle = "#18232b"; ctx.font = "bold 22px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(esSp(run.team[0].species)[0], h.x, h.y); }
+    ctx.restore();
+  }
 }
 function sinLimits(v) {
   const fit = Math.min(v.w / (SIN_BOUNDS.right - SIN_BOUNDS.x + 40), v.h / (SIN_BOUNDS.bottom - SIN_BOUNDS.y + 40));
@@ -160,15 +324,19 @@ function sinClamp(v) {
   v.cam.x = Math.max(SIN_BOUNDS.x - v.w / (4 * v.cam.z), Math.min(SIN_BOUNDS.right + v.w / (4 * v.cam.z), v.cam.x));
   v.cam.y = Math.max(SIN_BOUNDS.y - v.h / (4 * v.cam.z), Math.min(SIN_BOUNDS.bottom + v.h / (4 * v.cam.z), v.cam.y));
 }
-function sinSaveCam() {
+function sinSaveCam(manual = false) {
   if (!SIN_VIEW || !SIN_VIEW.cam) return;
+  if (manual === true) SIN_VIEW.camMoved = true;
+  if (!SIN_VIEW.camMoved) return;
   ST.sin.cam = {...SIN_VIEW.cam}; save();
 }
 function sinCenter() {
   const v = SIN_VIEW; if (!v) return;
-  v.cam = {x: (SIN_BOUNDS.x + SIN_BOUNDS.right) / 2, y: (SIN_BOUNDS.y + SIN_BOUNDS.bottom) / 2,
-    z: Math.min(v.w / (SIN_BOUNDS.right - SIN_BOUNDS.x + 40), v.h / (SIN_BOUNDS.bottom - SIN_BOUNDS.y + 40))};
-  sinSaveCam(); sinRequestDraw();
+  const run = ST.sin.run, h = run && SIN_BY_CELL.get(run.pos.join(","));
+  v.cam = h ? {x: h.x, y: h.y, z: .9} :
+    {x: (SIN_BOUNDS.x + SIN_BOUNDS.right) / 2, y: (SIN_BOUNDS.y + SIN_BOUNDS.bottom) / 2,
+      z: Math.min(v.w / (SIN_BOUNDS.right - SIN_BOUNDS.x + 40), v.h / (SIN_BOUNDS.bottom - SIN_BOUNDS.y + 40))};
+  v.camMoved = false; ST.sin.cam = null; save(); sinClamp(v); sinRequestDraw();
 }
 function sinResize() {
   const v = SIN_VIEW; if (!v || !v.canvas.isConnected) return;
@@ -190,10 +358,17 @@ function sinPick(px, py) {
     return dx <= SIN_S && dy <= SIN_H && Math.sqrt(3) * dx + dy <= Math.sqrt(3) * SIN_S;
   });
   if (!h) return;
-  v.selected = h;
+  sinShowCell(h);
+}
+function sinShowCell(h) {
+  const v = SIN_VIEW, cost = v.reachable.get(h.c + "," + h.r); v.selected = h;
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Casilla (${esc(h.c)}, ${esc(h.r)})</h2><button class="btn" data-act="sinclose" aria-label="Cerrar ficha">Cerrar</button></div>
     <p>Nivel de elevación: ${esc(h.l)} · ${esc(h.w ? "Agua" : "Tierra")}${h.dw ? " · Mundo Distorsión" : ""}</p>
-    ${h.tokens.length ? `<ul class="sin-tokens">${h.tokens.map(t => `<li><b>${esc(sinName(t))}</b><small>${esc(sinMeta(t))}</small>${t.kind === "CardCustom" ? "<small>Escondite · Boca abajo</small>" : ""}</li>`).join("")}</ul>` : '<p>No hay tokens en esta casilla.</p>'}`;
+    ${cost ? `<button class="btn primary sin-move" data-act="sinmove" data-cell="${esc(h.c + "," + h.r)}">Moverme aquí (${esc(cost)})</button>` : ""}
+    ${h.tokens.length ? `<ul class="sin-tokens">${h.tokens.map(t => {
+      const meta = sinMeta(t);
+      return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.kind === "CardCustom" ? "<small>Escondite · Boca abajo</small>" : ""}</li>`;
+    }).join("")}</ul>` : '<p>No hay tokens en esta casilla.</p>'}`;
   $("sin-card").hidden = false; sinRequestDraw();
 }
 function sinLocal(e) {
@@ -216,6 +391,7 @@ function sinMove(e) {
   v.points.set(e.pointerId, p); const after = sinGesture(v.points);
   if (Math.hypot(p.x - v.start.x, p.y - v.start.y) > 7) v.moved = true;
   if (v.moved) {
+    v.camMoved = true;
     if (v.points.size > 1 && before.d > 0 && after.d > 0) sinZoom(after.d / before.d, before.x, before.y);
     v.cam.x -= (after.x - before.x) / v.cam.z; v.cam.y -= (after.y - before.y) / v.cam.z;
     sinClamp(v); sinRequestDraw();
@@ -228,7 +404,7 @@ function sinUp(e) {
   v.points.delete(e.pointerId);
   if (v.canvas.hasPointerCapture(e.pointerId)) v.canvas.releasePointerCapture(e.pointerId);
   if (v.points.size) { v.gesture = sinGesture(v.points); v.moved = true; }
-  else { v.canvas.classList.remove("sin-drag"); sinSaveCam(); }
+  else { v.canvas.classList.remove("sin-drag"); if (v.moved) sinSaveCam(true); }
   if (tap) sinPick(p.x, p.y);
 }
 function sinLeave() {
@@ -239,25 +415,27 @@ function sinLeave() {
 }
 function renderSin() {
   sinLeave();
+  if (!ST.sin.run) return sinNewScreen();
   $("app").innerHTML = `<div class="sin-layout"><header class="sin-top"><button class="back" data-act="sinback">‹ Batalla</button><h1>Leyendas de Sinnoh</h1>
-    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar</button></div></header>
+    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar ficha</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
     <div class="sin-stage"><canvas id="sin-map" tabindex="0" aria-label="Mapa de Sinnoh. Arrastra para mover, pellizca o usa más y menos para acercar. Toca una casilla para ver su ficha."></canvas><div class="sin-hint">Arrastra para mover · Pellizca o usa + / − para acercar · Toca una casilla</div></div>
-    <section class="sin-card" id="sin-card" aria-live="polite" hidden></section></div>`;
+    <section class="sin-card" id="sin-card" aria-live="polite" hidden></section><footer class="sin-turn" id="sin-turn" aria-live="polite"></footer></div>`;
   const saved = ST.sin.cam, cam = saved && [saved.x, saved.y, saved.z].every(Number.isFinite) && saved.z > 0 ? {...saved} : null;
-  const v = SIN_VIEW = {canvas: $("sin-map"), cam, w: 0, h: 0, frame: 0, points: new Map(), events: new AbortController()};
+  const v = SIN_VIEW = {canvas: $("sin-map"), cam, camMoved: !!cam, reachable: new Map(), w: 0, h: 0, frame: 0, points: new Map(), events: new AbortController()};
   const opt = {signal: v.events.signal};
   v.canvas.addEventListener("pointerdown", sinDown, opt); v.canvas.addEventListener("pointermove", sinMove, opt);
   ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => v.canvas.addEventListener(name, sinUp, opt));
   v.canvas.addEventListener("wheel", e => {
     e.preventDefault(); const p = sinLocal(e), delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? v.h : 1);
     sinZoom(Math.exp(-Math.max(-400, Math.min(400, delta)) * .002), p.x, p.y);
-    clearTimeout(v.saveTimer); v.saveTimer = setTimeout(sinSaveCam, 180);
+    v.camMoved = true;
+    clearTimeout(v.saveTimer); v.saveTimer = setTimeout(() => sinSaveCam(true), 180);
   }, {...opt, passive: false});
   window.addEventListener("pagehide", sinSaveCam, opt);
   v.resize = new ResizeObserver(sinResize); v.resize.observe(v.canvas);
   v.removal = new MutationObserver(() => { if (!v.canvas.isConnected) sinLeave(); });
   v.removal.observe($("app"), {childList: true});
-  sinResize();
+  sinUpdateTurn(); sinResize();
 }
 document.addEventListener("click", e => {
   if (e.target.closest("[data-info]")) return;
@@ -265,8 +443,26 @@ document.addEventListener("click", e => {
   const act = b.dataset.act;
   if (act === "sin") return go("sin");
   if (VIEW !== "sin") return;
-  if (act === "sinback") { sinLeave(); return go("menu"); }
+  if (SIN_NEW.busy) return;
+  if (act === "sinback") { sinLeave(); SIN_NEW = {village: null, species: null, busy: false}; return go("menu"); }
+  if (act === "sinvillage") {
+    SIN_NEW.village = SIN_VILLAGES.find(v => v.village === b.dataset.village); SIN_NEW.species = null; return sinNewScreen();
+  }
+  if (act === "sinstarter" && SIN_NEW.village && SIN_NEW.village.starters.includes(b.dataset.species)) {
+    SIN_NEW.species = b.dataset.species; return sinNewScreen();
+  }
+  if (act === "sinnewback") {
+    if (SIN_NEW.species) SIN_NEW.species = null; else SIN_NEW.village = null; return sinNewScreen();
+  }
+  if (act === "sinbegin") return sinBegin();
+  if (act === "sinabandon") {
+    if (!confirm("¿Abandonar esta partida de Leyendas de Sinnoh? Se perderá su progreso.")) return;
+    sinLeave(); ST.sin.run = null; ST.sin.cam = null; SIN_NEW = {village: null, species: null, busy: false}; save(); return renderSin();
+  }
+  if (!SIN_VIEW || !ST.sin.run) return;
+  if (act === "sinmove") return sinMoveTo(b.dataset.cell);
+  if (act === "sinendturn") { ST.sin.run.turn++; ST.sin.run.moved = 0; save(); return sinUpdateTurn(); }
   if (act === "sincenter") return sinCenter();
   if (act === "sinclose") { $("sin-card").hidden = true; SIN_VIEW.selected = null; return sinRequestDraw(); }
-  if (act === "sinin" || act === "sinout") { sinZoom(act === "sinin" ? 1.4 : 1 / 1.4, SIN_VIEW.w / 2, SIN_VIEW.h / 2); sinSaveCam(); }
+  if (act === "sinin" || act === "sinout") { sinZoom(act === "sinin" ? 1.4 : 1 / 1.4, SIN_VIEW.w / 2, SIN_VIEW.h / 2); sinSaveCam(true); }
 });
