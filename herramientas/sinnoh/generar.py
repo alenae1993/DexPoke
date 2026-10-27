@@ -18,6 +18,14 @@ MAX_PACK = 15_000_000
 VECINOS = ((1, 1), (1, -1), (-1, 1), (-1, -1), (0, 2), (0, -2))
 
 
+def especie_showdown(nombre, interno=None):
+    # El océano Este usa sufijo; el Oeste corresponde a la forma base.
+    for prefijo, sufijo in (('East Ocean ', '-East'), ('West Ocean ', '')):
+        if (interno or nombre).startswith(prefijo):
+            return (nombre if interno else nombre[len(prefijo):]) + sufijo
+    return nombre
+
+
 def generar(datos, imagenes):
     def leer(nombre):
         return json.loads((datos / nombre).read_text(encoding='utf-8'))
@@ -89,6 +97,11 @@ def generar(datos, imagenes):
         cartas = []
         for original in mazo['cards']:
             carta = dict(original)
+            if 'd' in carta:
+                d = carta['d'] = dict(carta['d'])
+                d['sp'] = especie_showdown(d['pokedex_name'], d.get('internal_name'))
+                if d.get('evolve_into'):
+                    d['evo'] = [especie_showdown(n) for n in d['evolve_into']]
             cid = carta['cid']
             hoja_id, posicion = divmod(cid, 100)
             hoja = mazo['sheets'][str(hoja_id)]
