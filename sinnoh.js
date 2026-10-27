@@ -13,6 +13,57 @@ const SIN_VILLAGES = [
 ];
 const SIN_PLAYER_COLORS = {Pink: "#dc71ac", Yellow: "#e6bf36", Purple: "#9565cf", Teal: "#2dada8", Orange: "#db8532", Red: "#d95252", White: "#dce5ec", Green: "#459c65", Blue: "#447fd2"};
 const SIN_CARDS = SIN.decks.flatMap(d => d.cards);
+const SIN_FATE = SIN_CARDS.filter(c => (c.tags || []).includes("Change of Fate Card"));
+const SIN_ARTIFACTS = {
+  "Seafarer Egg": {name: "Huevo Marino", types: ["Psychic", "Water"]},
+  "Odd Keystone": {name: "Piedra Espíritu", types: ["Dark", "Ghost"]},
+  "Magma Stone": {name: "Piedra Magma", types: ["Fire", "Ground"]},
+  "Secret Key": {name: "Llave Secreta", types: ["Ghost", "Electric"]},
+  "Gracidea Flower": {name: "Gracídea", types: ["Grass", "Flying"], id: Dex.data.Items.gracidea ? "gracidea" : null},
+  "Rockice Core": {name: "Núcleo Rockice", types: ["Rock", "Ice"]},
+  "Icesteel Core": {name: "Núcleo Icesteel", types: ["Ice", "Steel"]},
+  "Steelrock Core": {name: "Núcleo Steelrock", types: ["Steel", "Rock"]},
+  "Adamant Artifact": {name: "Diamansfera", id: "adamantorb"},
+  "Lustrous Artifact": {name: "Lustresfera", id: "lustrousorb"},
+  "Griseous Artifact": {name: "Griseosfera", id: "griseousorb"}
+};
+Object.values(SIN_ARTIFACTS).forEach((item, i) => {
+  if (item.id) return;
+  // El nombre y su ID coinciden con la normalización del motor, incluso con tildes.
+  item.id = toID(item.name);
+  Dex.data.Items[item.id] = {name: item.name, num: -9001 - i, gen: 9, onBasePowerPriority: 15,
+    onBasePower(bp, user, target, move) {
+      if (item.types.includes(move.type)) return this.chainModify([4915, 4096]);
+    }};
+});
+const sinItemName = id => Object.values(SIN_ARTIFACTS).find(item => item.id === toID(id))?.name || esItem(id);
+const SIN_HIDDEN = SIN.tokens.map((t, i) => t.kind === "CardCustom" && t.cell ? i : -1).filter(i => i >= 0);
+const sinHiddenSpecial = t => (t.tags || []).includes("Artifact Token");
+function sinShuffleHidden() {
+  const hidden = {}, amounts = {};
+  [false, true].forEach(special => {
+    const positions = SIN_HIDDEN.filter(i => sinHiddenSpecial(SIN.tokens[i]) === special);
+    const contents = shuffle(positions.slice()).map(token => {
+      const t = SIN.tokens[token], stash = /^(\w+) Apricorn Stash$/.exec(t.n);
+      if (stash && !amounts[stash[1]]) amounts[stash[1]] = shuffle([1, 2, 3]);
+      return {token, revealed: false, present: true, ...(stash ? {amount: amounts[stash[1]].pop()} : {})};
+    });
+    positions.forEach((i, j) => { hidden[SIN.tokens[i].cell.join(",")] = contents[j]; });
+  });
+  return hidden;
+}
+function sinDrawFate(run, count) {
+  let drawn = 0, lost = 0, empty = 0;
+  for (let i = 0; i < count; i++) {
+    const key = run.fateDeck.pop();
+    if (!key) { empty++; continue; }
+    if (run.fate.length < 5) { run.fate.push(key); drawn++; }
+    else lost++;
+  }
+  return [drawn ? `Robaste ${drawn} ${drawn === 1 ? "carta" : "cartas"} de Destino.` : "",
+    lost ? `La mano está llena (5 cartas): se ${lost === 1 ? "perdió 1 carta sobrante" : `perdieron ${lost} cartas sobrantes`}.` : "",
+    empty ? "El mazo de Destino está agotado." : ""].filter(Boolean).join(" ");
+}
 const sinMoveName = name => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 const SIN_CARD_MOVES = new Map(Dex.moves.all().filter(m => m.exists).map(m => [sinMoveName(esMove(m.id)), m.id]));
 const sinSignatureMove = card => SIN_CARD_MOVES.get(sinMoveName(card?.d?.move_name)) || null;
@@ -99,6 +150,11 @@ function sinMigrateTeam(run) {
   if (!run.balls) { run.balls = sinStartingBalls(); changed = true; }
   if (!run.box) { run.box = []; changed = true; }
   if (run.pv == null) { run.pv = 0; changed = true; }
+  if (!run.hidden) { run.hidden = sinShuffleHidden(); changed = true; }
+  if (!run.items) { run.items = []; changed = true; }
+  if (!run.fate) { run.fate = []; changed = true; }
+  if (run.stars == null) { run.stars = 0; changed = true; }
+  if (!run.fateDeck) { run.fateDeck = shuffle(SIN_FATE.map(c => c.img).filter(key => !run.fate.includes(key))); changed = true; }
   const sets = [...run.team, ...run.box, ...(run.battle ? [run.battle.wild] : [])];
   sets.forEach(s => {
     if (s.exp == null) { s.exp = sinExpForLevel(sinSpeciesData(s.species)?.gw, s.level); changed = true; }
@@ -181,7 +237,7 @@ const SIN_COLORS = {Red: "rojo", Blue: "azul", Yellow: "amarillo", Pink: "rosa",
 const SIN_NAMES = {
   "Apricorn Reef": "Arrecife de Bonguri", "Warped Apricorn Tree": "Árbol de Bonguri deformado",
   Campsite: "Campamento", "Alpha Pokémon": "Pokémon Alfa", "Fallen Star": "Estrella caída",
-  "Odd Keystone": "Piedra Espíritu", "Gracidea Flower": "Flor Gracídea", "Seafarer Egg": "Huevo del navegante",
+  "Odd Keystone": "Piedra Espíritu", "Gracidea Flower": "Gracídea", "Seafarer Egg": "Huevo Marino",
   "Magma Stone": "Piedra Magma", "Secret Key": "Llave Secreta", "Steelrock Core": "Núcleo Steelrock",
   "Icesteel Core": "Núcleo Icesteel", "Rockice Core": "Núcleo Rockice", "Adamant Artifact": "Diamansfera",
   "Lustrous Artifact": "Lustresfera", "Griseous Artifact": "Griseosfera", "The Distortion World": "Mundo Distorsión"
@@ -261,6 +317,11 @@ sinStyle.textContent = `
   .sin-recipes{display:grid;gap:10px}
   .sin-recipe{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .sin-recipe small{display:block;color:var(--ink2)}
+  .sin-objects{display:grid;gap:10px;padding:0;list-style:none}
+  .sin-objects li{border:1px solid var(--line);border-radius:8px;padding:8px}
+  .sin-objects .btn{min-height:44px;white-space:normal}
+  .sin-fate{display:flex;gap:8px;flex-wrap:wrap}
+  .sin-fate img{width:100px;max-width:100%;aspect-ratio:4/7;object-fit:contain}
   .sin-move{margin-top:10px;min-height:44px}
   @media(max-width:650px){.sin-choices{grid-template-columns:repeat(2,minmax(0,1fr))}.sin-turn{padding:8px 12px;gap:6px 10px}.sin-turn-info{flex-basis:100%}.sin-team{flex:1}.sin-tools{flex-wrap:wrap}.sin-card{max-height:30dvh}}
   @media(max-width:540px){.sin-top{flex-wrap:wrap;gap:8px;padding:8px 12px}.sin-top h1{font-size:19px}.sin-tools{width:100%;justify-content:flex-end}.sin-tools .btn{min-width:44px}.sin-card{padding:10px 12px}.sin-hint{font-size:11px}}
@@ -303,7 +364,7 @@ function sinNewScreen() {
     </div></div>`;
   sinFillImages();
 }
-async function sinInitialSet(species, level = 5) {
+async function sinInitialSet(species, level = 5, alpha = false) {
   const set = blankSet(species);
   let learned = sinLevelMoves(species).filter(([n]) => n <= level).map(([, move]) => toID(move));
   if (!sinSpeciesData(species)) {
@@ -319,7 +380,8 @@ async function sinInitialSet(species, level = 5) {
   set.level = level;
   // Se conserva la aparición más reciente de cada ataque antes de tomar los últimos cuatro.
   set.moves = learned.filter((move, i) => learned.lastIndexOf(move) === i).slice(-4);
-  Object.keys(set.ivs).forEach(k => { set.ivs[k] = Math.floor(Math.random() * 32); });
+  Object.keys(set.ivs).forEach(k => { set.ivs[k] = alpha ? 31 : Math.floor(Math.random() * 32); });
+  if (alpha) set.alpha = true;
   set.exp = sinExpForLevel(sinSpeciesData(species)?.gw, level); set.gender = sinGender(species);
   set.friendship = sinBaseFriendship(species);
   const natures = Dex.natures.all(); set.nature = natures[Math.floor(Math.random() * natures.length)].name;
@@ -334,7 +396,8 @@ async function sinBegin() {
   try {
     const set = await sinInitialSet(species);
     ST.sin.run = {v: 1, village: v.village, color: v.color, pos: [...token.cell], team: [set], turn: 1, moved: 0, frag: 0,
-      bag: sinEmptyBag(), balls: sinStartingBalls(), box: [], pv: 0};
+      bag: sinEmptyBag(), balls: sinStartingBalls(), box: [], pv: 0, hidden: sinShuffleHidden(),
+      items: [], stars: 0, fate: [], fateDeck: shuffle(SIN_FATE.map(c => c.img))};
     // La cámara del antiguo visor no se hereda a una partida nueva.
     ST.sin.cam = null; save(); renderSin();
   } catch (err) {
@@ -343,7 +406,7 @@ async function sinBegin() {
     SIN_NEW.busy = false; document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = false; });
   }
 }
-function sinReachable(pos, remaining) {
+function sinReachable(pos, remaining, parents = null) {
   const start = pos.join(","), dist = new Map([[start, 0]]), queue = [SIN_BY_CELL.get(start)];
   if (!queue[0]) return new Map();
   for (let i = 0; i < queue.length; i++) {
@@ -351,7 +414,7 @@ function sinReachable(pos, remaining) {
     [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 2], [0, -2]].forEach(([dc, dr]) => {
       const key = (h.c + dc) + "," + (h.r + dr), next = SIN_BY_CELL.get(key);
       if (!next || dist.has(key) || Math.abs(next.l - h.l) > 1) return;
-      dist.set(key, cost + 1); queue.push(next);
+      dist.set(key, cost + 1); if (parents) parents.set(key, h.c + "," + h.r); queue.push(next);
     });
   }
   dist.delete(start); return dist;
@@ -364,10 +427,10 @@ function sinTeamHTML(run) {
     const gw = sinSpeciesData(s.species)?.gw, start = sinExpForLevel(gw, s.level), next = sinExpForLevel(gw, s.level + 1);
     const expPct = s.level >= 100 ? 100 : Math.max(0, Math.min(100, (s.exp - start) / (next - start) * 100));
     const expLabel = s.level >= 100 ? "Nivel máximo" : `${s.exp - start}/${next - start} EXP hacia el nivel ${s.level + 1}`;
-    return `<span class="sin-member">${pimg(s.species)}<span>${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}
+    return `<span class="sin-member">${pimg(s.species)}<span>${esc(esSp(s.species))}${s.alpha ? " · Alfa" : ""} · Nv. ${esc(s.level)}${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}
       <span class="sin-hp" role="meter" aria-label="PS de ${esc(esSp(s.species))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></span>
       <span class="sin-hp sin-exp" role="meter" aria-label="${esc(expLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${expPct}"><i style="width:${expPct}%"></i></span>
-      <small>${esc(health)}${SIN_STATUS[s.status] && sinAlive(s) ? " · " + esc(SIN_STATUS[s.status]) : ""}</small></span></span>`;
+      <small>${esc(health)}${SIN_STATUS[s.status] && sinAlive(s) ? " · " + esc(SIN_STATUS[s.status]) : ""}${s.item ? " · " + esc(sinItemName(s.item)) : ""}</small></span></span>`;
   }).join("");
 }
 function sinUpdateTurn() {
@@ -396,8 +459,30 @@ function sinShowBag() {
       `<li><span class="sin-bonguri" style="background:${color}" aria-hidden="true"></span>Bonguri ${esc(name)} ×${esc(run.bag[k])}</li>`).join("")}</ul>
     <div class="sin-recipes">${Object.entries(SIN_BALLS).map(([key, ball]) => `<div class="sin-recipe"><span><b>${esc(ball.name)} ×${esc(run.balls[key])}</b>
       <small>${Object.entries(ball.recipe).map(([k, n]) => `${esc(n)} Bonguri ${esc(SIN_BONGURI[k][0])}`).join(" + ")}</small></span>
-      <button class="btn" data-act="sincraft" data-ball="${key}" ${sinCanCraft(run, key) ? "" : "disabled"}>Fabricar</button></div>`).join("")}</div>`;
-  $("sin-card").hidden = false; sinRequestDraw();
+      <button class="btn" data-act="sincraft" data-ball="${key}" ${sinCanCraft(run, key) ? "" : "disabled"}>Fabricar</button></div>`).join("")}</div>
+    <h2>Objetos</h2>${run.items.length ? `<ul class="sin-objects">${run.items.map((id, i) => `<li><b>${esc(sinItemName(id))}</b>
+      <button class="btn" data-act="sinitemselect" data-item="${i}">Equipar</button>
+      ${SIN_VIEW.bagItem === i ? `<p>Equipar a…</p><div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sinequip" data-item="${i}" data-member="${j}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.item ? " · Devolver " + esc(sinItemName(s.item)) : ""}</button>`).join("")}</div>` : ""}</li>`).join("")}</ul>` : "<p>No tienes objetos en el inventario.</p>"}
+    <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li>${esc(esSp(s.species))}: <b>${esc(sinItemName(s.item))}</b>
+      <button class="btn" data-act="sinunequip" data-member="${i}">Quitar</button></li>` : "").join("")}</ul>
+    <h2>Destino (${esc(run.fate.length)}/5) · Estrellas: ${esc(run.stars)}</h2>
+    <p>Por cada 4 estrellas robas una carta al terminar cada turno. Los efectos de las cartas estarán disponibles próximamente.</p>
+    <div class="sin-fate">${run.fate.map((key, i) => sinCardImage(key, "Carta de Destino " + (i + 1))).join("") || "<p>No tienes cartas de Destino.</p>"}</div>`;
+  $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
+}
+function sinEquip(index, member, remove = false) {
+  const run = ST.sin.run, set = run?.team[member];
+  if (VIEW !== "sin" || !SIN_VIEW || !set || run.battle || run.progress || (run.offer && !run.offer.closed)) return;
+  if (remove) {
+    if (!set.item) return;
+    run.items.push(toID(set.item)); set.item = "";
+  } else {
+    if (!Number.isInteger(index) || !run.items[index] || !Dex.items.get(run.items[index]).exists) return;
+    const id = run.items.splice(index, 1)[0];
+    if (set.item) run.items.push(toID(set.item));
+    set.item = id;
+  }
+  SIN_VIEW.bagItem = null; save(); sinUpdateTurn();
 }
 function sinBonguriReward(run, token, count = 3) {
   const reward = {}, colors = ["red", "yellow", "blue", "pink", "green", "white"];
@@ -425,7 +510,7 @@ function sinOnFaint(me) {
   const run = ST.sin.run;
   if (!me.sin || me.over || me.dead || me.sinFled || !run?.battle) return;
   const tier = run.battle.tier || sinEncounterToken(run)?.tier;
-  if (!(tier in SIN_FLEE_BONGURI)) return;
+  if (run.battle.wild.alpha || !(tier in SIN_FLEE_BONGURI)) return;
   const alive = run.battle.indices.some(i => {
     const m = me.mons["p1:Sinnoh" + (i + 1)];
     return m && m.side === "p1" ? m.hp > 0 : sinAlive(run.team[i]);
@@ -454,7 +539,8 @@ async function sinThrowBall(me, key) {
   const wild = me.mons[me.act.p2];
   me.sinThrowing = true; me.lastReq = me.req; me.req = null; me.shown = false; $("ctl").innerHTML = "";
   run.balls[key]--; save();
-  const result = sinCaptureRoll(wild.hp, wild.max, sinSpeciesData(run.battle.wild.species)?.cr ?? 3, ball.bonus, wild.status);
+  const ratio = (sinSpeciesData(run.battle.wild.species)?.cr ?? 3) * (run.battle.wild.alpha ? .5 : 1);
+  const result = sinCaptureRoll(wild.hp, wild.max, ratio, ball.bonus, wild.status);
   try {
     await say(me, `¡Lanzaste una ${ball.name}!`, 1);
     for (let i = 0; i < Math.min(3, result.checks); i++) {
@@ -473,12 +559,50 @@ async function sinThrowBall(me, key) {
   } finally { me.sinThrowing = false; }
 }
 function sinMoveTo(key) {
-  const run = ST.sin.run; if (!run || !SIN_VIEW || run.fought || run.revive || run.battle) return;
+  const run = ST.sin.run; if (!run || !SIN_VIEW || run.fought || run.revive || run.battle || (run.offer && !run.offer.closed)) return;
   // Se vuelve a calcular al confirmar para no usar un coste de una ficha antigua.
-  const cost = sinReachable(run.pos, Math.max(0, sinMaxMoves(run) - run.moved)).get(key);
+  const parents = new Map(), cost = sinReachable(run.pos, Math.max(0, sinMaxMoves(run) - run.moved), parents).get(key);
   if (!cost) return;
-  const h = SIN_BY_CELL.get(key); run.pos = [h.c, h.r]; run.moved += cost;
-  save(); sinUpdateTurn();
+  const path = [], messages = [];
+  for (let step = key; step !== run.pos.join(","); step = parents.get(step)) path.unshift(step);
+  for (const step of path) {
+    const h = SIN_BY_CELL.get(step); run.pos = [h.c, h.r]; run.moved++;
+    if (sinRevealHidden(run, step, messages)) break;
+  }
+  run.notice = messages.join(" "); save();
+  if (run.offer && !run.offer.closed) renderSin(); else sinUpdateTurn();
+}
+function sinRevealHidden(run, key, messages) {
+  const hidden = run.hidden[key]; if (!hidden || hidden.revealed || !hidden.present) return false;
+  const t = SIN.tokens[hidden.token], stash = /^(\w+) Apricorn Stash$/.exec(t.n);
+  hidden.revealed = true;
+  if (stash) {
+    const color = stash[1].toLowerCase(); run.bag[color] += hidden.amount; hidden.present = false;
+    messages.push(`¡Encontraste ${hidden.amount} Bonguri ${SIN_BONGURI[color][hidden.amount === 1 ? 0 : 1]}!`);
+  } else if (t.n === "Campsite") messages.push("¡Encontraste un campamento! Aquí puedes curar a tu equipo una vez por turno.");
+  else if (t.n === "Fallen Star") {
+    run.stars++; hidden.present = false;
+    messages.push(`¡Encontraste una estrella caída! Estrellas: ${run.stars}. ${sinDrawFate(run, 2)}`);
+  } else if (t.n === "Alpha Pokémon") {
+    const c = shuffle(sinWildCards({...t, tier: "S"}).slice())[0], [lo, hi] = SIN_WILD_LEVELS.S;
+    run.searched = true;
+    run.offer = {cards: c ? [{species: c.d.sp, img: c.img, level: lo + Math.floor(Math.random() * (hi - lo + 1)) + 5, alpha: true}] : [],
+      token: hidden.token, hidden: key, alpha: true, place: "Pokémon Alfa", meta: sinMeta(t), closed: false};
+    messages.push("¡Un Pokémon Alfa te corta el paso! Debes combatir.");
+    return true;
+  } else if (SIN_ARTIFACTS[t.n]) {
+    const item = SIN_ARTIFACTS[t.n]; run.items.push(item.id); hidden.present = false;
+    messages.push(`¡Encontraste ${item.name}! Puedes equiparlo desde la Bolsa.`);
+  }
+  return false;
+}
+function sinCellTokens(h) {
+  const run = ST.sin.run;
+  return h.tokens.flatMap(t => {
+    if (t.kind !== "CardCustom") return [t];
+    const hidden = run?.hidden[t.cell.join(",")];
+    return hidden?.present ? [{...SIN.tokens[hidden.token], cell: t.cell, hidden}] : [];
+  });
 }
 function sinSearch(index) {
   const run = ST.sin.run, t = SIN.tokens[index];
@@ -493,11 +617,13 @@ function sinOfferScreen() {
   const run = ST.sin.run, offer = run.offer;
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Pokémon salvajes</h1>
     <p>${esc(offer.place)} · ${esc(offer.meta)}</p>
+    ${offer.alpha ? "<p>¡Alfa! Combate obligatorio: nivel Fuerte +5, IVs perfectos, ratio de captura a la mitad y recompensa de 4 PV (+2 al debilitar). No huye al debilitar a uno de los tuyos.</p>" : ""}
     ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
       ${sinCardImage(s.img, "Carta de " + esSp(s.species))}<b>${esc(esSp(s.species))}</b><span>Nv. ${esc(s.level)}</span>
       <div><button class="btn primary" data-act="sinfight" data-offer="${i}">Combatir</button></div></div>`).join("")}</div>` :
       '<p role="status">No hay cartas de Pokémon para este bioma, clima y nivel. La búsqueda de este turno ya fue usada.</p>'}
-    <div class="sin-new-actions"><button class="btn" data-act="sinskip">No combatir</button></div>
+    ${offer.alpha ? "" : '<div class="sin-new-actions"><button class="btn" data-act="sinskip">No combatir</button></div>'}
+    ${run.notice ? `<p role="status">${esc(run.notice)}</p>` : ""}
     <div class="sin-team">${sinTeamHTML(run)}</div><p id="sin-offer-error" role="alert"></p></div></div>`;
   sinFillImages();
 }
@@ -517,11 +643,11 @@ async function sinFight(index) {
   document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = true; });
   try {
     if (!run.battle) {
-      const s = run.offer.cards[index], wild = await sinInitialSet(s.species, s.level);
+      const s = run.offer.cards[index], wild = await sinInitialSet(s.species, s.level, !!s.alpha);
       // El índice original y un apodo único mantienen la asociación aunque cambie el orden o la forma.
       const indices = run.team.map((s, i) => sinAlive(s) ? i : -1).filter(i => i >= 0);
       const token = SIN.tokens.indexOf(sinEncounterToken(run));
-      run.battle = {wild, indices, token, tier: SIN.tokens[token]?.tier, card: s.img}; run.offer.closed = true; save();
+      run.battle = {wild, indices, token, tier: wild.alpha ? "L" : SIN.tokens[token]?.tier, card: s.img, hidden: run.offer.hidden}; run.offer.closed = true; save();
     }
     if (!run.battle.tier) { run.battle.tier = sinEncounterToken(run)?.tier; save(); }
     const mine = run.battle.indices.map(i => ({...run.team[i], name: "Sinnoh" + (i + 1)}));
@@ -557,7 +683,7 @@ function sinResult(won, me) {
   if (won === true) {
     sinGainExp(run, wild, me);
     run.progress.bonguri = sinBonguriReward(run, token);
-    run.progress.pv = (SIN_PV[tier] || 0) + (me.sinCaught ? 0 : 2);
+    run.progress.pv = (wild.alpha ? 4 : SIN_PV[tier] || 0) + (me.sinCaught ? 0 : 2);
     run.pv += run.progress.pv;
     if (!me.sinCaught && move) run.progress.signature = {move};
     if (me.sinCaught) {
@@ -571,15 +697,16 @@ function sinResult(won, me) {
     }
   }
   else {
-    run.progress = {won, rewards: [], pending: [], fled};
+    run.progress = {won, rewards: [], pending: [], fled, escaped: !!me.sinEscaped};
     if (fled) run.progress.bonguri = sinBonguriReward(run, token, SIN_FLEE_BONGURI[tier] ?? 0);
   }
+  if (run.battle.hidden && run.hidden[run.battle.hidden]) run.hidden[run.battle.hidden].present = false;
   run.fought = true; run.moved = sinMaxMoves(run); run.battle = null;
   if (!run.team.some(sinAlive)) {
     const home = SIN.tokens.find(t => t.n === run.village && (t.tags || []).includes("Village Token"));
     run.pos = [...home.cell]; run.revive = true; ST.sin.cam = null;
     run.notice = "Tu equipo fue derrotado. Volviste a tu pueblo natal; termina el turno para recuperarlo.";
-  } else run.notice = fled ? "¡El Pokémon salvaje huyó! Los PS y estados de tu equipo se mantienen." : won === null ? "El combate terminó en empate. Los PS y estados se mantienen." :
+  } else run.notice = me.sinEscaped ? "Huiste del Pokémon Alfa. Su ficha se descartó; los PS y estados de tu equipo se mantienen." : fled ? "¡El Pokémon salvaje huyó! Los PS y estados de tu equipo se mantienen." : won === null ? "El combate terminó en empate. Los PS y estados se mantienen." :
     me.sinCaught ? "¡Atrapaste al Pokémon salvaje! Los PS y estados se mantienen." : "¡Venciste al Pokémon salvaje! Los PS y estados de tu equipo se mantienen.";
   save();
 }
@@ -591,10 +718,10 @@ function sinEndHTML(won) {
 function sinProgressHTML(won) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
   if (p) won = p.won;
-  return `<div class="card"><p class="result">${p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
+  return `<div class="card"><p class="result">${p?.escaped ? "Huiste del combate" : p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
     <p class="note">${esc(run ? run.notice : "El combate terminó.")}</p>
     ${p?.caught ? `<p>${esc(esSp(p.caught.species))} ${p.caught.boxed ? "fue enviado a la Caja" : "se unió a tu equipo"}.</p>` : ""}
-    ${p?.pv != null ? `<p>Ganaste ${esc(p.pv)} Puntos de Viaje.</p>` : ""}
+    ${p?.pv != null ? `<p>Ganaste ${esc(p.pv)} ${p.pv === 1 ? "Punto" : "Puntos"} de Viaje.</p>` : ""}
     ${p?.fled && !Object.keys(p.bonguri || {}).length ? "<p>Recibiste 0 Bonguri.</p>" : ""}
     ${p?.bonguri && Object.keys(p.bonguri).length ? `<p>Recibiste ${Object.entries(p.bonguri).map(([k, n]) => `${esc(n)} Bonguri ${esc(SIN_BONGURI[k][n === 1 ? 0 : 1])}`).join(", ")}.</p>` : ""}
     ${p ? p.rewards.map(r => {
@@ -682,7 +809,7 @@ function sinBoxAction(action, index, other) {
 }
 function sinBoxMember(s) {
   const max = s.hpMax ?? calcStat(Dex.species.get(s.species), s, "hp"), hp = s.hpNow ?? max;
-  return `<b>${esc(esSp(s.species))}</b> · Nv. ${esc(s.level)} · ${s.gender === "M" ? "♂" : s.gender === "F" ? "♀" : "Sin sexo"} · ${esc(hp)}/${esc(max)} PS`;
+  return `<b>${esc(esSp(s.species))}</b>${s.alpha ? " · Alfa" : ""} · Nv. ${esc(s.level)} · ${s.gender === "M" ? "♂" : s.gender === "F" ? "♀" : "Sin sexo"} · ${esc(hp)}/${esc(max)} PS${s.item ? " · " + esc(sinItemName(s.item)) : ""}`;
 }
 function sinShowBox() {
   const run = ST.sin.run;
@@ -702,15 +829,17 @@ function sinShowBox() {
 }
 function sinHeal() {
   const run = ST.sin.run, h = run && SIN_BY_CELL.get(run.pos.join(","));
-  if (!h || run.healed || run.revive || run.battle || !h.tokens.some(t => (t.tags || []).includes("Village Token"))) return;
+  if (!h || run.healed || run.revive || run.battle || run.progress || !sinCellTokens(h).some(t =>
+    (t.tags || []).includes("Village Token") || (t.n === "Campsite" && t.hidden?.revealed))) return;
   run.team.forEach(s => { delete s.hpNow; delete s.status; });
   run.healed = true; run.notice = "Tu equipo está completamente recuperado."; save(); sinUpdateTurn();
 }
 function sinEndTurn() {
-  const run = ST.sin.run; if (!run || run.battle) return;
+  const run = ST.sin.run; if (!run || run.battle || run.progress || (run.offer && !run.offer.closed)) return;
   if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
   run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
-  run.offer = null; run.revive = false; run.notice = ""; save(); sinUpdateTurn();
+  run.offer = null; run.revive = false;
+  run.notice = run.stars >= 4 ? sinDrawFate(run, Math.floor(run.stars / 4)) : ""; save(); sinUpdateTurn();
 }
 function sinImage(key) {
   if (!key || !SIN.img[key]) return null;
@@ -806,10 +935,11 @@ function sinDraw() {
     if (h === v.selected) {
       sinHex(ctx, h.x, h.y); ctx.fillStyle = "#fff4"; ctx.fill(); ctx.strokeStyle = "#ffde75"; ctx.lineWidth = 3 / z; ctx.stroke();
     }
-    h.tokens.forEach((t, i) => {
+    const tokens = sinCellTokens(h);
+    tokens.forEach((t, i) => {
       // El generador reserva img para el frente y img2 para el reverso de CardCustom.
-      const key = t.kind === "CardCustom" ? t.img2 : t.img, im = sinImage(key);
-      const n = h.tokens.length, size = n === 1 ? 56 : Math.min(40, 64 / Math.sqrt(n));
+      const key = t.kind === "CardCustom" && !t.hidden?.revealed ? t.img2 : t.img, im = sinImage(key);
+      const n = tokens.length, size = n === 1 ? 56 : Math.min(40, 64 / Math.sqrt(n));
       const angle = i * Math.PI * 2 / n, offset = n === 1 ? 0 : 19;
       const tx = h.x + Math.cos(angle) * offset, ty = h.y + Math.sin(angle) * offset;
       if (im) {
@@ -888,14 +1018,17 @@ function sinPick(px, py) {
 function sinShowCell(h) {
   const v = SIN_VIEW, cost = v.reachable.get(h.c + "," + h.r); v.selected = h; v.bag = false; v.box = false; v.boxMember = null;
   const run = ST.sin.run, here = run.pos.join(",") === h.c + "," + h.r;
+  const tokens = sinCellTokens(h);
   const canSearch = !run.searched && !run.fought && !run.revive && run.team.some(sinAlive);
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Casilla (${esc(h.c)}, ${esc(h.r)})</h2><button class="btn" data-act="sinclose" aria-label="Cerrar ficha">Cerrar</button></div>
     <p>Nivel de elevación: ${esc(h.l)} · ${esc(h.w ? "Agua" : "Tierra")}${h.dw ? " · Mundo Distorsión" : ""}</p>
     ${cost ? `<button class="btn primary sin-move" data-act="sinmove" data-cell="${esc(h.c + "," + h.r)}">Moverme aquí (${esc(cost)})</button>` : ""}
-    ${h.tokens.length ? `<ul class="sin-tokens">${h.tokens.map(t => {
+    ${tokens.length ? `<ul class="sin-tokens">${tokens.map(t => {
+      if (t.hidden && !t.hidden.revealed) return `<li><b>Escondite ${sinHiddenSpecial(t) ? "especial" : "regular"}</b><small>Boca abajo · Se revela al pasar por aquí.</small></li>`;
       const meta = sinMeta(t);
-      return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.kind === "CardCustom" ? "<small>Escondite · Boca abajo</small>" : ""}
+      return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.hidden ? "<small>Escondite revelado</small>" : ""}
         ${here && sinSearchToken(t) ? `<button class="btn primary sin-move" data-act="sinsearch" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Buscar Pokémon</button>` : ""}
+        ${here && t.n === "Campsite" && t.hidden?.revealed ? `<button class="btn primary sin-move" data-act="sinheal" ${run.healed || run.revive ? "disabled" : ""}>Curar equipo</button><button class="btn sin-move" disabled>Comerciar con Ginkgo (próximamente)</button>` : ""}
         ${here && (t.tags || []).includes("Village Token") ? `<button class="btn primary sin-move" data-act="sinheal" ${run.healed || run.revive ? "disabled" : ""}>Curar equipo</button><button class="btn sin-move" data-act="sinbox">Caja (${esc(run.box.length)})</button>` : ""}</li>`;
     }).join("")}</ul>` : '<p>No hay tokens en esta casilla.</p>'}`;
   $("sin-card").hidden = false; sinRequestDraw();
@@ -974,6 +1107,12 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-info]")) return;
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const act = b.dataset.act;
+  if (act === "quit" && VIEW === "battle" && B?.sin && !B.over && ST.sin.run?.battle?.wild.alpha) {
+    // Se intercepta antes del listener de batalla.js para descartar el Alfa al huir.
+    e.stopImmediatePropagation();
+    if (!confirm("¿Huir del Pokémon Alfa? Su ficha se descartará y terminará tu turno.")) return;
+    B.sinEscaped = true; sinResult(null, B); B.dead = true; B = null; return go("sin");
+  }
   if (act === "sinthrow" && VIEW === "battle" && B && B.sin) return sinThrowBall(B, b.dataset.ball);
   if (act === "sinlearn" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinLearn(+b.dataset.slot);
   if (act === "sinsignature" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinTeachSignature(+b.dataset.member);
@@ -1002,11 +1141,14 @@ document.addEventListener("click", e => {
   }
   if (act === "sinfight") return sinFight(+b.dataset.offer);
   if (act === "sinresume") return sinFight();
-  if (act === "sinskip" && ST.sin.run && ST.sin.run.offer && !ST.sin.run.battle) {
+  if (act === "sinskip" && ST.sin.run && ST.sin.run.offer && !ST.sin.run.offer.alpha && !ST.sin.run.battle) {
     ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; save(); return renderSin();
   }
   if (!SIN_VIEW || !ST.sin.run) return;
   if (act === "sinbag") return sinShowBag();
+  if (act === "sinitemselect") { SIN_VIEW.bagItem = +b.dataset.item; return sinShowBag(); }
+  if (act === "sinequip") return sinEquip(+b.dataset.item, +b.dataset.member);
+  if (act === "sinunequip") return sinEquip(null, +b.dataset.member, true);
   if (act === "sinbox") { SIN_VIEW.boxMember = null; return sinShowBox(); }
   if (act === "sinboxselect") {
     const index = +b.dataset.member;
@@ -1022,4 +1164,4 @@ document.addEventListener("click", e => {
   if (act === "sincenter") return sinCenter();
   if (act === "sinclose") { $("sin-card").hidden = true; SIN_VIEW.selected = null; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.boxMember = null; return sinRequestDraw(); }
   if (act === "sinin" || act === "sinout") { sinZoom(act === "sinin" ? 1.4 : 1 / 1.4, SIN_VIEW.w / 2, SIN_VIEW.h / 2); sinSaveCam(true); }
-});
+}, true);

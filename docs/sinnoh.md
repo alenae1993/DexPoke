@@ -13,7 +13,30 @@ Objetivo del dueño, en sus palabras: *"basicamente quiero el juego pero con bat
 
 Se mantiene el juego actual: mapa, movimiento, búsqueda en árboles y arrecifes con las cartas del mod, combates, pueblos y turnos. Los niveles de los salvajes y la curación siguen iguales. La progresión de los Pokémon usa EXP, curvas de crecimiento, ataques por nivel, EVs, amistad y evolución como en los videojuegos.
 
-Se incorporan los Bonguri, las recetas de Balls, los Puntos de Viaje como moneda, las recompensas, la huida y los espacios de equipo del mod, con captura durante el combate como en los videojuegos. Captura con cartas, Destino, santuarios, campaña y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
+Se incorporan los Bonguri, las recetas de Balls, los Puntos de Viaje como moneda, las recompensas, la huida, los espacios de equipo y los escondites del mod, con captura durante el combate como en los videojuegos. Captura con cartas, efectos de Destino, santuarios, campaña y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
+
+**Escondites y objetos equipables (tarea 11):** al empezar, o al cargar una partida antigua sin `run.hidden`, se barajan los contenidos entre las posiciones regulares y, por separado, entre las especiales de `SIN.tokens`. Se conserva el inventario real extraído: 21 alijos (3 por color), 6 campamentos, 8 estrellas, 6 Alfa y 11 artefactos. La asignación por casilla, su revelación y su permanencia se guardan; no se vuelven a sortear al recargar. Se revelan todas las casillas del camino en orden, incluidos los pasos intermedios. Antes de descubrirlos, la ficha no muestra su contenido.
+
+Cada color tiene un alijo de **1, 2 y 3 Bonguri**; se recibe la cantidad al pasar y el alijo desaparece. Los **campamentos** permanecen boca arriba y permiten curar al equipo en su casilla, con el mismo límite compartido de una curación por turno que los pueblos. Muestran **Comerciar con Ginkgo (próximamente)** deshabilitado; no son pueblos ni permiten usar la Caja o volar.
+
+Cada **estrella caída** desaparece, suma uno a `run.stars` y roba dos cartas aleatorias del mazo de 42 cartas de Cambio de Destino. La mano `run.fate` tiene máximo **5 cartas**: las sobrantes se pierden con aviso. El orden restante del mazo también se guarda, sin repetir cartas; si se agota, se avisa. Al terminar el turno, cada grupo de cuatro estrellas da otra carta (una desde la cuarta, dos desde la octava), respetando el mismo límite. La Bolsa muestra las imágenes de la mano; sus efectos quedan para la tarea 18.
+
+Un **Alfa** interrumpe el movimiento en su casilla y ofrece una sola carta Fuerte del bioma y clima de su ficha, sin opción de rechazarla. El nivel es el del rango Fuerte **+5 (20–25)** y todos sus **IVs son 31**; `set.alpha = true` queda guardado. Su ratio de captura se multiplica por **0,5** y no huye al debilitar a uno de los tuyos. Da **4 PV** al capturarlo y **6 PV** al debilitarlo, además de la EXP/EVs habituales. La ficha desaparece al resolver el combate, incluida la derrota o huida voluntaria. Al recargar un combate pendiente se conserva el mismo Alfa. Capturarlo conserva la marca **Alfa**, visible en la barra y la Caja, y su objeto; la marca no ocupa la ranura de objeto ni se puede quitar.
+
+Los **artefactos** encontrados desaparecen del mapa y van a `run.items`. La Bolsa permite equiparlos al equipo fuera de combate y quitar los equipados. Si se reemplaza un objeto, vuelve al inventario. Se guardan como `set.item` y se entregan al motor real de combate. Los objetos propios se registran al cargar `sinnoh.js` en `Dex.data.Items`, con nombres españoles, números negativos e IDs normalizados con `toID`; su evento `onBasePower` aplica **×1,2** a los dos tipos correspondientes, sin modificar `ps.js`:
+
+| Objeto | Tipos potenciados |
+|---|---|
+| Huevo Marino | Psíquico y Agua |
+| Piedra Espíritu | Siniestro y Fantasma |
+| Piedra Magma | Fuego y Tierra |
+| Llave Secreta | Fantasma y Eléctrico |
+| Gracídea | Planta y Volador |
+| Núcleo Rockice | Roca y Hielo |
+| Núcleo Icesteel | Hielo y Acero |
+| Núcleo Steelrock | Acero y Roca |
+
+Diamansfera, Lustresfera y Griseosfera usan los objetos reales `adamantorb`, `lustrousorb` y `griseousorb`, con las reglas del motor y sus restricciones por especie. La búsqueda de legendarios mediante artefactos queda para la tarea 16.
 
 **PV, recompensas, huida y Caja (tarea 10):** `run.pv` empieza en 0, también al migrar una partida antigua. La barra de turno muestra **PV: N** y **Equipo N/espacios**. Capturar entrega 1/2/3/4 PV por encuentro Débil/Moderado/Fuerte/Legendario; debilitar entrega esa cantidad más **2 PV**. Ambos resultados conservan los **3 Bonguri** del token y la EXP/EVs reales. El resultado guarda las recompensas para no repetirlas al recargar.
 
