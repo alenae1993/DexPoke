@@ -583,7 +583,7 @@ async function handle(me, ln) {
       }
       return;
     }
-    case "faint": { const m = mon(me, args[0]); if (m) { m.hp = 0; m.status = "fnt"; } const side = sideOf(args[0]); $("mon-" + side).classList.add("faint"); drawSide(me, side); await say(me, `¡${X(0, 1)} se ha debilitado!`); return; }
+    case "faint": { const m = mon(me, args[0]); if (m) { m.hp = 0; m.status = "fnt"; } const side = sideOf(args[0]); $("mon-" + side).classList.add("faint"); drawSide(me, side); await say(me, `¡${X(0, 1)} se ha debilitado!`); if (me.sin && side === "p1" && typeof sinOnFaint === "function") sinOnFaint(me); return; }
     case "-supereffective": return say(me, "¡Es muy eficaz!", 0.7);
     case "-resisted": return say(me, "No es muy eficaz…", 0.7);
     case "-immune": return say(me, `No afecta a ${X(0)}…`, 0.8);
@@ -661,7 +661,7 @@ async function handle(me, ln) {
       else if (me.sin) { sinResult(won, me); await say(me, won ? (me.sinCaught ? "¡Has atrapado al Pokémon salvaje!" : "¡Has vencido al Pokémon salvaje!") : "Tu equipo ha sido derrotado. Vuelves a tu pueblo natal.", 1.2); }
       else await say(me, won ? "¡Has ganado la batalla!" : "Has perdido la batalla…", 1.2);
       showEnd(me, won); return; }
-    case "tie": { me.over = true; await say(me, "¡La batalla terminó en empate!"); showEnd(me, null); return; }
+    case "tie": { me.over = true; await say(me, me.sin && me.sinFled ? "¡El Pokémon salvaje huyó!" : "¡La batalla terminó en empate!"); showEnd(me, null); return; }
     case "error": { await say(me, "Esa acción no es válida: " + (args[0] || "").replace(/^\[.*?\]\s*/, "")); if (!me.req && me.lastReq) { me.req = me.lastReq; me.shown = false; } return; }
     default: return;
   }
