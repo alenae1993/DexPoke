@@ -1,5 +1,5 @@
 "use strict";
-/* ---------- Leyendas de Sinnoh: preparación, movimiento y turnos ---------- */
+/* ---------- Leyendas de Sinnoh: mapa, turnos y encuentros salvajes ---------- */
 if (!ST.sin) { ST.sin = {cam: null}; save(); }
 const SIN_VILLAGES = [
   {village: "Sinnome Village", name: "Pueblo Sinnome", color: "Pink", starters: ["Togepi", "Budew"]},
@@ -13,6 +13,13 @@ const SIN_VILLAGES = [
 ];
 const SIN_PLAYER_COLORS = {Pink: "#dc71ac", Yellow: "#e6bf36", Purple: "#9565cf", Teal: "#2dada8", Orange: "#db8532", Red: "#d95252", White: "#dce5ec", Green: "#459c65", Blue: "#447fd2"};
 const SIN_CARDS = SIN.decks.flatMap(d => d.cards);
+const SIN_WILD_LEVELS = {W: [3, 6], M: [8, 12], S: [15, 20]};
+const SIN_OFFER_COUNT = {W: 3, M: 2, S: 1};
+const SIN_STATUS = {par: "PAR", brn: "QUE", psn: "ENV", tox: "ENV", slp: "DOR", frz: "CON"};
+const sinSearchToken = t => !!(SIN_OFFER_COUNT[t.tier] && t.b && t.k && /Apricorn (Tree|Reef)/.test(t.n));
+const sinWildCards = t => SIN_CARDS.filter(c => c.d && c.d.sp && c.tier === t.tier && c.b === t.b && c.k === t.k);
+const sinAlive = s => s.hpNow == null || s.hpNow > 0;
+let SIN_BUSY = false;
 const SIN_HOME = SIN.decks.find(d => d.n === "Home Village Cards").cards;
 const SIN_STARTERS = SIN_CARDS.filter(c => (c.tags || []).includes("Starter Card"));
 const SIN_PROLOGUE = SIN_CARDS.find(c => (c.tags || []).includes("Act Card") && String(c.cid).endsWith("00"));
@@ -82,8 +89,16 @@ sinStyle.textContent = `
   .sin-new-actions{display:flex;gap:12px;justify-content:center;margin:18px 0;flex-wrap:wrap}
   .sin-turn{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px 16px;background:var(--surface);border-top:1px solid var(--line)}
   .sin-turn-info{flex:1;min-width:185px;font-weight:600}
-  .sin-team{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:13px}
+  .sin-team{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--ink2);font-size:13px}
   .sin-team img{width:40px;height:40px;object-fit:contain}
+  .sin-member{display:flex;align-items:center;gap:6px;min-width:0}
+  .sin-member small{display:block}
+  .sin-hp{display:block;width:100%;height:5px;border-radius:4px;background:var(--line);overflow:hidden;margin:3px 0}
+  .sin-hp i{display:block;height:100%;background:var(--good,#65bd83)}
+  .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .sin-offer .sin-choice{cursor:default;text-align:center}
+  .sin-offer .btn{margin-top:8px;min-height:44px}
+  .sin-notice{flex-basis:100%;margin:0;color:var(--ink2);font-size:13px}
   .sin-turn .btn{min-height:44px}
   .sin-move{margin-top:10px;min-height:44px}
   @media(max-width:650px){.sin-choices{grid-template-columns:repeat(2,minmax(0,1fr))}.sin-turn{padding:8px 12px;gap:6px 10px}.sin-turn-info{flex-basis:100%}.sin-team{flex:1}.sin-tools{flex-wrap:wrap}.sin-card{max-height:30dvh}}
@@ -127,14 +142,17 @@ function sinNewScreen() {
     </div></div>`;
   sinFillImages();
 }
-async function sinInitialSet(species) {
-  const set = blankSet(species), data = await Dex.learnsets.get(toID(species));
+async function sinInitialSet(species, level = 5) {
+  const set = blankSet(species);
+  let data = await Dex.learnsets.get(toID(species));
+  // Algunas formas, como Shellos oriental, heredan los movimientos de su especie base.
+  if (!data.learnset) data = await Dex.learnsets.get(toID(Dex.species.get(species).baseSpecies));
   const levels = Object.entries(data.learnset || {}).flatMap(([move, sources]) => sources.flatMap(source => {
     const m = /^(\d+)L(\d+)$/.exec(source); return m ? [{move: toID(move), gen: +m[1], level: +m[2]}] : [];
   }));
   const gen = Math.max(...levels.map(m => m.gen));
-  const learned = levels.filter(m => m.gen === gen && m.level <= 5).sort((a, b) => a.level - b.level);
-  set.level = 5;
+  const learned = levels.filter(m => m.gen === gen && m.level <= level).sort((a, b) => a.level - b.level);
+  set.level = level;
   set.moves = [...new Set(learned.map(m => m.move))].slice(-4);
   const natures = Dex.natures.all(); set.nature = natures[Math.floor(Math.random() * natures.length)].name;
   return set;
@@ -170,22 +188,128 @@ function sinReachable(pos, remaining) {
   dist.delete(start); return dist;
 }
 const sinMaxMoves = run => 3 + run.frag;
+function sinTeamHTML(run) {
+  return run.team.map(s => {
+    const healthy = s.hpNow == null, pct = healthy ? 100 : s.hpMax ? Math.max(0, Math.min(100, s.hpNow / s.hpMax * 100)) : 0;
+    const health = !sinAlive(s) ? "Debilitado" : healthy ? "PS completos" : `${s.hpNow}/${s.hpMax} PS`;
+    return `<span class="sin-member">${pimg(s.species)}<span>${esc(esSp(s.species))} · Nv. ${esc(s.level)}
+      <span class="sin-hp" role="meter" aria-label="PS de ${esc(esSp(s.species))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></span>
+      <small>${esc(health)}${SIN_STATUS[s.status] && sinAlive(s) ? " · " + esc(SIN_STATUS[s.status]) : ""}</small></span></span>`;
+  }).join("");
+}
 function sinUpdateTurn() {
   const run = ST.sin.run; if (!run || !SIN_VIEW) return;
-  const max = sinMaxMoves(run), left = Math.max(0, max - run.moved);
+  const max = sinMaxMoves(run), left = run.fought || run.revive ? 0 : Math.max(0, max - run.moved);
   SIN_VIEW.reachable = sinReachable(run.pos, left);
   $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)}</div>
-    <div class="sin-team">${run.team.map(s => `${pimg(s.species)}<span>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</span>`).join("")}</div>
-    <button class="btn primary" data-act="sinendturn">Terminar turno</button>`;
+    <div class="sin-team">${sinTeamHTML(run)}</div>
+    <button class="btn primary" data-act="sinendturn">Terminar turno</button>
+    ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}`;
   sinFillImages(); if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
 }
 function sinMoveTo(key) {
-  const run = ST.sin.run; if (!run || !SIN_VIEW) return;
+  const run = ST.sin.run; if (!run || !SIN_VIEW || run.fought || run.revive || run.battle) return;
   // Se vuelve a calcular al confirmar para no usar un coste de una ficha antigua.
   const cost = sinReachable(run.pos, Math.max(0, sinMaxMoves(run) - run.moved)).get(key);
   if (!cost) return;
   const h = SIN_BY_CELL.get(key); run.pos = [h.c, h.r]; run.moved += cost;
   save(); sinUpdateTurn();
+}
+function sinSearch(index) {
+  const run = ST.sin.run, t = SIN.tokens[index];
+  if (!run || run.searched || run.fought || run.battle || run.revive || !run.team.some(sinAlive) || !t || !sinSearchToken(t) || t.cell.join(",") !== run.pos.join(",")) return;
+  const [lo, hi] = SIN_WILD_LEVELS[t.tier];
+  const cards = shuffle(sinWildCards(t).slice()).slice(0, SIN_OFFER_COUNT[t.tier]).map(c =>
+    ({species: c.d.sp, img: c.img, level: lo + Math.floor(Math.random() * (hi - lo + 1))}));
+  run.searched = true; run.offer = {cards, place: sinName(t), meta: sinMeta(t), closed: false};
+  save(); renderSin();
+}
+function sinOfferScreen() {
+  const run = ST.sin.run, offer = run.offer;
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Pokémon salvajes</h1>
+    <p>${esc(offer.place)} · ${esc(offer.meta)}</p>
+    ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
+      ${sinCardImage(s.img, "Carta de " + esSp(s.species))}<b>${esc(esSp(s.species))}</b><span>Nv. ${esc(s.level)}</span>
+      <div><button class="btn primary" data-act="sinfight" data-pick="${i}">Combatir</button></div></div>`).join("")}</div>` :
+      '<p role="status">No hay cartas de Pokémon para este bioma, clima y nivel. La búsqueda de este turno ya fue usada.</p>'}
+    <div class="sin-new-actions"><button class="btn" data-act="sinskip">No combatir</button></div>
+    <div class="sin-team">${sinTeamHTML(run)}</div><p id="sin-offer-error" role="alert"></p></div></div>`;
+  sinFillImages();
+}
+function sinPre(team) {
+  // Solo se insertan números y estados conocidos en el código enviado al motor.
+  const pre = team.map((s, i) => {
+    const hp = s.hpNow == null ? "" : `a[${i}].sethp(${Math.max(1, Math.floor(s.hpNow))});`;
+    return hp + (SIN_STATUS[s.status] ? `a[${i}].setStatus(${JSON.stringify(s.status)});` : "");
+  }).join("");
+  return pre ? "const a=battle.sides[0].pokemon;" + pre : "";
+}
+async function sinFight(index) {
+  const run = ST.sin.run;
+  if (!run || SIN_BUSY || run.fought || run.revive || !run.team.some(sinAlive)) return;
+  if (!run.battle && (!run.offer || run.offer.closed || !run.offer.cards[index])) return;
+  SIN_BUSY = true;
+  document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = true; });
+  try {
+    if (!run.battle) {
+      const s = run.offer.cards[index], wild = await sinInitialSet(s.species, s.level);
+      // El índice original y un apodo único mantienen la asociación aunque cambie el orden o la forma.
+      const indices = run.team.map((s, i) => sinAlive(s) ? i : -1).filter(i => i >= 0);
+      run.battle = {wild, indices}; run.offer.closed = true; save();
+    }
+    const mine = run.battle.indices.map(i => ({...run.team[i], name: "Sinnoh" + (i + 1)}));
+    sinLeave(); newBattle(mine, [{...run.battle.wild}], {sin: true, aiDiff: "easy", pre: sinPre(mine)});
+  } catch (err) {
+    const el = $("sin-offer-error"); if (el) el.textContent = "No se pudo preparar el combate. Intenta nuevamente.";
+  } finally {
+    SIN_BUSY = false; document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = false; });
+  }
+}
+function sinPendingScreen() {
+  const wild = ST.sin.run.battle.wild;
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Combate pendiente</h1>
+    <p>${esc(esSp(wild.species))} · Nv. ${esc(wild.level)}. Al salir o recargar se repite este mismo encuentro desde su inicio.</p>
+    <button class="btn primary" data-act="sinresume">Reanudar combate</button><p id="sin-offer-error" role="alert"></p></div></div>`;
+}
+function sinResult(won, me) {
+  const run = ST.sin.run; if (!run || !run.battle) return;
+  run.battle.indices.forEach(i => {
+    const s = run.team[i], m = me.mons["p1:Sinnoh" + (i + 1)];
+    // me.mons solo contiene los que salieron al campo; los de la banca conservan su estado.
+    if (m && m.side === "p1") {
+      s.hpMax = m.dmax ? Math.floor(m.max / 2) : m.max;
+      s.hpNow = Math.min(s.hpMax, m.dmax ? Math.ceil(m.hp / 2) : m.hp);
+      s.status = SIN_STATUS[m.status] ? m.status : "";
+    }
+    // También permite comprobar la derrota mediante >forcewin p2.
+    if (won === false) { s.hpNow = 0; s.status = ""; }
+  });
+  run.fought = true; run.moved = sinMaxMoves(run); run.battle = null;
+  if (!run.team.some(sinAlive)) {
+    const home = SIN.tokens.find(t => t.n === run.village && (t.tags || []).includes("Village Token"));
+    run.pos = [...home.cell]; run.revive = true; ST.sin.cam = null;
+    run.notice = "Tu equipo fue derrotado. Volviste a tu pueblo natal; termina el turno para recuperarlo.";
+  } else run.notice = won === null ? "El combate terminó en empate. Los PS y estados se mantienen." : "¡Venciste al Pokémon salvaje! Los PS y estados de tu equipo se mantienen.";
+  save();
+}
+function sinEndHTML(won) {
+  // Los empates pasan directamente por showEnd en batalla.js.
+  if (won === null && B && B.sin) sinResult(null, B);
+  return `<div class="card"><p class="result">${won === null ? "Empate" : won ? "¡Victoria!" : "Derrota"}</p>
+    <p class="note">${esc(ST.sin.run ? ST.sin.run.notice : "El combate terminó.")}</p>
+    <div class="btns"><button class="btn primary" data-act="sin">Volver al mapa</button></div></div>`;
+}
+function sinHeal() {
+  const run = ST.sin.run, h = run && SIN_BY_CELL.get(run.pos.join(","));
+  if (!h || run.healed || run.revive || run.battle || !h.tokens.some(t => (t.tags || []).includes("Village Token"))) return;
+  run.team.forEach(s => { delete s.hpNow; delete s.status; });
+  run.healed = true; run.notice = "Tu equipo está completamente recuperado."; save(); sinUpdateTurn();
+}
+function sinEndTurn() {
+  const run = ST.sin.run; if (!run || run.battle) return;
+  if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
+  run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
+  run.offer = null; run.revive = false; run.notice = ""; save(); sinUpdateTurn();
 }
 function sinImage(key) {
   if (!key || !SIN.img[key]) return null;
@@ -362,12 +486,16 @@ function sinPick(px, py) {
 }
 function sinShowCell(h) {
   const v = SIN_VIEW, cost = v.reachable.get(h.c + "," + h.r); v.selected = h;
+  const run = ST.sin.run, here = run.pos.join(",") === h.c + "," + h.r;
+  const canSearch = !run.searched && !run.fought && !run.revive && run.team.some(sinAlive);
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Casilla (${esc(h.c)}, ${esc(h.r)})</h2><button class="btn" data-act="sinclose" aria-label="Cerrar ficha">Cerrar</button></div>
     <p>Nivel de elevación: ${esc(h.l)} · ${esc(h.w ? "Agua" : "Tierra")}${h.dw ? " · Mundo Distorsión" : ""}</p>
     ${cost ? `<button class="btn primary sin-move" data-act="sinmove" data-cell="${esc(h.c + "," + h.r)}">Moverme aquí (${esc(cost)})</button>` : ""}
     ${h.tokens.length ? `<ul class="sin-tokens">${h.tokens.map(t => {
       const meta = sinMeta(t);
-      return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.kind === "CardCustom" ? "<small>Escondite · Boca abajo</small>" : ""}</li>`;
+      return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.kind === "CardCustom" ? "<small>Escondite · Boca abajo</small>" : ""}
+        ${here && sinSearchToken(t) ? `<button class="btn primary sin-move" data-act="sinsearch" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Buscar Pokémon</button>` : ""}
+        ${here && (t.tags || []).includes("Village Token") ? `<button class="btn primary sin-move" data-act="sinheal" ${run.healed || run.revive ? "disabled" : ""}>Curar equipo</button>` : ""}</li>`;
     }).join("")}</ul>` : '<p>No hay tokens en esta casilla.</p>'}`;
   $("sin-card").hidden = false; sinRequestDraw();
 }
@@ -416,6 +544,8 @@ function sinLeave() {
 function renderSin() {
   sinLeave();
   if (!ST.sin.run) return sinNewScreen();
+  if (ST.sin.run.battle) return sinPendingScreen();
+  if (ST.sin.run.offer && !ST.sin.run.offer.closed) return sinOfferScreen();
   $("app").innerHTML = `<div class="sin-layout"><header class="sin-top"><button class="back" data-act="sinback">‹ Batalla</button><h1>Leyendas de Sinnoh</h1>
     <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar ficha</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
     <div class="sin-stage"><canvas id="sin-map" tabindex="0" aria-label="Mapa de Sinnoh. Arrastra para mover, pellizca o usa más y menos para acercar. Toca una casilla para ver su ficha."></canvas><div class="sin-hint">Arrastra para mover · Pellizca o usa + / − para acercar · Toca una casilla</div></div>
@@ -441,9 +571,9 @@ document.addEventListener("click", e => {
   if (e.target.closest("[data-info]")) return;
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const act = b.dataset.act;
-  if (act === "sin") return go("sin");
+  if (act === "sin") { if (B) B.dead = true; B = null; return go("sin"); }
   if (VIEW !== "sin") return;
-  if (SIN_NEW.busy) return;
+  if (SIN_NEW.busy || SIN_BUSY) return;
   if (act === "sinback") { sinLeave(); SIN_NEW = {village: null, species: null, busy: false}; return go("menu"); }
   if (act === "sinvillage") {
     SIN_NEW.village = SIN_VILLAGES.find(v => v.village === b.dataset.village); SIN_NEW.species = null; return sinNewScreen();
@@ -459,9 +589,16 @@ document.addEventListener("click", e => {
     if (!confirm("¿Abandonar esta partida de Leyendas de Sinnoh? Se perderá su progreso.")) return;
     sinLeave(); ST.sin.run = null; ST.sin.cam = null; SIN_NEW = {village: null, species: null, busy: false}; save(); return renderSin();
   }
+  if (act === "sinfight") return sinFight(+b.dataset.pick);
+  if (act === "sinresume") return sinFight();
+  if (act === "sinskip" && ST.sin.run && ST.sin.run.offer && !ST.sin.run.battle) {
+    ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; save(); return renderSin();
+  }
   if (!SIN_VIEW || !ST.sin.run) return;
   if (act === "sinmove") return sinMoveTo(b.dataset.cell);
-  if (act === "sinendturn") { ST.sin.run.turn++; ST.sin.run.moved = 0; save(); return sinUpdateTurn(); }
+  if (act === "sinsearch") return sinSearch(+b.dataset.token);
+  if (act === "sinheal") return sinHeal();
+  if (act === "sinendturn") return sinEndTurn();
   if (act === "sincenter") return sinCenter();
   if (act === "sinclose") { $("sin-card").hidden = true; SIN_VIEW.selected = null; return sinRequestDraw(); }
   if (act === "sinin" || act === "sinout") { sinZoom(act === "sinin" ? 1.4 : 1 / 1.4, SIN_VIEW.w / 2, SIN_VIEW.h / 2); sinSaveCam(true); }

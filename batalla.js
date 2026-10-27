@@ -430,14 +430,14 @@ function newBattle(t1, t2, opts) {
   const s = BattleStreams.getPlayerStreams(new BattleStreams.BattleStream());
   B = {s, t1, t2, mons: {}, act: {p1: null, p2: null}, weather: null, turn: 0, chunks: [], busy: false, req: null, reqReady: false,
        over: false, dead: false, choice: {tera: false, mega: false}, sideCount: {p1: t1.length, p2: t2.length}, fainted: {p1: 0, p2: 0},
-       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine, esc: !!opts.esc};
+       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine, esc: !!opts.esc, sin: !!opts.sin};
   const me = B;
   VIEW = "battle"; render();
   me.bg = pickBg(me); setBg(me.bg); bgm(pickBgm(me));
   (async () => { for await (const c of s.p1) { if (me.dead) return; me.chunks.push(c); pump(me); } })();
   aiLoop(me);
   if (me.trainer) { const r = me.trainer.r, pre = me.trainer.medal ? "El Líder de Gimnasio " : r.startsWith("Alto Mando") ? "El Alto Mando " : r.startsWith("Campeón") ? "El Campeón " : ""; me.chunks.push("|-intro|" + `¡${pre}${me.trainer.n} te desafía!`); pump(me); }
-  s.omniscient.write(`>start {"formatid":"${me.fmt ? me.fmt.fid : "gen9customgame"}"}\n>player p1 ${JSON.stringify({name: "Tú", team: Teams.pack(t1)})}\n>player p2 ${JSON.stringify({name: "CPU", team: Teams.pack(t2)})}`);
+  s.omniscient.write(`>start {"formatid":"${me.fmt ? me.fmt.fid : "gen9customgame"}"}\n>player p1 ${JSON.stringify({name: "Tú", team: Teams.pack(t1)})}\n${opts.pre ? ">eval " + opts.pre + "\n" : ""}>player p2 ${JSON.stringify({name: "CPU", team: Teams.pack(t2)})}`);
 }
 
 async function pump(me) {
@@ -658,6 +658,7 @@ async function handle(me, ln) {
         if (won) { await say(me, `¡Has derrotado a ${me.trainer.n}!`, 1.2); if (me.trainer.medal) await say(me, `¡Has obtenido la ${me.trainer.medal}!`, 1.4); retoWin(me.trainer.id); }
         else await say(me, `${me.trainer.n} te ha derrotado… ¡Ajusta tu equipo e inténtalo otra vez!`, 1.2);
       } else if (me.esc) { await say(me, won ? "¡Has ganado! Elige un Pokémon del rival." : "Has perdido… la escalada termina aquí.", 1.2); escResult(won); }
+      else if (me.sin) { sinResult(won, me); await say(me, won ? "¡Has vencido al Pokémon salvaje!" : "Tu equipo ha sido derrotado. Vuelves a tu pueblo natal.", 1.2); }
       else await say(me, won ? "¡Has ganado la batalla!" : "Has perdido la batalla…", 1.2);
       showEnd(me, won); return; }
     case "tie": { me.over = true; await say(me, "¡La batalla terminó en empate!"); showEnd(me, null); return; }
@@ -731,6 +732,7 @@ function choose(me, choice) { me.lastReq = me.req; me.req = null; me.shown = fal
 function showEnd(me, won) {
   const ctl = $("ctl"); if (!ctl) return;
   if (me.esc) { ctl.innerHTML = escEndHTML(won); return; }
+  if (me.sin) { ctl.innerHTML = sinEndHTML(won); return; }
   if (me.trainer) { ctl.innerHTML = `<div class="card"><p class="result">${won ? "¡Victoria!" : "Derrota"}</p>
     <div class="btns" style="justify-content:center">${won ? "" : `<button class="btn pri" data-act="rematch">Reintentar</button>`}<button class="btn ${won ? "pri" : ""}" data-act="reto">Volver al desafío</button><button class="btn" data-act="team">Ajustar mi equipo</button></div></div>`; return; }
   if (me.fmt) { ctl.innerHTML = `<div class="card"><p class="result">${won === null ? "Empate" : won ? "¡Victoria!" : "Derrota"}</p>
