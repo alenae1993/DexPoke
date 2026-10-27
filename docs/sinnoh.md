@@ -2,6 +2,8 @@
 
 Objetivo del dueño, en sus palabras: *"basicamente quiero el juego pero con batallas como lo tenemos en nuestro dex y el estilo tal cual el mod de tabletop"*.
 
+**Solo local: Leyendas de Sinnoh vive solo en la rama `sinnoh` del PC del dueño. No se sube a GitHub y el sitio publicado no la incluye.**
+
 - **Fuente:** el mod de Tabletop Simulator **"[1.4a]Pokémon: Leyendas de Sinnoh"**, Workshop `2880340481`, versión en español. El arte es de su autor, Levatius. El dueño pidió usar las imágenes del mod.
 - **Batallas:** con el motor de Mi Dex (Showdown, `batalla.js`), no con las cartas ni los dados del mod.
 - **Evolución, niveles y movimientos:** como en los juegos y Essentials, no con el sistema del juego de mesa.
@@ -183,12 +185,8 @@ Las etiquetas de la carta dan su bioma y clima.
 
 ## Plan de trabajo
 
-1. Correr `python herramientas/sinnoh/extraer_mod.py "<ruta>\Workshop\2880340481.json" sinnoh/datos` y revisar el mapa con `vista_mapa.py`.
-2. Copiar desde `Mods\Images` las imágenes listadas en `names.json` y empaquetarlas como `.bin` con encabezado `MIDEXPAK`, igual que `spr/`. Lo mínimo:
-   - las texturas de los hexágonos;
-   - los tokens de árboles, pueblos y santuarios;
-   - los reversos y frentes de los escondites;
-   - las figuras.
+1. **Hecho:** se corrió `python herramientas/sinnoh/extraer_mod.py "<ruta>\Workshop\2880340481.json" sinnoh/datos` y se revisó el mapa con `vista_mapa.py`.
+2. **Hecho con `generar.py`:** `python herramientas/sinnoh/generar.py sinnoh/datos "<ruta>\Mods\Images"` produce `sinnoh_datos.js` (índice de imágenes, mapa sin celdas aisladas, tokens y mazos con datos Lua) y `spr/sinnoh_*.bin` (WebP con transparencia, encabezado `MIDEXPAK` y máximo 15 MB por paquete). Reduce texturas, tokens, escondites y figuras, y recorta los frentes y reversos de las cartas de sus hojas. Ambas rutas tienen valores por defecto; puede repetirse para regenerar las mismas salidas.
 3. Pasar los nombres de las cartas Pokémon a especies de Showdown (`Dex.species.get`). Ojo con las formas, los nombres en español entre paréntesis ("Zubat (Recluta del Equipo Galaxia)") y `internal_name`.
 4. Crear `sinnoh.html` y `sinnoh.js`:
    - mapa con zoom y desplazamiento táctil;

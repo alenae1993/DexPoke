@@ -89,6 +89,7 @@ Todo es estático: no hay servidor, compilación ni dependencias npm en tiempo d
    - (b) Rivales por tiers progresivos: RU/UU al principio y luego OU y Ubers.
    - Hoy los Pokémon salen de `gen9randombattle`, que incluye legendarios desde la ronda 1.
 3. **Leyendas de Sinnoh**, el proyecto grande. Plan detallado en `docs/sinnoh.md`. En resumen:
+   - **Solo local: Leyendas de Sinnoh vive solo en la rama `sinnoh` del PC del dueño. No se sube a GitHub y el sitio publicado no la incluye.**
    1. Correr `extraer_mod.py` y copiar las 247 imágenes del mod.
    2. Crear `sinnoh.html` y `sinnoh.js` con el mapa hexagonal al estilo del mod, turnos, movimiento, búsqueda, Bonguri y crafteo.
    3. Usar las batallas de `batalla.js`, con PS y estados que persisten.
