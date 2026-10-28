@@ -13,7 +13,62 @@ Objetivo del dueño, en sus palabras: *"basicamente quiero el juego pero con bat
 
 Se mantiene el juego actual: mapa, movimiento, búsqueda en árboles y arrecifes con las cartas del mod, combates, pueblos y turnos. Los niveles de los salvajes y la curación siguen iguales. La progresión de los Pokémon usa EXP, curvas de crecimiento, ataques por nivel, EVs, amistad y evolución como en los videojuegos.
 
-Se incorporan los Bonguri, las recetas de Balls, los Puntos de Viaje como moneda, las recompensas, la huida, los espacios de equipo, los escondites del mod y la campaña completa Corazón de Sinnoh, con captura durante el combate como en los videojuegos. Captura con cartas, efectos de Destino, santuarios (salvo la ofrenda del Corazón), Ultra Explosión y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
+Se incorporan los Bonguri, las recetas de Balls, los Puntos de Viaje como moneda, las recompensas, la huida, los espacios de equipo, los escondites del mod, las ofrendas de santuario, los legendarios de evento y lugar y la campaña completa Corazón de Sinnoh, con captura durante el combate como en los videojuegos. Captura con cartas, efectos de Destino, Dioses de Sinnoh, Ultra Explosión y las demás mecánicas propias del juego de mesa quedan aparcadas. Se conservan sin cambios `sinnoh_datos.js`, `spr/sinnoh_*.bin` y `herramientas/sinnoh/generar.py` por si después se quiere replicar el mod tal cual. Las reglas y propuestas históricas de más abajo se conservan como referencia, sujetas a esta decisión.
+
+**Santuarios y legendarios (tarea 15):** cualquiera de los 20 tokens cuyo nombre termina en ` Shrine` permite una **Ofrenda de santuario**, una sola vez por turno entre todos ellos (`run.offered`). Se descarta 1 Bonguri: rojo/amarillo/azul son grado 1, rosa/verde/blanco grado 2 y negro grado 3. Si hay al menos 7 PV, se puede pagar además esa cantidad para la **ofrenda mayor**: ver tres cartas, elegir dos distintas en el orden en que se resolverán y descartar la otra. Ni una ofrenda normal ni una mayor permiten otra ese turno. Un legendario presente bloquea la ofrenda; `run.originGod` también bloquea la del Santuario Origin. La ofrenda del Corazón durante el Acto III conserva su acción y sus reglas independientes.
+
+`run.shrineDeck` y `run.shrineDiscard` guardan índices físicos de las **35 cartas**, incluidas sus copias. Se baraja al empezar o migrar y solo se rebaraja la pila de descartes cuando se agota el mazo. Las cartas retenidas en una ofrenda no se reintroducen mientras se resuelven. `run.shrineEvent` conserva cartas vistas, selección parcial, orden, grado, efecto ya aplicado, colores recibidos, descartado elegido y decisiones pendientes. Recargar conserva todo y no repite costes ni recompensas; no se termina el turno hasta resolver el evento. Las imágenes se muestran junto a la descripción y las elecciones.
+
+Se revisaron visualmente **los 15 frentes distintos** de `SIN.img`; todas sus imágenes y cantidades coinciden con la transcripción. La tabla `SIN_SHRINE_EFFECTS` de `sinnoh.js` los identifica por imagen; `SIN_SHRINE_CARDS` conserva las 35 instancias:
+
+| Imagen | Copias | Evento y efecto por grado 1/2/3 |
+|---|---|---|
+| `c373200` | 1 | Una Canción de Hielo: 3 Bonguri Azules y Articuno al Santuario Frostsong. |
+| `c373201` | 1 | Una Canción de Trueno: 3 Amarillos y Zapdos al Santuario Thundersong. |
+| `c373202` | 1 | Una Canción de Fuego: 3 Rojos y Moltres al Santuario Firesong. |
+| `c373203` | 1 | Un Visitante de Lejos: 2 Verdes y Celebi al Santuario Timeless. |
+| `c373204` | 1 | Una Sombra Emerge: 1 Negro y Darkrai al Santuario Moonglade, reemplazando a Cresselia. |
+| `c373205` | 1 | Un Faro de Luz: 2 Rosas y Cresselia al Santuario Moonglade, reemplazando a Darkrai. |
+| `c373206` | 1 | Un Gigante Despierta: 2 Blancos y Regigigas al Santuario Colossus. |
+| `c373207` | 7 | Fractura Celestial: roba 1 Destino, suma `run.fractures` y muestra «Los Dioses de Sinnoh se agitan…». Seguidores, Aura y aparición del Dios quedan para la tarea 16. |
+| `c382800` | 3 | Experiencia Predestinada: roba 1/2/3 cartas de Destino. |
+| `c382801` | 3 | Tesoro Oculto (Bonguri): elige el color de cada uno de los 1/2/3 recibidos. |
+| `c382802` | 3 | Intercambio Equivalente: sustituye uno de tier Débil/Moderado/Fuerte por un descartado del mismo tier. |
+| `c382803` | 3 | Sabiduría Antigua: enseña el movimiento característico de un descartado de tier hasta Moderado/Fuerte/Legendario. |
+| `c382804` | 3 | Banquete Espléndido: hasta 1/2/3 estofados distintos gratis este turno. |
+| `c382805` | 3 | Tesoro Oculto (Balls): entrega una Super Ball/Ultra Ball/Spirit Ball. |
+| `c382806` | 3 | Momento Relajante: entrega 2/4/6 PV. |
+
+Se ignora la línea «4+ entrenadores» porque se juega en solitario. Destino usa `sinDrawFate`, con el límite de cinco cartas y los avisos de mano llena o mazo agotado existentes.
+
+Desde esta tarea, los salvajes **derrotados**, incluidos Alfa y legendarios, van a `run.discard` como `{species, tier, signature}`; capturados o huidos no se agregan. Las capturas guardan `set.tier` (`W/M/S/L`; Alfa cuenta como L). El inicial y las capturas anteriores sin tier no se pueden sustituir: no se inventa su procedencia al migrar ni se reconstruyen derrotas anteriores. Intercambio cambia solo especie y habilidad (ranura 0), calcula los nuevos PS máximos y mantiene la proporción de PS actuales, con redondeo hacia arriba y mínimo 1 si estaba vivo. Conserva nivel, EXP, IVs, EVs, naturaleza, sexo, amistad, objeto, ataques, estado y demás marcas; retira el descartado elegido. No recalcula la EXP según la curva de la nueva especie. Sabiduría conserva el descartado y usa la cola de aprendizaje existente; con cuatro ataques permite olvidar uno o no aprender. Ambos efectos se pueden rechazar si no se desea usarlos o no hay candidatos compatibles.
+
+Banquete permite elegir los estofados en el propio evento o después en la Bolsa. `run.feast` guarda los usos gratuitos pendientes y los tipos ya elegidos: no cuesta Bonguri, no gasta el uso habitual y no permite repetir el mismo efecto gratuito durante el turno. Sus efectos son los existentes, incluido Infundido con aprendizaje/evolución persistentes. Se puede usar gratuitamente un tipo ya elaborado normalmente; el uso gratuito tampoco impide elaborarlo normalmente si todavía no se gastó ese uso. Los usos gratuitos pendientes caducan al terminar el turno. Sabroso gratuito también da +3 movimientos y evita la interrupción obligatoria de los Alfa.
+
+`run.shrineLegends` guarda santuario → especie; el mapa dibuja la carta encima del santuario y su ficha ofrece **Combatir contra…**. Vencer o capturar retira la ficha; perder o empatar la conserva. Los eventos pueden volver a invocar al mismo legendario al rebarajar el mazo. `run.legendsDone` registra especie → `caught`/`defeated` y evita que reaparezcan los encuentros únicos de lugar. La Bolsa lista los legendarios activos en santuarios y los ya derrotados/capturados.
+
+**Interpretaciones de los encuentros de lugar:** se puede **Buscar a…** en la casilla indicada si se cumple la condición; buscar consume la búsqueda del turno. El artefacto puede estar en la Bolsa o equipado, también en un Pokémon de la Caja, y **no se pierde**. Los guardianes se desbloquean después de ganar el Fragmento de su lago; Silvally después de derrotar a Helio (`act >= 4`), sin exigir escoger Héroe primero.
+
+| Legendario | Token del lugar y casilla | Condición |
+|---|---|---|
+| Manaphy | The Temple of the Sea `[-7,1]` | Huevo Marino. |
+| Heatran | The Magma Chamber `[6,14]` | Piedra Magma. |
+| Spiritomb | The Hallowed Tower `[4,-4]` | Piedra Espíritu. |
+| Rotom | The Grand Chateau `[-3,9]` | Llave Secreta. |
+| Shaymin | The Garden of Gratitude `[12,6]` | Gracídea. |
+| Regirock | Valley Ruins `[-2,0]` | Núcleo Rockice o Steelrock. |
+| Regice | Westbreeze Ruins `[-11,-3]` | Núcleo Rockice o Icesteel. |
+| Registeel | Firelilly Ruins `[9,7]` | Núcleo Icesteel o Steelrock. |
+| Mesprit | Lake Verity Cavern `[-7,-7]` | Fragmento de la Emoción. |
+| Uxie | Lake Acuity Cavern `[0,14]` | Fragmento del Conocimiento. |
+| Azelf | Lake Valor Cavern `[7,-7]` | Fragmento de la Voluntad. |
+| Silvally | The Temple of Sinnoh `[0,0]` | Helio derrotado. |
+
+Los legendarios son de **nivel 40**, con excepciones configurables: **Regigigas y Silvally 45; Mesprit, Uxie y Azelf 35** (`SIN_LEGEND_LEVEL`, `SIN_LEGEND_LEVELS`). Sus IVs son aleatorios con al menos tres en 31; cartas, sets e índices del equipo se guardan en `run.battle`, con origen en `battle.legend`. Reanudar repite el mismo set, no vuelve a sortearlo. Usan música `bgm_boss`, captura y combate salvaje normales; **no huyen al debilitar a uno tuyo**. Capturar da **4 PV**; derrotar da **6 PV**, lo agrega al descarte y ofrece su movimiento característico cuando existe en el motor. Dan EXP y EVs como los otros salvajes y **ningún Bonguri**. La derrota total mantiene la ficha y permite reintentar después de recuperarse. Todo el guardado y la migración quedan dentro de `ST.sin`; no se cambian `batalla.js`, los datos generados ni el service worker.
+
+**Decisión pendiente:** once legendarios tienen movimientos propios del mod sin correspondencia literal en Showdown: Articuno (Canción Helada), Zapdos (Canción Tronadora), Moltres (Canción Abrasadora), Regice (Hielo Glacial), Registeel (Acero Templado), Regirock (Recuperación Pétrea), Mesprit (Veracidad Impactante), Uxie (Agudeza Escalofriante), Azelf (Valor Ardiente), Shaymin (Fogonazo) y Celebi (Resplandor Eterno). Se consultó si usar equivalentes oficiales o excluir su enseñanza. Mientras no se decida, `sinSignatureMove` conserva su comportamiento previo: devuelve `null` para esos textos; su derrota se registra, pero no ofrece un ataque inexistente. Los demás legendarios mantienen el movimiento oficial identificado por nombre español. No se crean movimientos ni se modifica el motor.
+
+**Validación de la tarea 15:** comprobación de sintaxis y pruebas Node con `ps.js`, `data.js`, `esx.js` y `sinnoh_datos.js` reales: tabla y conteos de las 35 cartas, siete grados por color, barajado/rebarajado, ofrenda mayor 3→2 y costes únicos, límite compartido por turno, eventos y elecciones tras serialización, carga completa de un guardado con evento pendiente, mano de Destino, sustitución Darkrai/Cresselia, bloqueo por ocupante, Intercambio y conservación de atributos, Sabiduría con sustitución de ataque y cola persistente, Banquete y estofados sin consumo habitual, reinicio de turno, condiciones de los doce lugares, niveles, IVs, música, victorias/capturas/derrotas/empates, descarte de salvajes/Alfa y tier de captura. Además, los doce legendarios de lugar se cargaron y combatieron un turno con sus sets en `BattleStreams` real, sin errores del protocolo. Las pruebas temporales no se incorporaron al repositorio para respetar los tres archivos autorizados. **Pendiente:** enseñanza de los once movimientos propios según la decisión del dueño y revisión visual a unos 390 px con consola: el acceso a Google Chrome fue rechazado con «Computer Use was not approved to use Google Chrome»; tampoco hay navegador disponible en el conector de pestañas.
 
 **Campaña y combates de entrenador (tarea 13):** `ST.sin.run` guarda `campaign: "heart"`, `act` (0 Prólogo, 1–3 actos, 4 Final) y `moveBonus`. Tras elegir pueblo e inicial y pulsar **Comenzar** en el Prólogo, empieza el Acto I, se reciben **3 Bonguri Rojos**, además de las 3 Poké Balls, y `run.grunts` contiene solo el pueblo natal. Las partidas antiguas sin `campaign` reciben esta misma preparación una sola vez, conservando inventario, equipo y progreso. Los movimientos por turno son **3 + Fragmentos + moveBonus**, más los 3 temporales del Estofado Sabroso.
 
@@ -343,5 +398,5 @@ Las etiquetas de la carta dan su bioma y clima.
    - guardado en `localStorage` con una clave propia.
 5. Integrar las batallas: reutilizar `newBattle` sin duplicar código, con un archivo aparte como `escalada.js`, y devolver el resultado al mapa.
 6. **Hecho (tarea 7):** EXP, curvas de crecimiento, niveles, EVs y aprendizaje de movimientos con preguntas persistentes. Evolución pendiente para la tarea 8.
-7. **Hecho (tareas 11–14):** escondites, objetos equipables, pueblos y elaboración, campaña Corazón de Sinnoh completa hasta Héroe y exploración posterior. **Aparcado:** legendarios, santuarios salvo la ofrenda del Corazón, sellos, efectos de Destino y Ultra Explosión (ver `.tareas/plan-sinnoh-completo.md`).
+7. **Hecho (tareas 11–15):** escondites, objetos equipables, pueblos y elaboración, campaña Corazón de Sinnoh completa hasta Héroe y exploración posterior, ofrendas de santuario y legendarios de evento y lugar. **Aparcado:** Dioses de Sinnoh, sellos, efectos de Destino y Ultra Explosión (ver `.tareas/plan-sinnoh-completo.md`).
 8. Botón en el menú, `SHELL` del service worker, `LEEME.md` y pruebas en pantalla de celular.

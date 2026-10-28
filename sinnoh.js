@@ -33,6 +33,37 @@ const SIN_ACTS = [
 ];
 const SIN_GRUNT_IMAGE = SIN.tokens.find(t => /galact|galaxi|grunt/i.test(t.n) && SIN.img[t.img])?.img;
 const SIN_FATE = SIN_CARDS.filter(c => (c.tags || []).includes("Change of Fate Card"));
+// Tabla contrastada con los 15 frentes: las copias conservan su índice físico (35 cartas).
+const SIN_SHRINE_EFFECTS = {
+  c373200: {name: "Una Canción de Hielo", kind: "legend", species: "Articuno", shrine: "Frostsong Shrine", color: "blue", amount: 3},
+  c373201: {name: "Una Canción de Trueno", kind: "legend", species: "Zapdos", shrine: "Thundersong Shrine", color: "yellow", amount: 3},
+  c373202: {name: "Una Canción de Fuego", kind: "legend", species: "Moltres", shrine: "Firesong Shrine", color: "red", amount: 3},
+  c373203: {name: "Un Visitante de Lejos", kind: "legend", species: "Celebi", shrine: "Timeless Shrine", color: "green", amount: 2},
+  c373204: {name: "Una Sombra Emerge", kind: "legend", species: "Darkrai", shrine: "Moonglade Shrine", color: "black", amount: 1},
+  c373205: {name: "Un Faro de Luz", kind: "legend", species: "Cresselia", shrine: "Moonglade Shrine", color: "pink", amount: 2},
+  c373206: {name: "Un Gigante Despierta", kind: "legend", species: "Regigigas", shrine: "Colossus Shrine", color: "white", amount: 2},
+  c373207: {name: "Fractura Celestial", kind: "fracture"},
+  c382800: {name: "Experiencia Predestinada", kind: "fate"},
+  c382801: {name: "Tesoro Oculto · Bonguri", kind: "bonguri"},
+  c382802: {name: "Intercambio Equivalente", kind: "exchange"},
+  c382803: {name: "Sabiduría Antigua", kind: "wisdom"},
+  c382804: {name: "Banquete Espléndido", kind: "feast"},
+  c382805: {name: "Tesoro Oculto · Balls", kind: "ball"},
+  c382806: {name: "Momento Relajante", kind: "pv"}
+};
+const SIN_SHRINE_CARDS = SIN_CARDS.filter(c => c.tags?.includes("Shrine Card"));
+const SIN_LEGEND_CARDS = SIN_CARDS.filter(c => c.d?.encounter_tier === "Legendary");
+const SIN_LEGEND_LEVEL = 40;
+const SIN_LEGEND_LEVELS = {regigigas: 45, mesprit: 35, uxie: 35, azelf: 35, silvally: 45};
+const SIN_LEGEND_REQUIREMENTS = {
+  manaphy: {artifacts: ["Seafarer Egg"]}, heatran: {artifacts: ["Magma Stone"]},
+  spiritomb: {artifacts: ["Odd Keystone"]}, rotom: {artifacts: ["Secret Key"]}, shaymin: {artifacts: ["Gracidea Flower"]},
+  regirock: {artifacts: ["Rockice Core", "Steelrock Core"]}, regice: {artifacts: ["Rockice Core", "Icesteel Core"]},
+  registeel: {artifacts: ["Icesteel Core", "Steelrock Core"]},
+  mesprit: {fragment: "emotion"}, uxie: {fragment: "knowledge"}, azelf: {fragment: "willpower"}, silvally: {boss: true}
+};
+const sinBonguriGrade = color => color === "black" ? 3 : ["pink", "green", "white"].includes(color) ? 2 : ["red", "yellow", "blue"].includes(color) ? 1 : 0;
+const sinLegendCard = species => SIN_LEGEND_CARDS.find(c => toID(c.d.sp) === toID(species));
 const SIN_GINKGO = SIN.decks.find(d => d.cards.length === 9 && d.cards.every(c => !c.n && !c.tags?.length)).cards;
 const SIN_TRADES = [
   [[{yellow: 1, red: 1}, {pink: 1}], [{green: 1, white: 1}, {black: 1}]],
@@ -219,6 +250,14 @@ function sinMigrateTeam(run) {
     if (run[key] == null) { run[key] = false; changed = true; }
   }
   if (!run.stews) { run.stews = {}; changed = true; }
+  if (!run.feast) { run.feast = {remaining: 0, used: []}; changed = true; }
+  if (!run.discard) { run.discard = []; changed = true; }
+  if (!run.shrineLegends) { run.shrineLegends = {}; changed = true; }
+  if (!run.legendsDone) { run.legendsDone = {}; changed = true; }
+  if (!run.shrineDiscard) { run.shrineDiscard = []; changed = true; }
+  if (!run.shrineDeck) { run.shrineDeck = shuffle(SIN_SHRINE_CARDS.map((_, i) => i)); changed = true; }
+  if (run.offered == null) { run.offered = false; changed = true; }
+  if (run.fractures == null) { run.fractures = 0; changed = true; }
   if (!run.grunts) { run.grunts = []; changed = true; }
   if (!run.fragments) { run.fragments = []; changed = true; }
   for (const key of ["heart", "won"]) {
@@ -510,7 +549,8 @@ function sinReachable(pos, remaining, parents = null) {
   }
   dist.delete(start); return dist;
 }
-const sinMaxMoves = run => 3 + run.frag + (run.moveBonus || 0) + (run.stews?.tasty ? 3 : 0);
+const sinTasty = run => run.stews?.tasty || run.feast?.used.includes("tasty");
+const sinMaxMoves = run => 3 + run.frag + (run.moveBonus || 0) + (sinTasty(run) ? 3 : 0);
 function sinTeamHTML(run) {
   return run.team.map(s => {
     const healthy = s.hpNow == null, pct = healthy ? 100 : s.hpMax ? Math.max(0, Math.min(100, s.hpNow / s.hpMax * 100)) : 0;
@@ -536,6 +576,7 @@ function sinUpdateTurn() {
     ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}`;
   sinFillImages(); if (SIN_VIEW.panel === "ginkgo") sinShowGinkgo(); else if (SIN_VIEW.panel === "fly") sinShowFlight();
   else if (SIN_VIEW.panel === "campaign") sinShowCampaign();
+  else if (SIN_VIEW.panel === "shrine") sinShowShrine();
   else if (SIN_VIEW.box) sinShowBox(); else if (SIN_VIEW.bag) sinShowBag(); else if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
 }
 function sinCampaignHTML(run) {
@@ -579,30 +620,39 @@ function sinShowCampaign() {
 const sinCanPay = (run, recipe) => Object.entries(recipe).every(([k, n]) => run.bag[k] >= n);
 const sinPay = (run, recipe) => Object.entries(recipe).forEach(([k, n]) => { run.bag[k] -= n; });
 const sinRecipeText = recipe => Object.entries(recipe).map(([k, n]) => `${n} Bonguri ${SIN_BONGURI[k][0]}`).join(" + ");
-const sinMapAction = run => !!(VIEW === "sin" && SIN_VIEW && run && !run.battle && !run.progress && !run.revive && !(run.offer && !run.offer.closed));
+const sinMapAction = run => !!(VIEW === "sin" && SIN_VIEW && run && !run.battle && !run.progress && !run.shrineEvent && !run.revive && !(run.offer && !run.offer.closed));
 const sinRecipe = (key, kind) => (kind === "stew" ? SIN_STEWS : kind === "item" ? SIN_CRAFT_ITEMS : kind === "ball" ? SIN_BALLS : {})[key];
 const sinCanCraft = (run, key, kind = "ball") => {
   const recipe = sinRecipe(key, kind);
-  return !!recipe && sinCanPay(run, recipe.recipe) && (kind !== "stew" || (!run.stews[key] && (key !== "infused" || run.team.some(s => s.level < 100))));
+  const free = kind === "stew" && sinFreeStew(run, key);
+  return !!recipe && (free || sinCanPay(run, recipe.recipe)) && (kind !== "stew" || ((free || !run.stews[key]) && (key !== "infused" || run.team.some(s => s.level < 100))));
 };
+const sinFreeStew = (run, key) => run.feast.remaining > 0 && !run.feast.used.includes(key);
 function sinCraft(key, kind = "ball", member = null) {
   const run = ST.sin.run;
-  if (!sinMapAction(run) || !sinCanCraft(run, key, kind)) return;
+  const event = run?.shrineEvent;
+  const feast = event?.queue && event.started && SIN_SHRINE_EFFECTS[SIN_SHRINE_CARDS[event.queue[event.cursor]].img].kind === "feast";
+  if ((!sinMapAction(run) && !(VIEW === "sin" && feast && !run.progress && kind === "stew" && sinFreeStew(run, key))) || !sinCanCraft(run, key, kind)) return;
   if (kind === "stew" && key === "infused") {
-    if (member === null) { SIN_VIEW.bagStew = true; return sinShowBag(); }
+    if (member === null) {
+      if (feast) { event.infuse = true; save(); return sinShrineScreen(); }
+      SIN_VIEW.bagStew = true; return sinShowBag();
+    }
     if (!Number.isInteger(member) || !run.team[member] || run.team[member].level >= 100) return;
   }
-  sinPay(run, sinRecipe(key, kind).recipe);
+  const free = kind === "stew" && sinFreeStew(run, key);
+  if (free) { run.feast.remaining--; run.feast.used.push(key); }
+  else sinPay(run, sinRecipe(key, kind).recipe);
   if (kind === "ball") run.balls[key]++;
   else if (kind === "item") run.items.push(toID(key));
   else {
-    run.stews[key] = true;
+    if (!free) run.stews[key] = true;
     if (key === "restoring") run.team.forEach(s => { delete s.hpNow; delete s.status; });
     if (key === "captivating") run.captivating = true;
     if (key === "infused") { sinInfuse(run, member); save(); return renderSin(); }
   }
   run.notice = kind === "stew" ? `${SIN_STEWS[key].name}: ${SIN_STEWS[key].effect}` : `Fabricaste ${kind === "item" ? esItem(key) : SIN_BALLS[key].name}.`;
-  save(); sinUpdateTurn();
+  save(); if (feast) return sinShrineScreen(); sinUpdateTurn();
 }
 function sinInfuse(run, index) {
   const s = run.team[index], sp = Dex.species.get(s.species), oldMax = calcStat(sp, s, "hp"), before = s.exp;
@@ -625,8 +675,9 @@ function sinShowBag() {
       <small>${Object.entries(ball.recipe).map(([k, n]) => `${esc(n)} Bonguri ${esc(SIN_BONGURI[k][0])}`).join(" + ")}</small></span>
       <button class="btn" data-act="sincraft" data-ball="${key}" ${sinCanCraft(run, key) ? "" : "disabled"}>Fabricar</button></div>`).join("")}</div>
     <h2>Estofados</h2><p>Cada estofado se puede elaborar una vez por turno y se consume al instante.</p>
+    ${run.feast.remaining ? `<p>Banquete: hasta ${esc(run.feast.remaining)} estofados distintos gratis este turno, sin gastar su uso habitual.</p>` : ""}
     <div class="sin-recipes">${Object.entries(SIN_STEWS).map(([key, stew]) => `<div><div class="sin-recipe"><span><b>${esc(stew.name)}</b><small>${esc(sinRecipeText(stew.recipe))}</small><small>${esc(stew.effect)}</small></span>
-      <button class="btn" data-act="sinstew" data-stew="${key}" ${sinCanCraft(run, key, "stew") ? "" : "disabled"}>${run.stews[key] ? "Usado" : "Elaborar"}</button></div>
+      <button class="btn" data-act="sinstew" data-stew="${key}" ${sinCanCraft(run, key, "stew") ? "" : "disabled"}>${sinFreeStew(run, key) ? "Usar gratis" : run.stews[key] ? "Usado" : "Elaborar"}</button></div>
       ${key === "infused" && SIN_VIEW.bagStew && sinCanCraft(run, key, "stew") ? `<p>Elige el Pokémon que subirá de nivel:</p><div class="btns">${run.team.map((s, i) => `<button class="btn" data-act="sininfuse" data-member="${i}" ${s.level < 100 ? "" : "disabled"}>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>`).join("")}</div>` : ""}</div>`).join("")}</div>
     ${run.captivating ? "<p>Estofado Cautivador preparado para el primer intento de captura del próximo combate salvaje.</p>" : ""}
     <h2>Objetos de batalla</h2><div class="sin-recipes">${Object.entries(SIN_CRAFT_ITEMS).map(([key, item]) => `<div class="sin-recipe"><span><b>${esc(esItem(key))}</b><small>${esc(item.name)} · ${esc(sinRecipeText(item.recipe))}</small>${key === "luckyegg" ? "<small>Su portador recibe ×1,5 de EXP.</small>" : ""}</span>
@@ -636,6 +687,7 @@ function sinShowBag() {
       ${SIN_VIEW.bagItem === i ? `<p>Equipar a…</p><div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sinequip" data-item="${i}" data-member="${j}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.item ? " · Devolver " + esc(sinItemName(s.item)) : ""}</button>`).join("")}</div>` : ""}</li>`).join("")}</ul>` : "<p>No tienes objetos en el inventario.</p>"}
     <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li>${esc(esSp(s.species))}: <b>${esc(sinItemName(s.item))}</b>
       <button class="btn" data-act="sinunequip" data-member="${i}">Quitar</button></li>` : "").join("")}</ul>
+    ${sinLegendsHTML(run)}
     <h2>Destino (${esc(run.fate.length)}/5) · Estrellas: ${esc(run.stars)}</h2>
     <p>Por cada 4 estrellas robas una carta al terminar cada turno. Los efectos de las cartas estarán disponibles próximamente.</p>
     <div class="sin-fate">${run.fate.map((key, i) => sinCardImage(key, "Carta de Destino " + (i + 1))).join("") || "<p>No tienes cartas de Destino.</p>"}</div>`;
@@ -725,7 +777,7 @@ function sinOnFaint(me) {
   const run = ST.sin.run;
   if (!me.sin || me.over || me.dead || me.sinFled || !run?.battle || run.battle.trainer) return;
   const tier = run.battle.tier || sinEncounterToken(run)?.tier;
-  if (run.battle.wild.alpha || !(tier in SIN_FLEE_BONGURI)) return;
+  if (run.battle.legend || run.battle.wild.alpha || !(tier in SIN_FLEE_BONGURI)) return;
   const alive = run.battle.indices.some(i => {
     const m = me.mons["p1:Sinnoh" + (i + 1)];
     return m && m.side === "p1" ? m.hp > 0 : sinAlive(run.team[i]);
@@ -800,7 +852,7 @@ function sinRevealHidden(run, key, messages) {
     run.stars++; hidden.present = false;
     messages.push(`¡Encontraste una estrella caída! Estrellas: ${run.stars}. ${sinDrawFate(run, 2)}`);
   } else if (t.n === "Alpha Pokémon") {
-    if (run.stews.tasty) {
+    if (sinTasty(run)) {
       messages.push("¡Revelaste un Pokémon Alfa! El Estofado Sabroso te permite seguir; puedes buscarlo aquí después."); return false;
     }
     sinAlphaOffer(run, hidden, key);
@@ -845,6 +897,7 @@ function sinOfferScreen() {
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Pokémon salvajes</h1>
     <p>${esc(offer.place)} · ${esc(offer.meta)}</p>
     ${offer.alpha ? "<p>¡Alfa! Combate obligatorio: nivel Fuerte +5, IVs perfectos, ratio de captura a la mitad y recompensa de 4 PV (+2 al debilitar). No huye al debilitar a uno de los tuyos.</p>" : ""}
+    ${offer.legend ? "<p>Legendario: no huye al debilitar a uno de los tuyos. Capturarlo da 4 PV; derrotarlo da 6 PV y permite aprender su movimiento característico. No da Bonguri. Su ficha permanece si pierdes.</p>" : ""}
     ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
       ${sinCardImage(s.img, "Carta de " + esSp(s.species))}<b>${esc(esSp(s.species))}</b><span>Nv. ${esc(s.level)}</span>
       <div><button class="btn primary" data-act="sinfight" data-offer="${i}">Combatir</button></div></div>`).join("")}</div>` :
@@ -906,6 +959,164 @@ function sinOfferHeart(color) {
   run.notice = "¡Restauraste el Corazón de Sinnoh! Está en la Bolsa: equipado potencia un 20 % los movimientos del mismo tipo que su portador. Desafía a Helio en el Templo de Sinnoh.";
   save(); SIN_VIEW.panel = null; SIN_VIEW.selected = SIN_BY_CELL.get(run.pos.join(",")); sinUpdateTurn();
 }
+const sinShrineName = name => "Santuario " + name.replace(/ Shrine$/, "");
+const sinShrineOccupied = (run, name) => run.shrineLegends[name] || (name === "Origin Shrine" && run.originGod);
+const sinHereShrine = run => SIN.tokens.find(t => / Shrine$/.test(t.n) && t.cell?.join(",") === run.pos.join(","));
+function sinDrawShrine(run, count) {
+  const cards = [];
+  for (let i = 0; i < count; i++) {
+    if (!run.shrineDeck.length) run.shrineDeck = shuffle(run.shrineDiscard.splice(0));
+    if (!run.shrineDeck.length) break;
+    cards.push(run.shrineDeck.pop());
+  }
+  return cards;
+}
+function sinShowShrine() {
+  const run = ST.sin.run, shrine = run && sinHereShrine(run);
+  if (!sinMapAction(run) || !shrine || run.offered || sinShrineOccupied(run, shrine.n)) return;
+  SIN_VIEW.panel = "shrine"; SIN_VIEW.selected = null; SIN_VIEW.bag = false; SIN_VIEW.box = false;
+  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Ofrenda de santuario</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
+    <p>Una vez por turno. Elige 1 Bonguri: su grado determina la fuerza del evento.</p>
+    ${Object.entries(SIN_BONGURI).map(([color, names]) => `<div class="sin-recipe"><span>Bonguri ${esc(names[0])} ×${esc(run.bag[color])} · Grado ${sinBonguriGrade(color)}</span>
+      <div class="btns"><button class="btn" data-act="sinshrinedraw" data-color="${color}" ${run.bag[color] ? "" : "disabled"}>Ofrecer</button>
+      ${run.pv >= 7 ? `<button class="btn" data-act="sinshrinedraw" data-color="${color}" data-major="1" ${run.bag[color] ? "" : "disabled"}>Ofrenda mayor (7 PV): robar 3 y elegir 2</button>` : ""}</div></div>`).join("")}`;
+  $("sin-card").hidden = false;
+}
+function sinOfferShrine(color, major = false) {
+  const run = ST.sin.run, shrine = run && sinHereShrine(run), grade = sinBonguriGrade(color);
+  if (!sinMapAction(run) || !shrine || run.offered || sinShrineOccupied(run, shrine.n) || !grade || !(run.bag[color] > 0) || (major && run.pv < 7)) return;
+  const drawn = sinDrawShrine(run, major ? 3 : 1);
+  if (drawn.length !== (major ? 3 : 1)) return;
+  run.bag[color]--; if (major) run.pv -= 7;
+  run.offered = true;
+  run.shrineEvent = {drawn, grade, selected: [], queue: major ? null : drawn.slice(), cursor: 0};
+  save(); renderSin();
+}
+function sinChooseShrine(index) {
+  const run = ST.sin.run, e = run?.shrineEvent;
+  if (!e || e.queue || !e.drawn.includes(index) || e.selected.includes(index)) return;
+  e.selected.push(index);
+  if (e.selected.length === 2) {
+    e.queue = e.selected.slice(); run.shrineDiscard.push(...e.drawn.filter(i => !e.selected.includes(i)));
+  }
+  save(); sinShrineScreen();
+}
+function sinApplyShrine(run) {
+  const e = run.shrineEvent;
+  if (!e?.queue || e.started) return;
+  const effect = SIN_SHRINE_EFFECTS[SIN_SHRINE_CARDS[e.queue[e.cursor]].img];
+  e.started = true; e.done = true; e.message = "";
+  if (effect.kind === "legend") {
+    run.bag[effect.color] += effect.amount; run.shrineLegends[effect.shrine] = effect.species;
+    e.message = `Recibiste ${effect.amount} Bonguri ${SIN_BONGURI[effect.color][1]}. ${esSp(effect.species)} apareció en el ${sinShrineName(effect.shrine)}.`;
+  } else if (effect.kind === "fracture" || effect.kind === "fate") {
+    if (effect.kind === "fracture") run.fractures++;
+    e.message = (effect.kind === "fracture" ? "Los Dioses de Sinnoh se agitan… " : "") + sinDrawFate(run, effect.kind === "fracture" ? 1 : e.grade);
+  } else if (effect.kind === "pv") {
+    run.pv += 2 * e.grade; e.message = `Ganaste ${2 * e.grade} PV.`;
+  } else if (effect.kind === "ball") {
+    const ball = ["great", "ultra", "spirit"][e.grade - 1]; run.balls[ball]++; e.message = `Recibiste una ${SIN_BALLS[ball].name}.`;
+  } else if (effect.kind === "feast") {
+    run.feast.remaining = Math.min(4 - run.feast.used.length, run.feast.remaining + e.grade);
+    e.message = `Puedes elegir hasta ${e.grade} estofados distintos gratis en la Bolsa durante este turno. No gastan Bonguri ni su uso habitual.`;
+  } else { e.done = false; e.remaining = e.grade; }
+  save();
+}
+function sinShrineDiscards(run, kind, grade) {
+  const tiers = kind === "exchange" ? [["W"], ["M"], ["S"]][grade - 1] : [["W", "M"], ["W", "M", "S"], ["W", "M", "S", "L"]][grade - 1];
+  return run.discard.map((s, i) => ({...s, index: i})).filter(s => tiers.includes(s.tier) &&
+    (kind === "exchange" ? run.team.some(p => p.tier === s.tier) : s.signature && Dex.moves.get(s.signature).exists));
+}
+function sinExchangeSpecies(run, member, discarded) {
+  const s = run.team[member], d = run.discard[discarded];
+  if (!s || !d || !s.tier || s.tier !== d.tier) return false;
+  const sp = Dex.species.get(d.species); if (!sp.exists) return false;
+  const max = calcStat(Dex.species.get(s.species), s, "hp"), ratio = s.hpNow == null ? 1 : s.hpNow / max;
+  s.species = sp.name; s.ability = sp.abilities["0"]; s.hpMax = calcStat(sp, s, "hp");
+  if (s.hpNow != null) s.hpNow = ratio > 0 ? Math.max(1, Math.min(s.hpMax, Math.ceil(ratio * s.hpMax))) : 0;
+  run.discard.splice(discarded, 1); return true;
+}
+function sinShrineChoice(action, value) {
+  const run = ST.sin.run, e = run?.shrineEvent;
+  if (!e?.queue || e.done || run.progress) return;
+  const effect = SIN_SHRINE_EFFECTS[SIN_SHRINE_CARDS[e.queue[e.cursor]].img];
+  if (action === "color" && effect.kind === "bonguri" && SIN_BONGURI[value] && e.remaining > 0) {
+    run.bag[value]++; e.remaining--; e.message = (e.message || "") + ` Recibiste 1 Bonguri ${SIN_BONGURI[value][0]}.`;
+    e.done = e.remaining === 0;
+  } else if (action === "discard" && ["exchange", "wisdom"].includes(effect.kind) && sinShrineDiscards(run, effect.kind, e.grade).some(s => s.index === +value)) {
+    e.discarded = +value;
+  } else if (action === "member" && Number.isInteger(+value) && run.team[+value]) {
+    const d = run.discard[e.discarded];
+    if (!d || !sinShrineDiscards(run, effect.kind, e.grade).some(s => s.index === e.discarded)) return;
+    if (effect.kind === "exchange") {
+      if (!sinExchangeSpecies(run, +value, e.discarded)) return;
+      e.done = true; e.message = `El Pokémon elegido ahora es ${esSp(d.species)}. Conservó su progreso, ataques, objeto, estado y proporción de PS.`;
+    } else if (effect.kind === "wisdom" && !run.team[+value].moves.includes(d.signature)) {
+      run.progress = {kind: "shrine", won: null, rewards: run.team.map((_, index) => ({index, exp: 0, levels: [], events: []})),
+        pending: [{index: +value, move: d.signature, kind: "signature"}]};
+      sinAdvanceMoves(run); e.message = `Sabiduría Antigua: ${esMove(d.signature)}.`;
+    }
+  } else return;
+  save(); sinShrineScreen();
+}
+function sinNextShrine() {
+  const run = ST.sin.run, e = run?.shrineEvent;
+  if (!e?.queue || !e.done || run.progress) return;
+  run.shrineDiscard.push(e.queue[e.cursor]); e.cursor++;
+  if (e.cursor === e.queue.length) { run.notice = e.message || "Ofrenda de santuario resuelta."; delete run.shrineEvent; }
+  else { delete e.started; delete e.done; delete e.discarded; delete e.infuse; }
+  save(); renderSin();
+}
+function sinShrineScreen() {
+  const run = ST.sin.run, e = run.shrineEvent;
+  sinApplyShrine(run);
+  const index = e.queue?.[e.cursor], card = SIN_SHRINE_CARDS[index], effect = card && SIN_SHRINE_EFFECTS[card.img];
+  const choices = effect && ["exchange", "wisdom"].includes(effect.kind) ? sinShrineDiscards(run, effect.kind, e.grade) : [];
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Ofrenda de santuario · Grado ${esc(e.grade)}</h1>
+    ${!e.queue ? `<p>Elige 2 cartas. Sus efectos se resolverán en el orden elegido; la restante se descarta.</p><div class="sin-choices sin-offer">${e.drawn.map(i => {
+      const c = SIN_SHRINE_CARDS[i], fx = SIN_SHRINE_EFFECTS[c.img];
+      return `<div class="sin-choice">${sinCardImage(c.img, fx.name)}<b>${esc(fx.name)}</b><button class="btn" data-act="sinshrinechoose" data-card="${i}" ${e.selected.includes(i) ? "disabled" : ""}>${e.selected.includes(i) ? "Elegida" : "Elegir"}</button></div>`;
+    }).join("")}</div>` : `${sinCardImage(card.img, effect.name, "sin-prologue")}<h2>${esc(effect.name)}</h2><p role="status">${esc(e.message)}</p>
+      ${effect.kind === "feast" && !run.progress ? `<p>Estofados gratis pendientes: ${esc(run.feast.remaining)}. También puedes elegirlos luego en la Bolsa, antes de terminar el turno.</p><div class="btns">${Object.entries(SIN_STEWS).map(([key, stew]) => `<button class="btn" data-act="sinstew" data-stew="${key}" ${sinFreeStew(run, key) && sinCanCraft(run, key, "stew") ? "" : "disabled"}>${esc(stew.name)}</button>`).join("")}</div>
+        ${e.infuse && sinFreeStew(run, "infused") ? `<p>Elige quién subirá un nivel:</p><div class="btns">${run.team.map((s, i) => `<button class="btn" data-act="sininfuse" data-member="${i}" ${s.level < 100 ? "" : "disabled"}>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>`).join("")}</div>` : ""}` : ""}
+      ${run.progress ? sinProgressHTML() : e.done ? `<button class="btn primary" data-act="sinshrinenext">${e.cursor + 1 < e.queue.length ? "Siguiente carta" : "Volver al mapa"}</button>` :
+      effect.kind === "bonguri" ? `<p>Elige ${esc(e.remaining)} Bonguri, uno por uno:</p><div class="btns">${Object.entries(SIN_BONGURI).map(([color, names]) => `<button class="btn" data-act="sinshrinecolor" data-color="${color}">${esc(names[0])}</button>`).join("")}</div>` :
+      `<p>${effect.kind === "exchange" ? "Sustituye un Pokémon del equipo por un descartado del mismo nivel de encuentro." : "Elige el movimiento característico de un Pokémon descartado y a quién enseñarlo."}</p>
+       ${choices.length ? `<div class="btns">${choices.map(s => `<button class="btn" data-act="sinshrinediscard" data-discard="${s.index}">${esc(esSp(s.species))} · ${esc(SIN_ES[s.tier] || s.tier)}${effect.kind === "wisdom" ? " · " + esc(esMove(s.signature)) : ""}${e.discarded === s.index ? " ✓" : ""}</button>`).join("")}</div>` : "<p>No hay Pokémon descartados compatibles con este efecto.</p>"}
+       ${run.discard[e.discarded] ? `<p>Elige un Pokémon del equipo:</p><div class="btns">${run.team.map((s, i) => `<button class="btn" data-act="sinshrinemember" data-member="${i}" ${(effect.kind === "exchange" ? s.tier === run.discard[e.discarded].tier : !s.moves.includes(run.discard[e.discarded].signature)) ? "" : "disabled"}>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>`).join("")}</div>` : ""}
+       <button class="btn" data-act="sinshrineskip">No usar este efecto</button>`}`}
+    </div></div>`;
+  sinFillImages();
+}
+function sinLegendAvailable(run, species) {
+  const id = toID(species), req = SIN_LEGEND_REQUIREMENTS[id];
+  if (!req || run.legendsDone[id]) return false;
+  if (req.fragment) return run.fragments.includes(req.fragment);
+  if (req.boss) return run.act >= 4;
+  const items = [...run.items, ...run.team.map(s => s.item), ...run.box.map(s => s.item)].map(toID);
+  return req.artifacts.some(name => items.includes(SIN_ARTIFACTS[name].id));
+}
+function sinLegendRequirement(species) {
+  const req = SIN_LEGEND_REQUIREMENTS[toID(species)];
+  if (req?.fragment) return "Requiere el " + SIN_COMMANDERS.find(c => c.id === req.fragment).fragment + ".";
+  if (req?.boss) return "Requiere derrotar a Helio.";
+  return req ? "Requiere " + req.artifacts.map(name => SIN_ARTIFACTS[name].name).join(" o ") + " en la Bolsa o equipado. El artefacto se conserva." : "";
+}
+function sinSeekLegend(index) {
+  const run = ST.sin.run, token = SIN.tokens[index];
+  if (!sinMapAction(run) || run.searched || run.fought || !run.team.some(sinAlive) || !token || !sinAtToken(run, token.n)) return;
+  const shrine = / Shrine$/.test(token.n), species = shrine ? run.shrineLegends[token.n] : token.gm;
+  if (!species || (!shrine && (!token.tags?.includes("Legendary Encounter Card") || !sinLegendAvailable(run, species)))) return;
+  const card = sinLegendCard(species); if (!card) return;
+  run.searched = true;
+  run.offer = {cards: [{species, img: card.img, level: SIN_LEGEND_LEVELS[toID(species)] || SIN_LEGEND_LEVEL}],
+    token: index, legend: {species, ...(shrine ? {shrine: token.n} : {place: token.n})}, place: sinName(token), meta: "Encuentro legendario", closed: false};
+  save(); renderSin();
+}
+function sinLegendsHTML(run) {
+  return `<h2>Legendarios</h2><p>Activos en santuarios:</p>${Object.keys(run.shrineLegends).length ? `<ul>${Object.entries(run.shrineLegends).map(([shrine, species]) => `<li>${esc(esSp(species))} · ${esc(sinShrineName(shrine))}</li>`).join("")}</ul>` : "<p>Ninguno.</p>"}
+    <p>Ya derrotados o capturados:</p>${Object.keys(run.legendsDone).length ? `<ul>${Object.entries(run.legendsDone).map(([species, result]) => `<li>${esc(esSp(species))} · ${result === "caught" ? "Capturado" : "Derrotado"}</li>`).join("")}</ul>` : "<p>Ninguno.</p>"}`;
+}
 async function sinFight(index, trainerKey = false) {
   const run = ST.sin.run;
   if (!run || SIN_BUSY || run.fought || run.revive || !run.team.some(sinAlive)) return;
@@ -923,8 +1134,10 @@ async function sinFight(index, trainerKey = false) {
         run.battle = {trainer: {kind, id, name, intro, bgm, aiDiff}, foes, cards: cards.map(c => c.img), indices};
       } else {
         const s = run.offer.cards[index], wild = await sinInitialSet(s.species, s.level, !!s.alpha);
+        if (run.offer.legend) shuffle(Object.keys(wild.ivs)).slice(0, 3).forEach(k => { wild.ivs[k] = 31; });
         const token = SIN.tokens.indexOf(sinEncounterToken(run));
-        run.battle = {wild, indices, token, tier: wild.alpha ? "L" : SIN.tokens[token]?.tier, card: s.img, hidden: run.offer.hidden, captivating: !!run.captivating};
+        run.battle = {wild, indices, token, tier: wild.alpha || run.offer.legend ? "L" : SIN.tokens[token]?.tier, card: s.img, hidden: run.offer.hidden,
+          legend: run.offer.legend, captivating: !!run.captivating};
         run.captivating = false; run.offer.closed = true;
       }
       save();
@@ -935,6 +1148,7 @@ async function sinFight(index, trainerKey = false) {
     const foes = (trainer ? run.battle.foes : [run.battle.wild]).map(s => ({...s}));
     const spec = trainer && (trainer.name ? trainer : sinTrainerSpec(run, "grunt"));
     sinLeave(); newBattle(mine, foes, {sin: true, aiDiff: spec ? spec.aiDiff : "easy", pre: sinPre(mine),
+      ...(run.battle.legend ? {bgm: "bgm_boss"} : {}),
       ...(spec ? {foeName: spec.name, intro: spec.intro, bgm: spec.bgm} : {})});
   } catch (err) {
     const message = "No se pudo preparar el combate. Intenta nuevamente.";
@@ -982,11 +1196,18 @@ function sinResult(won, me) {
         run.act = 4; run.progress.act = 4;
       }
     } else {
-      run.progress.bonguri = sinBonguriReward(run, token);
+      run.progress.bonguri = run.battle.legend ? {} : sinBonguriReward(run, token);
       run.progress.pv = (wild.alpha ? 4 : SIN_PV[tier] || 0) + (me.sinCaught ? 0 : 2);
       run.pv += run.progress.pv;
       if (!me.sinCaught && move) run.progress.signature = {move};
+      if (!me.sinCaught) run.discard.push({species: wild.species, tier, signature: move});
+      if (run.battle.legend) {
+        run.legendsDone[toID(wild.species)] = me.sinCaught ? "caught" : "defeated";
+        const shrine = run.battle.legend.shrine;
+        if (shrine && toID(run.shrineLegends[shrine]) === toID(wild.species)) delete run.shrineLegends[shrine];
+      }
       if (me.sinCaught) {
+        wild.tier = tier;
         const m = me.mons[me.act.p2];
         wild.hpMax = calcStat(Dex.species.get(wild.species), wild, "hp");
         wild.hpNow = Math.max(1, Math.min(wild.hpMax, Math.ceil(m.hp / m.max * wild.hpMax)));
@@ -1045,6 +1266,7 @@ function sinProgressHTML(won) {
     p?.signature && !p.signature.done ? `<div class="sin-learn"><p>Enseñar <b>${esc(esMove(p.signature.move))}</b> a…</p><div class="btns">
       ${run.team.map((s, i) => sinAlive(s) && !s.moves.some(m => toID(m) === p.signature.move) ? `<button class="btn" data-act="sinsignature" data-member="${i}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>` : "").join("")}
       <button class="btn" data-act="sinsignature" data-member="-1">No enseñar</button></div></div>` :
+      run.shrineEvent ? '<div class="btns"><button class="btn primary" data-act="sinshrineprogress">Continuar evento</button></div>' :
       run.act === 4 && !run.won ? sinFinalChoicesHTML() : '<div class="btns"><button class="btn primary" data-act="sinmap">Volver al mapa</button></div>'}</div>`;
 }
 function sinTeachSignature(index) {
@@ -1088,6 +1310,7 @@ function sinEvolve(accept) {
   sinAdvanceMoves(run); save(); sinRefreshProgress();
 }
 function sinRefreshProgress() {
+  if (ST.sin.run?.shrineEvent) return sinShrineScreen();
   if (VIEW === "battle" && $("ctl")) $("ctl").innerHTML = sinProgressHTML();
   else sinProgressScreen();
 }
@@ -1140,10 +1363,11 @@ function sinHeal() {
   run.healed = true; run.notice = "Tu equipo está completamente recuperado."; save(); sinUpdateTurn();
 }
 function sinEndTurn() {
-  const run = ST.sin.run; if (!run || run.battle || run.progress || (run.offer && !run.offer.closed)) return;
+  const run = ST.sin.run; if (!run || run.battle || run.progress || run.shrineEvent || (run.offer && !run.offer.closed)) return;
   if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
   run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
   run.traded = false; run.flown = false; run.stews = {};
+  run.offered = false; run.feast = {remaining: 0, used: []};
   if (SIN_VIEW) SIN_VIEW.bagStew = false;
   run.offer = null; run.revive = false;
   run.notice = run.stars >= 4 ? sinDrawFate(run, Math.floor(run.stars / 4)) : ""; save(); sinUpdateTurn();
@@ -1259,6 +1483,14 @@ function sinDraw() {
         ctx.drawImage(im, tx - w / 2, ty - ht / 2, w, ht);
       } else { ctx.beginPath(); ctx.arc(tx, ty, size / 3, 0, Math.PI * 2); ctx.fillStyle = "#eaf4e229"; ctx.fill(); }
     });
+    const shrine = tokens.find(t => run?.shrineLegends[t.n]);
+    if (shrine) {
+      const species = run.shrineLegends[shrine.n], im = sinImage(sinLegendCard(species)?.img);
+      ctx.save(); ctx.fillStyle = "#ffe35d"; ctx.fillRect(h.x + 12, h.y - 44, 30, 51);
+      if (im) ctx.drawImage(im, h.x + 14, h.y - 42, 26, 47);
+      else { ctx.fillStyle = "#18232b"; ctx.font = "bold 13px sans-serif"; ctx.fillText(esSp(species)[0], h.x + 20, h.y - 15); }
+      ctx.restore();
+    }
     if (h.tokens.some(t => run?.grunts.includes(t.n))) {
       const im = sinImage(SIN_GRUNT_IMAGE), tx = h.x + 34, ty = h.y - 30;
       if (im) ctx.drawImage(im, tx - 18, ty - 18, 36, 36);
@@ -1350,6 +1582,9 @@ function sinShowCell(h) {
       const meta = sinMeta(t);
       const commander = SIN_COMMANDERS.find(c => c.token === t.n);
       return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.hidden ? "<small>Escondite revelado</small>" : ""}
+        ${/ Shrine$/.test(t.n) ? run.shrineLegends[t.n] ? `<small>${esc(esSp(run.shrineLegends[t.n]))} está en el santuario. No permite ofrendas.</small>${here ? `<button class="btn primary sin-move" data-act="sinlegend" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Combatir contra ${esc(esSp(run.shrineLegends[t.n]))}</button>` : ""}` :
+          `${here ? `<button class="btn sin-move" data-act="sinshrine" ${run.offered || run.revive || sinShrineOccupied(run, t.n) || !Object.values(run.bag).some(n => n > 0) ? "disabled" : ""}>Ofrenda de santuario${run.offered ? " (usada este turno)" : ""}</button>` : ""}` : ""}
+        ${t.tags?.includes("Legendary Encounter Card") && !run.legendsDone[toID(t.gm)] ? `<small>${esc(sinLegendRequirement(t.gm))}</small>${here ? `<button class="btn primary sin-move" data-act="sinlegend" data-token="${SIN.tokens.indexOf(t)}" ${canSearch && sinLegendAvailable(run, t.gm) ? "" : "disabled"}>Buscar a ${esc(esSp(t.gm))}</button>` : ""}` : ""}
         ${run.grunts.includes(t.n) ? "<small>Ocupado por Reclutas del Equipo Galaxia</small>" : ""}
         ${here && t.n === run.village && run.act === 1 && run.grunts.includes(t.n) ? `<button class="btn primary sin-move" data-act="singrunts" ${sinCanChallengeGrunts(run) ? "" : "disabled"}>Desafiar a los Reclutas</button>` : ""}
         ${commander && run.act === 2 && !run.fragments.includes(commander.id) ? `<small>${esc(commander.fragment)} · ${esc(commander.lake)}</small>${here ? `<button class="btn primary sin-move" data-act="sincommander" data-commander="${esc(commander.id)}" ${sinCanChallengeTrainer(run, commander.id) ? "" : "disabled"}>Desafiar ${commander.article === "la" ? "a la" : "al"} ${esc(commander.name)}</button>` : ""}` : ""}
@@ -1409,6 +1644,7 @@ function renderSin() {
   sinLeave();
   if (!ST.sin.run) return sinNewScreen();
   sinMigrateTeam(ST.sin.run);
+  if (ST.sin.run.shrineEvent) return sinShrineScreen();
   if (ST.sin.run.progress) return sinProgressScreen();
   if (ST.sin.run.battle) return sinPendingScreen();
   if (ST.sin.run.offer && !ST.sin.run.offer.closed) return sinOfferScreen();
@@ -1478,11 +1714,31 @@ document.addEventListener("click", e => {
   if (act === "sincommander") return sinFight(null, b.dataset.commander);
   if (act === "sinhelio") return sinFight(null, "boss");
   if (act === "sinresume") return sinFight();
+  if (act === "sinshrinechoose") return sinChooseShrine(+b.dataset.card);
+  if (act === "sinshrinenext") return sinNextShrine();
+  if (act === "sinshrinecolor") return sinShrineChoice("color", b.dataset.color);
+  if (act === "sinshrinediscard") return sinShrineChoice("discard", +b.dataset.discard);
+  if (act === "sinshrinemember") return sinShrineChoice("member", +b.dataset.member);
+  if (act === "sinshrineskip") {
+    const run = ST.sin.run, e = run?.shrineEvent;
+    if (!e?.queue || e.done || run.progress || !["exchange", "wisdom"].includes(SIN_SHRINE_EFFECTS[SIN_SHRINE_CARDS[e.queue[e.cursor]].img].kind)) return;
+    e.done = true; e.message = "Decidiste no usar este efecto."; save(); return sinShrineScreen();
+  }
+  if (act === "sinshrineprogress") {
+    const run = ST.sin.run;
+    if (!run?.shrineEvent || !run.progress || run.progress.pending.length) return;
+    delete run.progress; run.shrineEvent.done = true; save(); return sinShrineScreen();
+  }
+  if (act === "sinstew" && ST.sin.run?.shrineEvent) return sinCraft(b.dataset.stew, "stew");
+  if (act === "sininfuse" && ST.sin.run?.shrineEvent) return sinCraft("infused", "stew", +b.dataset.member);
   if (act === "sinskip" && ST.sin.run && ST.sin.run.offer && !ST.sin.run.offer.alpha && !ST.sin.run.battle) {
     ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; save(); return renderSin();
   }
   if (!SIN_VIEW || !ST.sin.run) return;
   if (act === "sinbag") return sinShowBag();
+  if (act === "sinshrine") return sinShowShrine();
+  if (act === "sinshrinedraw") return sinOfferShrine(b.dataset.color, b.dataset.major === "1");
+  if (act === "sinlegend") return sinSeekLegend(+b.dataset.token);
   if (act === "sincampaign") return sinShowCampaign();
   if (act === "sinheart") return sinShowOffering();
   if (act === "sinofferheart") return sinOfferHeart(b.dataset.color);
