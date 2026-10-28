@@ -33,6 +33,13 @@ const SIN_ACTS = [
 ];
 const SIN_GRUNT_IMAGE = SIN.tokens.find(t => /galact|galaxi|grunt/i.test(t.n) && SIN.img[t.img])?.img;
 const SIN_FATE = SIN_CARDS.filter(c => (c.tags || []).includes("Change of Fate Card"));
+const SIN_FATE_GODS = {dialga: "c373300", palkia: "c373301", giratina: "c373302", arceus: "c373303"};
+const SIN_GODS = {
+  dialga: {species: "Dialga", artifact: "adamantorb"},
+  palkia: {species: "Palkia", artifact: "lustrousorb"},
+  giratina: {species: "Giratina", artifact: "griseousorb"}
+};
+const SIN_GOD_LEVEL = 50;
 // Tabla contrastada con los 15 frentes: las copias conservan su índice físico (35 cartas).
 const SIN_SHRINE_EFFECTS = {
   c373200: {name: "Una Canción de Hielo", kind: "legend", species: "Articuno", shrine: "Frostsong Shrine", color: "blue", amount: 3},
@@ -129,14 +136,87 @@ function sinShuffleHidden() {
 function sinDrawFate(run, count) {
   let drawn = 0, lost = 0, empty = 0;
   for (let i = 0; i < count; i++) {
+    if (!run.fateDeck.length && run.fateDiscard.length) run.fateDeck = shuffle(run.fateDiscard.splice(0));
     const key = run.fateDeck.pop();
     if (!key) { empty++; continue; }
     if (run.fate.length < 5) { run.fate.push(key); drawn++; }
-    else lost++;
+    else { run.fateDiscard.push(key); lost++; }
   }
   return [drawn ? `Robaste ${drawn} ${drawn === 1 ? "carta" : "cartas"} de Destino.` : "",
-    lost ? `La mano está llena (5 cartas): se ${lost === 1 ? "perdió 1 carta sobrante" : `perdieron ${lost} cartas sobrantes`}.` : "",
+    lost ? `La mano está llena (5 cartas): se ${lost === 1 ? "descartó 1 carta sobrante" : `descartaron ${lost} cartas sobrantes`}.` : "",
     empty ? "El mazo de Destino está agotado." : ""].filter(Boolean).join(" ");
+}
+// La ficha no se descarta; para Juega 3 sustituye una sola carta de su Dios.
+function sinFatePayment(run, god, count) {
+  if (!run || run.fatePlayed || !SIN_FATE_GODS[god] || ![1, 3].includes(count) || (god === "arceus" && count === 1)) return null;
+  const needed = count === 3 && run.follower === god ? 2 : count;
+  const native = run.fate.map((key, i) => key === SIN_FATE_GODS[god] ? i : -1).filter(i => i >= 0);
+  const wild = count === 3 && god !== "arceus" ? run.fate.map((key, i) => key === SIN_FATE_GODS.arceus ? i : -1).filter(i => i >= 0) : [];
+  const indices = [...native, ...wild].slice(0, needed);
+  return indices.length === needed ? indices : null;
+}
+function sinSpendFate(run, god, count) {
+  const payment = sinFatePayment(run, god, count); if (!payment) return false;
+  payment.sort((a, b) => b - a).forEach(i => run.fateDiscard.push(...run.fate.splice(i, 1)));
+  run.fatePlayed = true; return true;
+}
+function sinChooseFollower(god) {
+  const run = ST.sin.run, e = run?.shrineEvent;
+  if (!SIN_GODS[god] || !e?.followerPending || e.done) return;
+  run.follower = god; run.originGod = god; e.followerPending = false; e.done = true;
+  e.message += ` Sigues a ${SIN_GODS[god].species}, que ocupa el Santuario Origin. Ganas +1 movimiento por turno mientras esté allí.`;
+  save(); sinShrineScreen();
+}
+const sinGodAura = (run, god) => !!SIN_GODS[god] &&
+  ![...run.items, ...run.team.map(s => s.item), ...run.box.map(s => s.item)].some(id => toID(id) === SIN_GODS[god].artifact);
+function sinSeekGod() {
+  const run = ST.sin.run, god = run?.originGod;
+  if (!sinMapAction(run) || !SIN_GODS[god] || !sinAtToken(run, "Origin Shrine") || run.fought || run.searched || !run.team.some(sinAlive)) return;
+  const species = SIN_GODS[god].species, card = sinLegendCard(species);
+  run.searched = true;
+  run.offer = {cards: [{species, img: card?.img || SIN_FATE_GODS[god], level: SIN_GOD_LEVEL}],
+    legend: {species, god, phase: 1, aura: sinGodAura(run, god)}, place: "Santuario Origin", meta: "Dios de Sinnoh", closed: false};
+  save(); renderSin();
+}
+function sinFateHTML(run) {
+  return `<h2>Seguidor</h2><p>${run.follower ? `Sigues a ${esc(SIN_GODS[run.follower].species)}. Tu ficha cuenta como una carta de ese Dios para Juega 3 y se conserva.` : "Ficha boca abajo. Elegirás tu Dios en la primera Fractura Celestial."}</p>
+    ${run.follower ? `<div class="sin-fate">${sinCardImage(SIN_FATE_GODS[run.follower], "Seguidor de " + SIN_GODS[run.follower].species)}</div>` : ""}
+    ${run.originGod ? `<p>${esc(SIN_GODS[run.originGod].species)} ocupa el Santuario Origin${run.follower === run.originGod ? ": +1 movimiento por turno" : ""}.</p>` : ""}
+    <h2>Destino (${esc(run.fate.length)}/5) · Estrellas: ${esc(run.stars)}</h2>
+    <p>Un efecto por turno${run.fatePlayed ? " (ya usado)" : ""}. Arceus es comodín para Juega 3. Por cada 4 estrellas robas una carta al terminar el turno.</p>
+    <div class="sin-fate">${run.fate.map(key => sinCardImage(key, Object.keys(SIN_FATE_GODS).find(g => SIN_FATE_GODS[g] === key))).join("") || "<p>No tienes cartas de Destino.</p>"}</div>
+    <p>Dialga ×1: repite una captura fallida. Dialga Juega 3: repite una derrota. Giratina ×1/Juega 3: sacrifica PS por aumentos de estadísticas en combate.</p>
+    <div class="btns">${[1, 3].map(count => `<button class="btn" data-act="sinfate" data-god="palkia" data-count="${count}" ${sinMapAction(run) && sinFatePayment(run, "palkia", count) ? "" : "disabled"}>Palkia ${count === 1 ? "×1: hasta 3 casillas" : "Juega 3: todo el mapa"}</button>`).join("")}
+    <button class="btn" data-act="sinfate" data-god="arceus" data-count="3" ${sinCanMapFate(run, "arceus") && run.campaign === "heart" && sinFatePayment(run, "arceus", 3) ? "" : "disabled"}>Arceus Juega 3: curar y revivir equipo</button></div>`;
+}
+const sinCanMapFate = (run, god) => sinMapAction(run) || !!(god === "arceus" && VIEW === "sin" && SIN_VIEW && run &&
+  !run.battle && !run.progress && !run.shrineEvent && !run.fateTeleport && !(run.offer && !run.offer.closed));
+function sinPlayMapFate(god, count) {
+  const run = ST.sin.run;
+  if (!sinCanMapFate(run, god) || !sinFatePayment(run, god, count)) return;
+  if (god === "palkia") {
+    run.fateTeleport = {count}; run.notice = "Palkia: toca una casilla resaltada para teletransportarte. Las cartas se descartan al elegir el destino.";
+  } else if (god === "arceus" && count === 3 && run.campaign === "heart") {
+    sinSpendFate(run, god, count); run.team.forEach(s => { delete s.hpNow; delete s.status; });
+    run.revive = false;
+    run.notice = "¡Bendición de Arceus! Todo tu equipo está curado y revivido.";
+  } else return;
+  save(); sinUpdateTurn();
+}
+function sinTeleportCells(run) {
+  const selection = run.fateTeleport; if (!selection) return new Map();
+  return new Map(SIN_CELLS.filter(h => {
+    const dc = Math.abs(h.c - run.pos[0]), dr = Math.abs(h.r - run.pos[1]);
+    return (dc || dr) && (selection.count === 3 ? !h.dw : Math.max(dc, (dc + dr) / 2) <= 3);
+  }).map(h => [h.c + "," + h.r, 1]));
+}
+function sinTeleportTo(key) {
+  const run = ST.sin.run;
+  if (!run?.fateTeleport || !SIN_VIEW || run.battle || run.progress || run.shrineEvent || run.revive || !sinTeleportCells(run).has(key)) return;
+  if (!sinSpendFate(run, "palkia", run.fateTeleport.count)) return;
+  const h = SIN_BY_CELL.get(key), messages = ["¡Palkia te teletransportó sin gastar movimientos!"];
+  delete run.fateTeleport; run.pos = [h.c, h.r]; sinRevealHidden(run, key, messages);
+  run.notice = messages.join(" "); ST.sin.cam = null; save(); renderSin();
 }
 const sinMoveName = name => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 const SIN_CARD_MOVES = new Map(Dex.moves.all().filter(m => m.exists).map(m => [sinMoveName(esMove(m.id)), m.id]));
@@ -271,7 +351,17 @@ function sinMigrateTeam(run) {
   if (!run.items) { run.items = []; changed = true; }
   if (!run.fate) { run.fate = []; changed = true; }
   if (run.stars == null) { run.stars = 0; changed = true; }
-  if (!run.fateDeck) { run.fateDeck = shuffle(SIN_FATE.map(c => c.img).filter(key => !run.fate.includes(key))); changed = true; }
+  if (run.follower === undefined) { run.follower = null; changed = true; }
+  if (run.fatePlayed == null) { run.fatePlayed = false; changed = true; }
+  if (!run.fateDeck || !run.fateDiscard) {
+    // Se restan copias, no frentes: una mano puede tener varias cartas iguales.
+    const remaining = SIN_FATE.map(c => c.img);
+    [...run.fate, ...(run.fateDeck || []), ...(run.fateDiscard || [])].forEach(key => {
+      const i = remaining.indexOf(key); if (i >= 0) remaining.splice(i, 1);
+    });
+    if (!run.fateDeck) { run.fateDeck = shuffle(remaining.splice(0)); }
+    run.fateDiscard = [...(run.fateDiscard || []), ...remaining]; changed = true;
+  }
   const sets = [...run.team, ...run.box, ...(run.battle ? run.battle.foes || [run.battle.wild] : [])];
   sets.forEach(s => {
     if (s.exp == null) { s.exp = sinExpForLevel(sinSpeciesData(s.species)?.gw, s.level); changed = true; }
@@ -523,7 +613,7 @@ async function sinBegin() {
     const set = await sinInitialSet(species);
     ST.sin.run = {v: 1, village: v.village, color: v.color, pos: [...token.cell], team: [set], turn: 1, moved: 0, frag: 0,
       bag: sinEmptyBag(), balls: sinStartingBalls(), box: [], pv: 0, hidden: sinShuffleHidden(),
-      items: [], stars: 0, fate: [], fateDeck: shuffle(SIN_FATE.map(c => c.img)),
+      items: [], stars: 0, fate: [], fateDeck: shuffle(SIN_FATE.map(c => c.img)), fateDiscard: [], fatePlayed: false, follower: null,
       ginkgo: sinNextGinkgo(), traded: false, flown: false, stews: {}, captivating: false,
       campaign: "heart", act: 1, moveBonus: 0, grunts: [v.village], fragments: [], heart: false, originGod: null, won: false, caught: 0,
       notice: "Acto I · El Viaje: recibiste 3 Bonguri Rojos. Los Reclutas del Equipo Galaxia ocupan tu pueblo natal."};
@@ -550,7 +640,7 @@ function sinReachable(pos, remaining, parents = null) {
   dist.delete(start); return dist;
 }
 const sinTasty = run => run.stews?.tasty || run.feast?.used.includes("tasty");
-const sinMaxMoves = run => 3 + run.frag + (run.moveBonus || 0) + (sinTasty(run) ? 3 : 0);
+const sinMaxMoves = run => 3 + run.frag + (run.moveBonus || 0) + (sinTasty(run) ? 3 : 0) + (run.originGod && run.follower === run.originGod ? 1 : 0);
 function sinTeamHTML(run) {
   return run.team.map(s => {
     const healthy = s.hpNow == null, pct = healthy ? 100 : s.hpMax ? Math.max(0, Math.min(100, s.hpNow / s.hpMax * 100)) : 0;
@@ -567,12 +657,13 @@ function sinTeamHTML(run) {
 function sinUpdateTurn() {
   const run = ST.sin.run; if (!run || !SIN_VIEW) return;
   const max = sinMaxMoves(run), left = run.fought || run.revive ? 0 : Math.max(0, max - run.moved);
-  SIN_VIEW.reachable = sinReachable(run.pos, left);
+  SIN_VIEW.reachable = run.fateTeleport ? sinTeleportCells(run) : sinReachable(run.pos, left);
   $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)} · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}</div>
     <div class="sin-team">${sinTeamHTML(run)}</div>
     <button class="btn" data-act="sinbag">Bolsa</button>
     <button class="btn" data-act="sincampaign">Campaña</button>
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
+    ${run.fateTeleport ? '<p>Palkia: toca una casilla resaltada. <button class="btn" data-act="sinfatecancel">Cancelar teletransporte</button></p>' : ""}
     ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}`;
   sinFillImages(); if (SIN_VIEW.panel === "ginkgo") sinShowGinkgo(); else if (SIN_VIEW.panel === "fly") sinShowFlight();
   else if (SIN_VIEW.panel === "campaign") sinShowCampaign();
@@ -620,7 +711,7 @@ function sinShowCampaign() {
 const sinCanPay = (run, recipe) => Object.entries(recipe).every(([k, n]) => run.bag[k] >= n);
 const sinPay = (run, recipe) => Object.entries(recipe).forEach(([k, n]) => { run.bag[k] -= n; });
 const sinRecipeText = recipe => Object.entries(recipe).map(([k, n]) => `${n} Bonguri ${SIN_BONGURI[k][0]}`).join(" + ");
-const sinMapAction = run => !!(VIEW === "sin" && SIN_VIEW && run && !run.battle && !run.progress && !run.shrineEvent && !run.revive && !(run.offer && !run.offer.closed));
+const sinMapAction = run => !!(VIEW === "sin" && SIN_VIEW && run && !run.battle && !run.progress && !run.shrineEvent && !run.fateTeleport && !run.revive && !(run.offer && !run.offer.closed));
 const sinRecipe = (key, kind) => (kind === "stew" ? SIN_STEWS : kind === "item" ? SIN_CRAFT_ITEMS : kind === "ball" ? SIN_BALLS : {})[key];
 const sinCanCraft = (run, key, kind = "ball") => {
   const recipe = sinRecipe(key, kind);
@@ -688,9 +779,7 @@ function sinShowBag() {
     <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li>${esc(esSp(s.species))}: <b>${esc(sinItemName(s.item))}</b>
       <button class="btn" data-act="sinunequip" data-member="${i}">Quitar</button></li>` : "").join("")}</ul>
     ${sinLegendsHTML(run)}
-    <h2>Destino (${esc(run.fate.length)}/5) · Estrellas: ${esc(run.stars)}</h2>
-    <p>Por cada 4 estrellas robas una carta al terminar cada turno. Los efectos de las cartas estarán disponibles próximamente.</p>
-    <div class="sin-fate">${run.fate.map((key, i) => sinCardImage(key, "Carta de Destino " + (i + 1))).join("") || "<p>No tienes cartas de Destino.</p>"}</div>`;
+    ${sinFateHTML(run)}`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
 }
 const sinVillage = run => SIN_BY_CELL.get(run.pos.join(","))?.tokens.find(t => SIN_VILLAGES.some(v => v.village === t.n));
@@ -794,22 +883,78 @@ function sinCaptureRoll(hp, max, ratio, bonus, status, captivating = false) {
   while (checks < 4 && Math.floor(Math.random() * 65536) < b) checks++;
   return {a, b, checks, caught: checks === 4};
 }
-const sinCanThrow = me => !!(me && me.sin && !me.over && !me.dead && !me.sinThrowing && me.req?.active &&
-  !me.req.wait && !me.req.forceSwitch && !me.req.teamPreview && ST.sin.run?.battle && !ST.sin.run.battle.trainer && me.mons[me.act.p2]?.hp > 0);
-function sinBallsHTML(me) {
-  const run = ST.sin.run; if (!run || run.battle?.trainer) return "";
-  return Object.entries(SIN_BALLS).map(([key, ball]) => `<button class="btn" data-act="sinthrow" data-ball="${key}" ${sinCanThrow(me) && run.balls[key] > 0 ? "" : "disabled"}>${esc(ball.name)} ×${esc(run.balls[key])}</button>`).join("");
+const sinCanBattleFate = me => !!(me && me === B && me.sin && !me.over && !me.dead && !me.sinThrowing && !me.sinFateBusy &&
+  me.req?.active && !me.req.wait && !me.req.forceSwitch && !me.req.teamPreview && ST.sin.run?.battle && !ST.sin.run.battle.failedBall && !ST.sin.run.battle.ballAttempt);
+const sinCanThrow = me => sinCanBattleFate(me) && !ST.sin.run.battle.trainer && me.mons[me.act.p2]?.hp > 0;
+const sinCaptureRatio = battle => (sinSpeciesData(battle.wild.species)?.cr ?? 3) * (battle.wild.alpha ? .5 : 1) * (battle.legend?.aura ? .25 : 1);
+function sinFailedBallHTML(run) {
+  return `<p>La captura falló. Elige antes de perder el turno:</p><button class="btn" data-act="sindialgaretry" ${sinFatePayment(run, "dialga", 1) ? "" : "disabled"}>Dialga ×1: repetir con la misma Ball</button>
+    <button class="btn" data-act="sindialgapass">Continuar sin repetir</button>`;
 }
-async function sinThrowBall(me, key) {
+function sinBallsHTML(me) {
+  const run = ST.sin.run; if (!run?.battle) return "";
+  if (run.battle.ballAttempt) {
+    const attempt = run.battle.ballAttempt;
+    requestAnimationFrame(() => {
+      if (B === me && !me.dead && !me.over && !me.sinThrowing && run.battle?.ballAttempt === attempt) sinThrowBall(me, attempt.key, attempt, attempt);
+    });
+    return "<p>Resolviendo el lanzamiento guardado…</p>";
+  }
+  if (run.battle.failedBall) {
+    // showControls también se usa al reanudar: la decisión precede a cualquier ataque.
+    requestAnimationFrame(() => { if (B === me && run.battle?.failedBall && $("ctl")) $("ctl").innerHTML = sinFailedBallHTML(run); });
+    return sinFailedBallHTML(run);
+  }
+  return (run.battle.trainer ? "" : Object.entries(SIN_BALLS).map(([key, ball]) => `<button class="btn" data-act="sinthrow" data-ball="${key}" ${sinCanThrow(me) && run.balls[key] > 0 ? "" : "disabled"}>${esc(ball.name)} ×${esc(run.balls[key])}</button>`).join("")) +
+    [1, 3].map(count => `<button class="btn" data-act="singiratina" data-count="${count}" ${sinCanBattleFate(me) && sinFatePayment(run, "giratina", count) ? "" : "disabled"}>Giratina ${count === 1 ? "×1: −1/8 PS, +1 Atq./At. Esp." : "Juega 3: 1 PS, +2 Atq./At. Esp., +1 Vel."}</button>`).join("");
+}
+async function sinGiratina(me, count) {
+  const run = ST.sin.run, active = me?.mons[me.act.p1];
+  if (!sinCanBattleFate(me) || !active || active.hp <= 0 || !sinFatePayment(run, "giratina", count)) return;
+  // El coste de ×1 puede debilitar: se deja al motor resolverlo y pedir el cambio.
+  me.sinFateBusy = true; $("ctl").innerHTML = "";
+  const index = run.battle.indices.find(i => "p1:Sinnoh" + (i + 1) === me.act.p1);
+  if (index == null) { me.sinFateBusy = false; return showControls(me); }
+  sinSpendFate(run, "giratina", count);
+  (run.battle.fateEffects ||= []).push({index, count}); save();
+  try {
+    await say(me, count === 1 ? "¡Giratina: Sacrifica! Pierdes 1/8 de tus PS máximos y ganas +1 Ataque y +1 Ataque Especial." : "¡Giratina: Sacrifica todo! Quedas con 1 PS y ganas +2 Ataque, +2 Ataque Especial y +1 Velocidad.", 1.2);
+    if (me.dead || me.over) return;
+    me.s.omniscient.write(`>eval const p=battle.sides[0].active[0]; ${sinGiratinaEval(count)} battle.add('-damage',p,()=>p.getHealth()); battle.add('-boost',p,'atk',${count === 3 ? 2 : 1}); battle.add('-boost',p,'spa',${count === 3 ? 2 : 1}); ${count === 3 ? "battle.add('-boost',p,'spe',1);" : ""} if(!p.hp){battle.faintMessages();if(!battle.ended){battle.checkFainted();battle.makeRequest('switch');}}else battle.makeRequest('move');`);
+    me.shown = false;
+  } finally { me.sinFateBusy = false; }
+}
+const sinGiratinaEval = count => count === 3 ? "p.sethp(1); p.boostBy({atk:2,spa:2,spe:1});" : "p.damage(Math.max(1,Math.floor(p.maxhp/8))); p.boostBy({atk:1,spa:1});";
+function sinPassCapture(me) {
+  if (me !== B || me.dead || me.over || !ST.sin.run?.battle) return;
+  delete ST.sin.run.battle.failedBall; save();
+  me.req = null; me.shown = false; $("ctl").innerHTML = "";
+  me.s.omniscient.write('>eval const sd=battle.sides[0]; sd.clearChoice(); sd.choice.actions=[{choice:"pass",pokemon:sd.active[0],index:0}]; sd.choice.forcedPassesLeft=0; if (battle.allChoicesDone()) battle.commitChoices();');
+}
+async function sinRepeatCapture(me) {
+  const run = ST.sin.run, failed = run?.battle?.failedBall;
+  if (me !== B || !me.sin || me.dead || me.over || me.sinThrowing || !failed || !sinSpendFate(run, "dialga", 1)) return;
+  delete run.battle.failedBall; save();
+  return sinThrowBall(me, failed.key, failed);
+}
+async function sinThrowBall(me, key, repeat = null, pending = null) {
   const run = ST.sin.run, ball = SIN_BALLS[key];
-  if (me !== B || !ball || !sinCanThrow(me) || !(run.balls[key] > 0)) return;
+  if (me !== B || !ball || (!repeat && (!sinCanThrow(me) || !(run.balls[key] > 0)))) return;
   const wild = me.mons[me.act.p2];
   me.sinThrowing = true; me.lastReq = me.req; me.req = null; me.shown = false; $("ctl").innerHTML = "";
-  const captivating = !!run.battle.captivating;
-  run.balls[key]--; run.battle.captivating = false; save();
-  const ratio = (sinSpeciesData(run.battle.wild.species)?.cr ?? 3) * (run.battle.wild.alpha ? .5 : 1);
-  const result = sinCaptureRoll(wild.hp, wild.max, ratio, ball.bonus, wild.status, captivating);
+  const captivating = repeat ? repeat.captivating : !!run.battle.captivating;
+  if (!repeat) run.balls[key]--;
+  run.battle.captivating = false;
+  const target = repeat?.target || {hp: wild.hp, max: wild.max, status: wild.status};
+  const result = pending?.result || sinCaptureRoll(target.hp, target.max, sinCaptureRatio(run.battle), ball.bonus, target.status, captivating);
+  run.battle.ballAttempt = {key, captivating, target, result}; save();
   try {
+    if (repeat) {
+      // Reanudar conserva el objetivo del intento guardado, incluidos sus PS y estado.
+      const status = SIN_STATUS[target.status] ? target.status : "";
+      me.s.omniscient.write(`>eval const p=battle.sides[1].active[0]; p.sethp(${Math.max(1, Math.floor(target.hp))}); ${status ? `p.setStatus(${JSON.stringify(status)});` : "p.cureStatus();"} battle.add('-damage',p,()=>p.getHealth());`);
+      wild.hp = target.hp; wild.max = target.max; wild.status = status;
+    }
     await say(me, `¡Lanzaste una ${ball.name}!`, 1);
     for (let i = 0; i < Math.min(3, result.checks); i++) {
       if (me.dead || me.over) return;
@@ -822,12 +967,18 @@ async function sinThrowBall(me, key) {
       if (!me.dead && !me.over) me.s.omniscient.write(">forcewin p1");
     } else {
       await say(me, "¡Oh, no! ¡El Pokémon se ha escapado!", 1.2);
-      if (!me.dead && !me.over) me.s.omniscient.write('>eval const sd=battle.sides[0]; sd.clearChoice(); sd.choice.actions=[{choice:"pass",pokemon:sd.active[0],index:0}]; sd.choice.forcedPassesLeft=0; if (battle.allChoicesDone()) battle.commitChoices();');
+      if (!me.dead && !me.over) {
+        delete run.battle.ballAttempt;
+        if (sinFatePayment(run, "dialga", 1)) {
+          run.battle.failedBall = {key, captivating, target}; save();
+          $("ctl").innerHTML = sinFailedBallHTML(run);
+        } else sinPassCapture(me);
+      }
     }
   } finally { me.sinThrowing = false; }
 }
 function sinMoveTo(key) {
-  const run = ST.sin.run; if (!run || !SIN_VIEW || run.fought || run.revive || run.battle || (run.offer && !run.offer.closed)) return;
+  const run = ST.sin.run; if (!sinMapAction(run) || run.fought) return;
   // Se vuelve a calcular al confirmar para no usar un coste de una ficha antigua.
   const parents = new Map(), cost = sinReachable(run.pos, Math.max(0, sinMaxMoves(run) - run.moved), parents).get(key);
   if (!cost) return;
@@ -898,6 +1049,7 @@ function sinOfferScreen() {
     <p>${esc(offer.place)} · ${esc(offer.meta)}</p>
     ${offer.alpha ? "<p>¡Alfa! Combate obligatorio: nivel Fuerte +5, IVs perfectos, ratio de captura a la mitad y recompensa de 4 PV (+2 al debilitar). No huye al debilitar a uno de los tuyos.</p>" : ""}
     ${offer.legend ? "<p>Legendario: no huye al debilitar a uno de los tuyos. Capturarlo da 4 PV; derrotarlo da 6 PV y permite aprender su movimiento característico. No da Bonguri. Su ficha permanece si pierdes.</p>" : ""}
+    ${offer.legend?.god ? `<p>${offer.legend.aura ? "Aura Celestial: captura ×0,25. Al derrotar su primera forma combatirás inmediatamente contra su Forma Origen, totalmente restaurada, conservando tus PS y estados." : "Tu artefacto celestial anula el Aura: captura normal y un solo combate. El artefacto se conserva."} Vencer o capturar concede otro turno inmediato en Corazón de Sinnoh.</p>` : ""}
     ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
       ${sinCardImage(s.img, "Carta de " + esSp(s.species))}<b>${esc(esSp(s.species))}</b><span>Nv. ${esc(s.level)}</span>
       <div><button class="btn primary" data-act="sinfight" data-offer="${i}">Combatir</button></div></div>`).join("")}</div>` :
@@ -913,7 +1065,11 @@ function sinPre(team) {
     const hp = s.hpNow == null ? "" : `a[${i}].sethp(${Math.max(1, Math.floor(s.hpNow))});`;
     return hp + (SIN_STATUS[s.status] ? `a[${i}].setStatus(${JSON.stringify(s.status)});` : "");
   }).join("");
-  return pre ? "const a=battle.sides[0].pokemon;" + pre : "";
+  const effects = (ST.sin.run?.battle?.fateEffects || []).map(effect => {
+    const i = team.findIndex(s => s.name === "Sinnoh" + (effect.index + 1));
+    return i < 0 ? "" : `{const p=a[${i}];${sinGiratinaEval(effect.count)}}`;
+  }).join("");
+  return pre || effects ? "const a=battle.sides[0].pokemon;" + pre + effects : "";
 }
 const sinCanChallengeGrunts = run => run.act === 1 && run.grunts.includes(run.village) &&
   sinVillage(run)?.n === run.village && !run.fought && !run.revive && run.team.some(sinAlive);
@@ -1010,7 +1166,7 @@ function sinApplyShrine(run) {
     run.bag[effect.color] += effect.amount; run.shrineLegends[effect.shrine] = effect.species;
     e.message = `Recibiste ${effect.amount} Bonguri ${SIN_BONGURI[effect.color][1]}. ${esSp(effect.species)} apareció en el ${sinShrineName(effect.shrine)}.`;
   } else if (effect.kind === "fracture" || effect.kind === "fate") {
-    if (effect.kind === "fracture") run.fractures++;
+    if (effect.kind === "fracture") { run.fractures++; e.followerPending = true; e.done = false; }
     e.message = (effect.kind === "fracture" ? "Los Dioses de Sinnoh se agitan… " : "") + sinDrawFate(run, effect.kind === "fracture" ? 1 : e.grade);
   } else if (effect.kind === "pv") {
     run.pv += 2 * e.grade; e.message = `Ganaste ${2 * e.grade} PV.`;
@@ -1080,6 +1236,7 @@ function sinShrineScreen() {
       ${effect.kind === "feast" && !run.progress ? `<p>Estofados gratis pendientes: ${esc(run.feast.remaining)}. También puedes elegirlos luego en la Bolsa, antes de terminar el turno.</p><div class="btns">${Object.entries(SIN_STEWS).map(([key, stew]) => `<button class="btn" data-act="sinstew" data-stew="${key}" ${sinFreeStew(run, key) && sinCanCraft(run, key, "stew") ? "" : "disabled"}>${esc(stew.name)}</button>`).join("")}</div>
         ${e.infuse && sinFreeStew(run, "infused") ? `<p>Elige quién subirá un nivel:</p><div class="btns">${run.team.map((s, i) => `<button class="btn" data-act="sininfuse" data-member="${i}" ${s.level < 100 ? "" : "disabled"}>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>`).join("")}</div>` : ""}` : ""}
       ${run.progress ? sinProgressHTML() : e.done ? `<button class="btn primary" data-act="sinshrinenext">${e.cursor + 1 < e.queue.length ? "Siguiente carta" : "Volver al mapa"}</button>` :
+      e.followerPending ? `<p>${run.follower ? "Puedes mantener tu Seguidor o cambiarlo." : "Elige obligatoriamente tu primer Dios Seguidor."} El elegido reemplazará al Dios que esté en Origin.</p><div class="sin-choices">${Object.entries(SIN_GODS).map(([god, data]) => `<div class="sin-choice">${sinCardImage(SIN_FATE_GODS[god], data.species)}<button class="btn primary" data-act="sinfollower" data-god="${god}">${run.follower === god ? "Seguir con " : "Seguir a "}${esc(data.species)}</button></div>`).join("")}</div>` :
       effect.kind === "bonguri" ? `<p>Elige ${esc(e.remaining)} Bonguri, uno por uno:</p><div class="btns">${Object.entries(SIN_BONGURI).map(([color, names]) => `<button class="btn" data-act="sinshrinecolor" data-color="${color}">${esc(names[0])}</button>`).join("")}</div>` :
       `<p>${effect.kind === "exchange" ? "Sustituye un Pokémon del equipo por un descartado del mismo nivel de encuentro." : "Elige el movimiento característico de un Pokémon descartado y a quién enseñarlo."}</p>
        ${choices.length ? `<div class="btns">${choices.map(s => `<button class="btn" data-act="sinshrinediscard" data-discard="${s.index}">${esc(esSp(s.species))} · ${esc(SIN_ES[s.tier] || s.tier)}${effect.kind === "wisdom" ? " · " + esc(esMove(s.signature)) : ""}${e.discarded === s.index ? " ✓" : ""}</button>`).join("")}</div>` : "<p>No hay Pokémon descartados compatibles con este efecto.</p>"}
@@ -1140,7 +1297,11 @@ async function sinFight(index, trainerKey = false) {
           legend: run.offer.legend, captivating: !!run.captivating};
         run.captivating = false; run.offer.closed = true;
       }
+      run.battle.start = {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: run.searched};
       save();
+    }
+    if (!run.battle.start) {
+      run.battle.start = {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: run.searched}; save();
     }
     if (!run.battle.trainer && !run.battle.tier) { run.battle.tier = sinEncounterToken(run)?.tier; save(); }
     const mine = run.battle.indices.map(i => ({...run.team[i], name: "Sinnoh" + (i + 1)}));
@@ -1148,7 +1309,7 @@ async function sinFight(index, trainerKey = false) {
     const foes = (trainer ? run.battle.foes : [run.battle.wild]).map(s => ({...s}));
     const spec = trainer && (trainer.name ? trainer : sinTrainerSpec(run, "grunt"));
     sinLeave(); newBattle(mine, foes, {sin: true, aiDiff: spec ? spec.aiDiff : "easy", pre: sinPre(mine),
-      ...(run.battle.legend ? {bgm: "bgm_boss"} : {}),
+      ...(run.battle.legend ? {bgm: run.battle.legend.god ? "bgm_final" : "bgm_boss"} : {}),
       ...(spec ? {foeName: spec.name, intro: spec.intro, bgm: spec.bgm} : {})});
   } catch (err) {
     const message = "No se pudo preparar el combate. Intenta nuevamente.";
@@ -1168,7 +1329,8 @@ function sinPendingScreen() {
 function sinResult(won, me) {
   const run = ST.sin.run; if (!run || !run.battle) return;
   sinMigrateTeam(run);
-  const trainer = run.battle.trainer, wild = run.battle.wild, token = trainer ? null : sinEncounterToken(run), tier = run.battle.tier || token?.tier;
+  const encounter = run.battle, god = encounter.legend?.god;
+  const trainer = encounter.trainer, wild = encounter.wild, token = trainer ? null : sinEncounterToken(run), tier = encounter.tier || token?.tier;
   const move = trainer ? null : sinSignatureMove(sinBattleCard(run)), fled = !trainer && won === null && !!me.sinFled;
   run.battle.indices.forEach(i => {
     const s = run.team[i], m = me.mons["p1:Sinnoh" + (i + 1)];
@@ -1181,6 +1343,21 @@ function sinResult(won, me) {
     // También permite comprobar la derrota mediante >forcewin p2.
     if (won === false) { s.hpNow = 0; s.status = ""; }
   });
+  if (won === true && god && encounter.legend.aura && encounter.legend.phase === 1 && !me.sinCaught) {
+    const species = SIN_GODS[god].species + "-Origin";
+    const origin = {...wild, species, ability: Dex.species.get(species).abilities["0"]};
+    delete origin.hpNow; delete origin.status;
+    run.battle = {...encounter, wild: origin, legend: {...encounter.legend, phase: 2}, fateEffects: [],
+      indices: run.team.map((s, i) => sinAlive(s) ? i : -1).filter(i => i >= 0),
+      start: {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: run.searched}};
+    delete run.battle.failedBall; delete run.battle.ballAttempt;
+    me.sinOriginPending = true;
+    run.notice = `¡El Aura Celestial restaura a ${SIN_GODS[god].species} en su Forma Origen! Tu equipo conserva sus PS y estados.`;
+    save(); return;
+  }
+  if (won === false && encounter.start && sinFatePayment(run, "dialga", 3)) {
+    run.retry = JSON.parse(JSON.stringify(encounter));
+  }
   if (won === true) {
     sinGainExp(run, trainer ? run.battle.foes : wild, me, !!trainer);
     if (trainer) {
@@ -1223,19 +1400,51 @@ function sinResult(won, me) {
     run.progress = {won, rewards: [], pending: [], fled, escaped: !trainer && !!me.sinEscaped, ...(trainer ? {kind: "trainer"} : {})};
     if (fled) run.progress.bonguri = sinBonguriReward(run, token, SIN_FLEE_BONGURI[tier] ?? 0);
   }
-  if (run.battle.hidden && run.hidden[run.battle.hidden]) run.hidden[run.battle.hidden].present = false;
+  if (run.battle.hidden && run.hidden[run.battle.hidden] && !run.retry) run.hidden[run.battle.hidden].present = false;
   run.fought = true; run.moved = sinMaxMoves(run); run.battle = null;
-  if (!run.team.some(sinAlive)) {
-    const home = SIN.tokens.find(t => t.n === run.village && (t.tags || []).includes("Village Token"));
-    run.pos = [...home.cell]; run.revive = true; ST.sin.cam = null;
-    run.notice = "Tu equipo fue derrotado. Volviste a tu pueblo natal; termina el turno para recuperarlo.";
+  if (run.retry) {
+    run.revive = true; run.notice = "Tu equipo fue derrotado. Puedes jugar Dialga Juega 3 antes de volver al pueblo: repetirás los mismos rivales con tu equipo como estaba al empezar.";
+  } else if (!run.team.some(sinAlive)) {
+    sinReturnHome(run);
   } else run.notice = trainer ? (won ? trainer.kind === "grunt" ? "¡Derrotaste a los Reclutas del Equipo Galaxia! Ganas +2 movimientos por turno." : `¡Derrotaste a ${trainer.name}! ${trainer.kind === "boss" ? "Es hora de elegir el destino del Corazón de Sinnoh." : "Obtuviste un Fragmento de Sinnoh."}` : "El combate terminó en empate. Puedes reintentar el desafío en otro turno; los PS y estados se mantienen.") : me.sinEscaped ? "Huiste del Pokémon Alfa. Su ficha se descartó; los PS y estados de tu equipo se mantienen." : fled ? "¡El Pokémon salvaje huyó! Los PS y estados de tu equipo se mantienen." : won === null ? "El combate terminó en empate. Los PS y estados se mantienen." :
     me.sinCaught ? "¡Atrapaste al Pokémon salvaje! Los PS y estados se mantienen." : "¡Venciste al Pokémon salvaje! Los PS y estados de tu equipo se mantienen.";
+  if (won === true && god) {
+    run.originGod = null;
+    if (run.campaign === "heart") {
+      const stars = sinResetTurn(run);
+      run.notice = `¡${me.sinCaught ? "Capturaste" : "Venciste"} a ${SIN_GODS[god].species}! Origin queda libre. ¡Juegas otro turno inmediatamente! ${stars}`;
+    } else run.notice = `¡Origin queda libre de ${SIN_GODS[god].species}!`;
+  }
   save();
+}
+function sinReturnHome(run) {
+  const home = SIN.tokens.find(t => t.n === run.village && t.tags?.includes("Village Token"));
+  run.pos = [...home.cell]; run.revive = true; ST.sin.cam = null;
+  run.notice = "Tu equipo fue derrotado. Volviste a tu pueblo natal; termina el turno para recuperarlo.";
+}
+async function sinRepeatBattle() {
+  const run = ST.sin.run, encounter = run?.retry;
+  if (!encounter || run.progress?.won !== false || !sinSpendFate(run, "dialga", 3)) return;
+  const start = encounter.start;
+  run.team = JSON.parse(JSON.stringify(start.team)); run.pos = [...start.pos]; run.moved = start.moved; run.searched = start.searched;
+  run.fought = false; run.revive = false; run.battle = encounter; run.battle.fateEffects = [];
+  delete run.battle.failedBall; delete run.battle.ballAttempt; delete run.progress; delete run.retry;
+  run.notice = "¡Dialga rebobina el combate! Conservas las Balls gastadas; recuperas el equipo con que empezaste.";
+  save(); if (B) B.dead = true; B = null; VIEW = "sin"; return sinFight();
+}
+function sinAcceptDefeat() {
+  const run = ST.sin.run; if (!run?.retry || run.progress?.won !== false) return;
+  if (run.retry.hidden && run.hidden[run.retry.hidden]) run.hidden[run.retry.hidden].present = false;
+  delete run.retry; sinReturnHome(run); save(); sinRefreshProgress();
 }
 function sinEndHTML(won) {
   // Los empates pasan directamente por showEnd en batalla.js.
   if (won === null && B && B.sin) sinResult(null, B);
+  if (B?.sinOriginPending && ST.sin.run?.battle?.legend?.phase === 2) {
+    const me = B;
+    setTimeout(() => { if (B === me && !me.dead && ST.sin.run?.battle?.legend?.phase === 2) { VIEW = "sin"; sinFight(); } }, 0);
+    return `<div class="card"><p>${esc(ST.sin.run.notice)}</p><button class="btn primary" data-act="sinorigin">Continuar contra la Forma Origen</button></div>`;
+  }
   return sinProgressHTML(won);
 }
 function sinProgressHTML(won) {
@@ -1266,6 +1475,7 @@ function sinProgressHTML(won) {
     p?.signature && !p.signature.done ? `<div class="sin-learn"><p>Enseñar <b>${esc(esMove(p.signature.move))}</b> a…</p><div class="btns">
       ${run.team.map((s, i) => sinAlive(s) && !s.moves.some(m => toID(m) === p.signature.move) ? `<button class="btn" data-act="sinsignature" data-member="${i}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>` : "").join("")}
       <button class="btn" data-act="sinsignature" data-member="-1">No enseñar</button></div></div>` :
+      run.retry ? `<div class="btns"><button class="btn primary" data-act="sinretrybattle" ${sinFatePayment(run, "dialga", 3) ? "" : "disabled"}>Dialga Juega 3: Repetir combate</button><button class="btn" data-act="sinacceptdefeat">Volver al pueblo</button></div>` :
       run.shrineEvent ? '<div class="btns"><button class="btn primary" data-act="sinshrineprogress">Continuar evento</button></div>' :
       run.act === 4 && !run.won ? sinFinalChoicesHTML() : '<div class="btns"><button class="btn primary" data-act="sinmap">Volver al mapa</button></div>'}</div>`;
 }
@@ -1363,14 +1573,17 @@ function sinHeal() {
   run.healed = true; run.notice = "Tu equipo está completamente recuperado."; save(); sinUpdateTurn();
 }
 function sinEndTurn() {
-  const run = ST.sin.run; if (!run || run.battle || run.progress || run.shrineEvent || (run.offer && !run.offer.closed)) return;
+  const run = ST.sin.run; if (!run || run.battle || run.progress || run.shrineEvent || run.fateTeleport || (run.offer && !run.offer.closed)) return;
   if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
+  run.notice = sinResetTurn(run); save(); sinUpdateTurn();
+}
+function sinResetTurn(run) {
   run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
   run.traded = false; run.flown = false; run.stews = {};
-  run.offered = false; run.feast = {remaining: 0, used: []};
+  run.offered = false; run.feast = {remaining: 0, used: []}; run.fatePlayed = false; delete run.fateTeleport;
   if (SIN_VIEW) SIN_VIEW.bagStew = false;
   run.offer = null; run.revive = false;
-  run.notice = run.stars >= 4 ? sinDrawFate(run, Math.floor(run.stars / 4)) : ""; save(); sinUpdateTurn();
+  return run.stars >= 4 ? sinDrawFate(run, Math.floor(run.stars / 4)) : "";
 }
 function sinImage(key) {
   if (!key || !SIN.img[key]) return null;
@@ -1483,9 +1696,9 @@ function sinDraw() {
         ctx.drawImage(im, tx - w / 2, ty - ht / 2, w, ht);
       } else { ctx.beginPath(); ctx.arc(tx, ty, size / 3, 0, Math.PI * 2); ctx.fillStyle = "#eaf4e229"; ctx.fill(); }
     });
-    const shrine = tokens.find(t => run?.shrineLegends[t.n]);
+    const shrine = tokens.find(t => (t.n === "Origin Shrine" && run?.originGod) || run?.shrineLegends[t.n]);
     if (shrine) {
-      const species = run.shrineLegends[shrine.n], im = sinImage(sinLegendCard(species)?.img);
+      const species = shrine.n === "Origin Shrine" && run.originGod ? SIN_GODS[run.originGod].species : run.shrineLegends[shrine.n], im = sinImage(sinLegendCard(species)?.img);
       ctx.save(); ctx.fillStyle = "#ffe35d"; ctx.fillRect(h.x + 12, h.y - 44, 30, 51);
       if (im) ctx.drawImage(im, h.x + 14, h.y - 42, 26, 47);
       else { ctx.fillStyle = "#18232b"; ctx.font = "bold 13px sans-serif"; ctx.fillText(esSp(species)[0], h.x + 20, h.y - 15); }
@@ -1567,11 +1780,16 @@ function sinPick(px, py) {
     return dx <= SIN_S && dy <= SIN_H && Math.sqrt(3) * dx + dy <= Math.sqrt(3) * SIN_S;
   });
   if (!h) return;
+  if (ST.sin.run?.fateTeleport) return sinTeleportTo(h.c + "," + h.r);
   sinShowCell(h);
 }
 function sinShowCell(h) {
   const v = SIN_VIEW, cost = v.reachable.get(h.c + "," + h.r); v.selected = h; v.bag = false; v.box = false; v.boxMember = null; v.panel = null;
   const run = ST.sin.run, here = run.pos.join(",") === h.c + "," + h.r;
+  if (run.fateTeleport) {
+    $("sin-card").innerHTML = '<p>Palkia: toca directamente una casilla resaltada del mapa o cancela el teletransporte.</p><button class="btn" data-act="sinfatecancel">Cancelar</button>';
+    $("sin-card").hidden = false; return sinRequestDraw();
+  }
   const tokens = sinCellTokens(h);
   const canSearch = !run.searched && !run.fought && !run.revive && run.team.some(sinAlive);
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Casilla (${esc(h.c)}, ${esc(h.r)})</h2><button class="btn" data-act="sinclose" aria-label="Cerrar ficha">Cerrar</button></div>
@@ -1582,6 +1800,7 @@ function sinShowCell(h) {
       const meta = sinMeta(t);
       const commander = SIN_COMMANDERS.find(c => c.token === t.n);
       return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.hidden ? "<small>Escondite revelado</small>" : ""}
+        ${t.n === "Origin Shrine" && run.originGod ? `<small>${esc(SIN_GODS[run.originGod].species)} ocupa Origin. ${sinGodAura(run, run.originGod) ? "Aura Celestial: captura ×0,25 y segunda fase en Forma Origen." : "Tu artefacto celestial evita el Aura; un solo combate y captura normal."}</small>${here ? `<button class="btn primary sin-move" data-act="singod" ${canSearch ? "" : "disabled"}>Combatir contra ${esc(SIN_GODS[run.originGod].species)}</button>` : ""}` : ""}
         ${/ Shrine$/.test(t.n) ? run.shrineLegends[t.n] ? `<small>${esc(esSp(run.shrineLegends[t.n]))} está en el santuario. No permite ofrendas.</small>${here ? `<button class="btn primary sin-move" data-act="sinlegend" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Combatir contra ${esc(esSp(run.shrineLegends[t.n]))}</button>` : ""}` :
           `${here ? `<button class="btn sin-move" data-act="sinshrine" ${run.offered || run.revive || sinShrineOccupied(run, t.n) || !Object.values(run.bag).some(n => n > 0) ? "disabled" : ""}>Ofrenda de santuario${run.offered ? " (usada este turno)" : ""}</button>` : ""}` : ""}
         ${t.tags?.includes("Legendary Encounter Card") && !run.legendsDone[toID(t.gm)] ? `<small>${esc(sinLegendRequirement(t.gm))}</small>${here ? `<button class="btn primary sin-move" data-act="sinlegend" data-token="${SIN.tokens.indexOf(t)}" ${canSearch && sinLegendAvailable(run, t.gm) ? "" : "disabled"}>Buscar a ${esc(esSp(t.gm))}</button>` : ""}` : ""}
@@ -1673,6 +1892,13 @@ function renderSin() {
 }
 document.addEventListener("click", e => {
   if (e.target.closest("[data-info]")) return;
+  if (VIEW === "battle" && B?.sin && e.target.closest("button") &&
+      (B.sinThrowing || B.sinFateBusy || ST.sin.run?.battle?.failedBall || ST.sin.run?.battle?.ballAttempt)) {
+    const action = e.target.closest("button").dataset.act;
+    if (action !== "quit" && !(!B.sinThrowing && !B.sinFateBusy && ["sindialgaretry", "sindialgapass"].includes(action))) {
+      e.stopImmediatePropagation(); return;
+    }
+  }
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const act = b.dataset.act;
   if (act === "quit" && VIEW === "battle" && B?.sin && !B.over && ST.sin.run?.battle?.wild?.alpha) {
@@ -1682,11 +1908,17 @@ document.addEventListener("click", e => {
     B.sinEscaped = true; sinResult(null, B); B.dead = true; B = null; return go("sin");
   }
   if (act === "sinthrow" && VIEW === "battle" && B && B.sin) return sinThrowBall(B, b.dataset.ball);
+  if (act === "singiratina" && VIEW === "battle" && B?.sin) return sinGiratina(B, +b.dataset.count);
+  if (act === "sindialgaretry" && VIEW === "battle" && B?.sin) return sinRepeatCapture(B);
+  if (act === "sindialgapass" && VIEW === "battle" && B?.sin && ST.sin.run?.battle?.failedBall) return sinPassCapture(B);
+  if (act === "sinretrybattle" && (VIEW === "sin" || B?.sin)) return sinRepeatBattle();
+  if (act === "sinacceptdefeat" && (VIEW === "sin" || B?.sin)) return sinAcceptDefeat();
+  if (act === "sinorigin" && B?.sinOriginPending) { VIEW = "sin"; return sinFight(); }
   if (act === "sinlearn" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinLearn(+b.dataset.sinSlot);
   if (act === "sinsignature" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinTeachSignature(+b.dataset.member);
   if ((act === "sinevolve" || act === "sincancelevolution") && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinEvolve(act === "sinevolve");
   if (act === "sinmap") {
-    const run = ST.sin.run; if (!run || !run.progress || run.progress.pending.length || (run.progress.signature && !run.progress.signature.done)) return;
+    const run = ST.sin.run; if (!run || run.retry || !run.progress || run.progress.pending.length || (run.progress.signature && !run.progress.signature.done)) return;
     delete run.progress; save(); if (B) B.dead = true; B = null; return go("sin");
   }
   if (act === "sinhero" && (VIEW === "sin" || (VIEW === "battle" && B?.sin))) return sinHero();
@@ -1714,6 +1946,7 @@ document.addEventListener("click", e => {
   if (act === "sincommander") return sinFight(null, b.dataset.commander);
   if (act === "sinhelio") return sinFight(null, "boss");
   if (act === "sinresume") return sinFight();
+  if (act === "sinfollower") return sinChooseFollower(b.dataset.god);
   if (act === "sinshrinechoose") return sinChooseShrine(+b.dataset.card);
   if (act === "sinshrinenext") return sinNextShrine();
   if (act === "sinshrinecolor") return sinShrineChoice("color", b.dataset.color);
@@ -1735,7 +1968,11 @@ document.addEventListener("click", e => {
     ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; save(); return renderSin();
   }
   if (!SIN_VIEW || !ST.sin.run) return;
+  if (act === "sinfatecancel" && ST.sin.run.fateTeleport) { delete ST.sin.run.fateTeleport; ST.sin.run.notice = "Teletransporte cancelado; conservas tus cartas."; save(); return sinUpdateTurn(); }
+  if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
+  if (act === "sinfate") return sinPlayMapFate(b.dataset.god, +b.dataset.count);
+  if (act === "singod") return sinSeekGod();
   if (act === "sinshrine") return sinShowShrine();
   if (act === "sinshrinedraw") return sinOfferShrine(b.dataset.color, b.dataset.major === "1");
   if (act === "sinlegend") return sinSeekLegend(+b.dataset.token);
