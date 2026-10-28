@@ -165,7 +165,7 @@ function sinChooseFollower(god) {
   if (!SIN_GODS[god] || !e?.followerPending || e.done) return;
   run.follower = god; run.originGod = god; e.followerPending = false; e.done = true;
   e.message += ` Sigues a ${SIN_GODS[god].species}, que ocupa el Santuario Origin. Ganas +1 movimiento por turno mientras esté allí.`;
-  save(); sinShrineScreen();
+  sinSave(); sinShrineScreen();
 }
 const sinGodAura = (run, god) => !!SIN_GODS[god] &&
   ![...run.items, ...run.team.map(s => s.item), ...run.box.map(s => s.item)].some(id => toID(id) === SIN_GODS[god].artifact);
@@ -176,7 +176,7 @@ function sinSeekGod() {
   run.searched = true;
   run.offer = {cards: [{species, img: card?.img || SIN_FATE_GODS[god], level: SIN_GOD_LEVEL}],
     legend: {species, god, phase: 1, aura: sinGodAura(run, god)}, place: "Santuario Origin", meta: "Dios de Sinnoh", closed: false};
-  save(); renderSin();
+  sinSave(); renderSin();
 }
 function sinFateHTML(run) {
   return `<h2>Seguidor</h2><p>${run.follower ? `Sigues a ${esc(SIN_GODS[run.follower].species)}. Tu ficha cuenta como una carta de ese Dios para Juega 3 y se conserva.` : "Ficha boca abajo. Elegirás tu Dios en la primera Fractura Celestial."}</p>
@@ -201,7 +201,7 @@ function sinPlayMapFate(god, count) {
     run.revive = false;
     run.notice = "¡Bendición de Arceus! Todo tu equipo está curado y revivido.";
   } else return;
-  save(); sinUpdateTurn();
+  sinSave(); sinUpdateTurn();
 }
 function sinTeleportCells(run) {
   const selection = run.fateTeleport; if (!selection) return new Map();
@@ -216,7 +216,7 @@ function sinTeleportTo(key) {
   if (!sinSpendFate(run, "palkia", run.fateTeleport.count)) return;
   const h = SIN_BY_CELL.get(key), messages = ["¡Palkia te teletransportó sin gastar movimientos!"];
   delete run.fateTeleport; run.pos = [h.c, h.r]; sinRevealHidden(run, key, messages);
-  run.notice = messages.join(" "); ST.sin.cam = null; save(); renderSin();
+  run.notice = messages.join(" "); ST.sin.cam = null; sinSave(); renderSin();
 }
 const sinMoveName = name => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 const SIN_CARD_MOVES = new Map(Dex.moves.all().filter(m => m.exists).map(m => [sinMoveName(esMove(m.id)), m.id]));
@@ -257,6 +257,59 @@ if (!Dex.data.Items.luckyegg) Dex.data.Items.luckyegg = {name: "Lucky Egg", num:
 const sinEmptyBag = () => Object.fromEntries(Object.keys(SIN_BONGURI).map(k => [k, 0]));
 const sinStartingBalls = () => ({poke: 3, great: 0, ultra: 0, spirit: 0});
 const SIN_EXP_SHARE = .5;
+const SIN_STAMPS = [
+  "Fallar la captura de un Pokémon salvaje en 2 turnos seguidos del mismo combate.",
+  "Ganar contra otro entrenador o un Ultraente (Reclutas, Comandantes o Helio en solitario).",
+  "Tener al menos 1 Bonguri de cada color en la Bolsa.",
+  "Haber capturado un Pokémon Legendario.",
+  "Tener 3 o más objetos equipados en el equipo.",
+  "Ganar una Batalla Enjambre.",
+  "Tener 3 cartas de Cambio de Destino diferentes en la mano."
+];
+const SIN_STAMP_REWARDS = ["1 Rojo + 1 Azul + 1 Amarillo", "5 cartas Débiles (MT reutilizables)",
+  "1 Rosa + 1 Verde + 1 Blanco", "5 cartas Moderadas (MT reutilizables)", "3 Bonguri Negros",
+  "5 cartas Fuertes (MT reutilizables)", "Pergamino de Nobleza (un solo Pokémon)"];
+function sinCheckStamps(run, event = {}) {
+  if (!run?.bag || !run.team || !run.box || !run.fate) return false;
+  let changed = false;
+  for (const key of ["stamps", "stampRewards", "stampNotices", "tms"]) {
+    if (!run[key]) { run[key] = []; changed = true; }
+  }
+  const conditions = [event.failedCapture, event.trainer || run.act >= 2,
+    Object.keys(SIN_BONGURI).every(k => run.bag[k] > 0),
+    [...run.team, ...run.box].some(s => s.tier === "L") || Object.values(run.legendsDone || {}).includes("caught"),
+    run.team.filter(s => s.item).length >= 3, event.swarm,
+    new Set(run.fate.filter(k => Object.values(SIN_FATE_GODS).includes(k))).size >= 3];
+  conditions.forEach((ok, i) => {
+    if (!ok || run.stamps.some(s => s.id === i + 1)) return;
+    run.stamps.push({id: i + 1, turn: run.turn, date: new Date().toISOString()}); changed = true;
+    run.stampNotices.push(`¡Sello ${i + 1} conseguido! ${SIN_STAMPS[i]}`);
+  });
+  while (run.stampRewards.length < run.stamps.length) {
+    const n = run.stampRewards.length + 1, tier = {2: "W", 4: "M", 6: "S"}[n];
+    if (tier) {
+      const pool = SIN_CARDS.filter(c => c.tier === tier && c.d?.sp && sinSignatureMove(c));
+      shuffle(pool.slice()).slice(0, 5).forEach(c => run.tms.push({img: c.img, species: c.d.sp, move: sinSignatureMove(c), tier}));
+    } else if (n === 7) run.noble = {used: false};
+    else Object.entries(({1: {red: 1, blue: 1, yellow: 1}, 3: {pink: 1, green: 1, white: 1}, 5: {black: 3}})[n]).forEach(([k, amount]) => { run.bag[k] += amount; });
+    run.stampRewards.push({milestone: n, turn: run.turn, date: new Date().toISOString()});
+    run.stampNotices.push(`Hito ${n}: recibiste ${SIN_STAMP_REWARDS[n - 1]}.`); changed = true;
+  }
+  if (changed) sinCheckStamps(run);
+  return changed;
+}
+function sinSave() { sinCheckStamps(ST.sin.run); save(); }
+function sinStampNotices(run) {
+  return run.stampNotices?.length ? `<div role="status">${run.stampNotices.map(n => `<p>${esc(n)}</p>`).join("")}<button class="btn" data-act="sinstampseen">Entendido</button></div>` : "";
+}
+function sinShowStamps() {
+  const run = ST.sin.run; if (!run || !SIN_VIEW) return;
+  SIN_VIEW.panel = "stamps"; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.selected = null;
+  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Sellos de Viaje · ${run.stamps.length}/7</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
+    <ol>${SIN_STAMPS.map((text, i) => { const s = run.stamps.find(s => s.id === i + 1); return `<li>${esc(text)} <b>${s ? `Conseguido · Turno ${esc(s.turn)} · ${esc(s.date.slice(0, 10))}` : "Pendiente"}</b></li>`; }).join("")}</ol>
+    <h2>Recompensas por cantidad de sellos</h2><ul class="sin-objects">${SIN_STAMP_REWARDS.map((text, i) => `<li>Hito ${i + 1}: ${esc(text)} · <b>${run.stampRewards.some(r => r.milestone === i + 1) ? "Reclamado" : "Pendiente"}</b></li>`).join("")}</ul>`;
+  $("sin-card").hidden = false;
+}
 const SIN_FRIEND_WIN = 1;
 const SIN_EV_STATS = {HP: "hp", ATTACK: "atk", DEFENSE: "def", SPECIAL_ATTACK: "spa", SPECIAL_DEFENSE: "spd", SPEED: "spe"};
 const SIN_SPECIES = new Map(D.P.map(p => [p.c, p]));
@@ -368,7 +421,8 @@ function sinMigrateTeam(run) {
     if (!s.gender) { s.gender = sinGender(s.species); changed = true; }
     if (s.friendship == null) { s.friendship = sinBaseFriendship(s.species); changed = true; }
   });
-  if (changed) save();
+  if (sinCheckStamps(run)) changed = true;
+  if (changed) sinSave();
 }
 sinMigrateTeam(ST.sin.run);
 const sinLevelMoves = species => (sinSpeciesData(species)?.lv || []).filter(([n]) => n > 0).slice().sort((a, b) => a[0] - b[0]);
@@ -619,7 +673,7 @@ async function sinBegin() {
       notice: "Acto I · El Viaje: recibiste 3 Bonguri Rojos. Los Reclutas del Equipo Galaxia ocupan tu pueblo natal."};
     ST.sin.run.bag.red = 3;
     // La cámara del antiguo visor no se hereda a una partida nueva.
-    ST.sin.cam = null; save(); renderSin();
+    ST.sin.cam = null; sinSave(); renderSin();
   } catch (err) {
     if ($("sin-new-error")) $("sin-new-error").textContent = "No se pudo preparar el inicial. Intenta comenzar de nuevo.";
   } finally {
@@ -662,12 +716,14 @@ function sinUpdateTurn() {
     <div class="sin-team">${sinTeamHTML(run)}</div>
     <button class="btn" data-act="sinbag">Bolsa</button>
     <button class="btn" data-act="sincampaign">Campaña</button>
+    <button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
     ${run.fateTeleport ? '<p>Palkia: toca una casilla resaltada. <button class="btn" data-act="sinfatecancel">Cancelar teletransporte</button></p>' : ""}
-    ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}`;
+    ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}${sinStampNotices(run)}`;
   sinFillImages(); if (SIN_VIEW.panel === "ginkgo") sinShowGinkgo(); else if (SIN_VIEW.panel === "fly") sinShowFlight();
   else if (SIN_VIEW.panel === "campaign") sinShowCampaign();
   else if (SIN_VIEW.panel === "shrine") sinShowShrine();
+  else if (SIN_VIEW.panel === "stamps") sinShowStamps();
   else if (SIN_VIEW.box) sinShowBox(); else if (SIN_VIEW.bag) sinShowBag(); else if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
 }
 function sinCampaignHTML(run) {
@@ -692,7 +748,7 @@ function sinHero() {
   if (!run || run.act !== 4 || run.won || run.battle || run.progress?.pending.length) return;
   run.won = true;
   run.victory = {turns: run.turn, team: run.team.map(s => ({species: s.species, level: s.level})), pv: run.pv, caught: run.caught};
-  delete run.progress; save(); if (B) B.dead = true; B = null; go("sin");
+  delete run.progress; sinSave(); if (B) B.dead = true; B = null; go("sin");
 }
 function sinVictoryScreen() {
   const v = ST.sin.run.victory;
@@ -726,7 +782,7 @@ function sinCraft(key, kind = "ball", member = null) {
   if ((!sinMapAction(run) && !(VIEW === "sin" && feast && !run.progress && kind === "stew" && sinFreeStew(run, key))) || !sinCanCraft(run, key, kind)) return;
   if (kind === "stew" && key === "infused") {
     if (member === null) {
-      if (feast) { event.infuse = true; save(); return sinShrineScreen(); }
+      if (feast) { event.infuse = true; sinSave(); return sinShrineScreen(); }
       SIN_VIEW.bagStew = true; return sinShowBag();
     }
     if (!Number.isInteger(member) || !run.team[member] || run.team[member].level >= 100) return;
@@ -740,10 +796,10 @@ function sinCraft(key, kind = "ball", member = null) {
     if (!free) run.stews[key] = true;
     if (key === "restoring") run.team.forEach(s => { delete s.hpNow; delete s.status; });
     if (key === "captivating") run.captivating = true;
-    if (key === "infused") { sinInfuse(run, member); save(); return renderSin(); }
+    if (key === "infused") { sinInfuse(run, member); sinSave(); return renderSin(); }
   }
   run.notice = kind === "stew" ? `${SIN_STEWS[key].name}: ${SIN_STEWS[key].effect}` : `Fabricaste ${kind === "item" ? esItem(key) : SIN_BALLS[key].name}.`;
-  save(); if (feast) return sinShrineScreen(); sinUpdateTurn();
+  sinSave(); if (feast) return sinShrineScreen(); sinUpdateTurn();
 }
 function sinInfuse(run, index) {
   const s = run.team[index], sp = Dex.species.get(s.species), oldMax = calcStat(sp, s, "hp"), before = s.exp;
@@ -778,9 +834,57 @@ function sinShowBag() {
       ${SIN_VIEW.bagItem === i ? `<p>Equipar a…</p><div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sinequip" data-item="${i}" data-member="${j}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.item ? " · Devolver " + esc(sinItemName(s.item)) : ""}</button>`).join("")}</div>` : ""}</li>`).join("")}</ul>` : "<p>No tienes objetos en el inventario.</p>"}
     <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li>${esc(esSp(s.species))}: <b>${esc(sinItemName(s.item))}</b>
       <button class="btn" data-act="sinunequip" data-member="${i}">Quitar</button></li>` : "").join("")}</ul>
-    ${sinLegendsHTML(run)}
+    ${sinTMsHTML(run)}${sinNobleHTML(run)}${sinLegendsHTML(run)}
     ${sinFateHTML(run)}`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
+}
+function sinTMsHTML(run) {
+  return `<h2>Movimientos de cartas</h2><p>MT del mod: puedes usarlas sin límite fuera de combate.</p><ul class="sin-objects">${run.tms.map((tm, i) => `<li><div class="sin-fate">${sinCardImage(tm.img, esSp(tm.species))}</div><b>${esc(esSp(tm.species))} · ${esc(esMove(tm.move))}</b>
+    <button class="btn" data-act="sintmselect" data-tm="${i}">Enseñar a…</button>${SIN_VIEW.bagTM === i ? `<div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sintmteach" data-tm="${i}" data-member="${j}" ${s.moves.includes(tm.move) ? "disabled" : ""}>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>`).join("")}</div>` : ""}</li>`).join("") || "<li>No tienes MT de cartas.</li>"}</ul>`;
+}
+function sinTeachTM(tmIndex, member) {
+  const run = ST.sin.run, tm = run?.tms[tmIndex], set = run?.team[member];
+  if (!sinMapAction(run) || !tm || !set || !Dex.moves.get(tm.move).exists || set.moves.includes(tm.move)) return;
+  run.progress = {kind: "tm", won: null, rewards: run.team.map((_, index) => ({index, exp: 0, levels: [], events: []})),
+    pending: [{index: member, move: tm.move, kind: "signature"}]};
+  run.notice = `MT de ${esSp(tm.species)}: ${esMove(tm.move)}. La carta se conserva.`;
+  sinAdvanceMoves(run); sinSave(); renderSin();
+}
+function sinNobleOptions(set) {
+  const sp = Dex.species.get(set.species);
+  if (!sp.exists || sp.evos.length) return null;
+  let root = sp;
+  while (root.prevo) root = Dex.species.get(root.prevo);
+  if (!SIN_VILLAGES.some(v => v.starters.some(s => toID(s) === root.id))) return null;
+  const base = Dex.species.get(sp.baseSpecies);
+  const forms = (base.otherFormes || []).map(s => Dex.species.get(s)).filter(s => s.exists && !s.battleOnly && !s.isMega && !s.isPrimal && !/Gmax|Totem/.test(s.forme));
+  const alternate = forms.find(s => s.forme === "Hisui") || forms[0];
+  return alternate ? {base: base.name, alternate: alternate.name} : {perfect: true};
+}
+function sinNobleHTML(run) {
+  if (!run.noble) return "";
+  return `<h2>Pergamino de Nobleza</h2><p>${run.noble.used ? "Pergamino usado definitivamente. El Pokémon elegido conserva su mejora, también en la Caja." : "Un solo uso definitivo en un inicial completamente evolucionado. Conserva su progreso, ataques, objeto, estado y proporción de PS."}</p><ul class="sin-objects">${run.team.map((s, i) => {
+    const option = s.noble || (!run.noble.used && sinNobleOptions(s));
+    if (!option) return "";
+    return `<li>${esc(esSp(s.species))} · Nv. ${esc(s.level)} ${option.perfect && s.noble ? "· IVs perfectos" : `<button class="btn" data-act="sinnoble" data-member="${i}">${option.perfect ? "Usar: IVs 31 en todo" : s.noble ? "Cambiar a " + esc(esSp(s.species === option.base ? option.alternate : option.base)) : "Usar: habilitar cambio de forma"}</button>`}</li>`;
+  }).join("") || "<li>No hay iniciales completamente evolucionados elegibles en el equipo.</li>"}</ul>`;
+}
+function sinUseNoble(member) {
+  const run = ST.sin.run, s = run?.team[member];
+  if (!sinMapAction(run) || !run.noble || !s) return;
+  const option = s.noble || (!run.noble.used && sinNobleOptions(s));
+  if (!option || (s.noble?.perfect) || (s.noble && ![option.base, option.alternate].includes(s.species))) return;
+  const oldMax = calcStat(Dex.species.get(s.species), s, "hp"), ratio = s.hpNow == null ? 1 : s.hpNow / oldMax;
+  if (option.perfect) s.ivs = Object.fromEntries(["hp", "atk", "def", "spa", "spd", "spe"].map(k => [k, 31]));
+  else {
+    s.species = s.species === option.base ? option.alternate : option.base;
+    s.ability = Dex.species.get(s.species).abilities["0"];
+  }
+  s.noble = {...option}; run.noble.used = true;
+  s.hpMax = calcStat(Dex.species.get(s.species), s, "hp");
+  if (s.hpNow != null) s.hpNow = ratio > 0 ? Math.max(1, Math.min(s.hpMax, Math.ceil(ratio * s.hpMax))) : 0;
+  run.notice = option.perfect ? `¡${esSp(s.species)} tiene IVs 31 en todas sus estadísticas!` : `¡Forma de ${esSp(s.species)}! Puedes alternarla desde la Bolsa.`;
+  sinSave(); sinUpdateTurn();
 }
 const sinVillage = run => SIN_BY_CELL.get(run.pos.join(","))?.tokens.find(t => SIN_VILLAGES.some(v => v.village === t.n));
 const sinAtGinkgo = run => sinCellTokens(SIN_BY_CELL.get(run.pos.join(","))).some(t =>
@@ -802,7 +906,7 @@ function sinTrade(index, card) {
   const trade = SIN_TRADES[run.ginkgo][index]; if (!trade || !sinCanPay(run, trade[0])) return;
   sinPay(run, trade[0]); Object.entries(trade[1]).forEach(([k, n]) => { run.bag[k] += n; });
   run.traded = true; run.ginkgo = sinNextGinkgo(run.ginkgo);
-  run.notice = `Comerciaste con Ginkgo: recibiste ${sinRecipeText(trade[1])}.`; save(); sinUpdateTurn();
+  run.notice = `Comerciaste con Ginkgo: recibiste ${sinRecipeText(trade[1])}.`; sinSave(); sinUpdateTurn();
 }
 const sinFlightBlocked = (run, village) => run.grunts.includes(village);
 function sinShowFlight() {
@@ -824,7 +928,7 @@ function sinFly(village, color) {
     sinFlightBlocked(run, origin.n) || sinFlightBlocked(run, village) || !SIN_BONGURI[color] || !(run.bag[color] > 0)) return;
   run.bag[color]--; run.flown = true; run.pos = [...dest.cell];
   run.notice = `Volaste a ${sinName(dest)} descartando 1 Bonguri ${SIN_BONGURI[color][0]}.`;
-  SIN_VIEW.panel = null; SIN_VIEW.flyTo = null; save(); sinCenter(); sinShowCell(SIN_BY_CELL.get(run.pos.join(","))); sinUpdateTurn();
+  SIN_VIEW.panel = null; SIN_VIEW.flyTo = null; sinSave(); sinCenter(); sinShowCell(SIN_BY_CELL.get(run.pos.join(","))); sinUpdateTurn();
 }
 function sinEquip(index, member, remove = false) {
   const run = ST.sin.run, set = run?.team[member];
@@ -838,7 +942,7 @@ function sinEquip(index, member, remove = false) {
     if (set.item) run.items.push(toID(set.item));
     set.item = id;
   }
-  SIN_VIEW.bagItem = null; save(); sinUpdateTurn();
+  SIN_VIEW.bagItem = null; sinSave(); sinUpdateTurn();
 }
 function sinBonguriReward(run, token, count = 3) {
   const reward = {}, colors = ["red", "yellow", "blue", "pink", "green", "white"];
@@ -862,9 +966,37 @@ function sinBattleCard(run) {
     SIN_CARDS.find(c => c.d?.sp && toID(c.d.sp) === toID(battle.wild.species) && c.tier === (battle.tier || token?.tier) &&
       (!token || (c.b === token.b && c.k === token.k)));
 }
+function sinSwarmIndex(battle, me) {
+  return battle.foes.findIndex((s, i) => me.act.p2 === "p2:Enjambre" + (i + 1));
+}
+function sinSwarmDefeated(battle, me) {
+  battle.defeated ||= [];
+  battle.foes.forEach((s, i) => {
+    if (!battle.captures[i] && me.mons["p2:Enjambre" + (i + 1)]?.hp === 0 && !battle.defeated.includes(i)) battle.defeated.push(i);
+  });
+}
+function sinSwarmRewards(run, battle, won, me) {
+  if (me) sinSwarmDefeated(battle, me);
+  // forcewin se interpreta como la derrota de todos los rivales que quedaban.
+  if (won) battle.foes.forEach((s, i) => { if (!battle.captures[i] && !battle.defeated.includes(i)) battle.defeated.push(i); });
+  const resolved = [...new Set([...battle.defeated, ...Object.keys(battle.captures).map(Number)])];
+  if (me && resolved.length) {
+    sinGainExp(run, resolved.map(i => battle.foes[i]), me);
+    run.progress.won = won;
+  }
+  run.progress.kind = "swarm"; run.progress.pv = won && resolved.length === 3 ? 7 : 0;
+  run.pv += run.progress.pv;
+  battle.defeated.forEach(i => { const c = battle.swarmCards[i]; run.discard.push({species: c.species, tier: c.tier, signature: c.move}); });
+  run.progress.captures = Object.values(battle.captures).map(s => {
+    const boxed = run.team.length >= sinTeamSlots(run);
+    (boxed ? run.box : run.team).push(s); run.caught++;
+    return {species: s.species, boxed};
+  });
+  if (run.progress.pv === 7) sinCheckStamps(run, {swarm: true});
+}
 function sinOnFaint(me) {
   const run = ST.sin.run;
-  if (!me.sin || me.over || me.dead || me.sinFled || !run?.battle || run.battle.trainer) return;
+  if (!me.sin || me.over || me.dead || me.sinFled || !run?.battle || run.battle.trainer || run.battle.swarm) return;
   const tier = run.battle.tier || sinEncounterToken(run)?.tier;
   if (run.battle.legend || run.battle.wild.alpha || !(tier in SIN_FLEE_BONGURI)) return;
   const alive = run.battle.indices.some(i => {
@@ -886,7 +1018,14 @@ function sinCaptureRoll(hp, max, ratio, bonus, status, captivating = false) {
 const sinCanBattleFate = me => !!(me && me === B && me.sin && !me.over && !me.dead && !me.sinThrowing && !me.sinFateBusy &&
   me.req?.active && !me.req.wait && !me.req.forceSwitch && !me.req.teamPreview && ST.sin.run?.battle && !ST.sin.run.battle.failedBall && !ST.sin.run.battle.ballAttempt);
 const sinCanThrow = me => sinCanBattleFate(me) && !ST.sin.run.battle.trainer && me.mons[me.act.p2]?.hp > 0;
-const sinCaptureRatio = battle => (sinSpeciesData(battle.wild.species)?.cr ?? 3) * (battle.wild.alpha ? .5 : 1) * (battle.legend?.aura ? .25 : 1);
+const sinCaptureRatio = (battle, target = battle.wild) => (sinSpeciesData(target.species)?.cr ?? 3) * (target.alpha ? .5 : 1) * (battle.legend?.aura ? .25 : 1);
+function sinCaptureFailure(run, turn) {
+  const battle = run.battle;
+  if (battle.captureFailureTurn === turn) return;
+  battle.captureFailureStreak = battle.captureFailureTurn === turn - 1 ? (battle.captureFailureStreak || 0) + 1 : 1;
+  battle.captureFailureTurn = turn;
+  if (battle.captureFailureStreak >= 2) sinCheckStamps(run, {failedCapture: true});
+}
 function sinFailedBallHTML(run) {
   return `<p>La captura falló. Elige antes de perder el turno:</p><button class="btn" data-act="sindialgaretry" ${sinFatePayment(run, "dialga", 1) ? "" : "disabled"}>Dialga ×1: repetir con la misma Ball</button>
     <button class="btn" data-act="sindialgapass">Continuar sin repetir</button>`;
@@ -916,7 +1055,7 @@ async function sinGiratina(me, count) {
   const index = run.battle.indices.find(i => "p1:Sinnoh" + (i + 1) === me.act.p1);
   if (index == null) { me.sinFateBusy = false; return showControls(me); }
   sinSpendFate(run, "giratina", count);
-  (run.battle.fateEffects ||= []).push({index, count}); save();
+  (run.battle.fateEffects ||= []).push({index, count}); sinSave();
   try {
     await say(me, count === 1 ? "¡Giratina: Sacrifica! Pierdes 1/8 de tus PS máximos y ganas +1 Ataque y +1 Ataque Especial." : "¡Giratina: Sacrifica todo! Quedas con 1 PS y ganas +2 Ataque, +2 Ataque Especial y +1 Velocidad.", 1.2);
     if (me.dead || me.over) return;
@@ -927,27 +1066,30 @@ async function sinGiratina(me, count) {
 const sinGiratinaEval = count => count === 3 ? "p.sethp(1); p.boostBy({atk:2,spa:2,spe:1});" : "p.damage(Math.max(1,Math.floor(p.maxhp/8))); p.boostBy({atk:1,spa:1});";
 function sinPassCapture(me) {
   if (me !== B || me.dead || me.over || !ST.sin.run?.battle) return;
-  delete ST.sin.run.battle.failedBall; save();
+  delete ST.sin.run.battle.failedBall; sinSave();
   me.req = null; me.shown = false; $("ctl").innerHTML = "";
   me.s.omniscient.write('>eval const sd=battle.sides[0]; sd.clearChoice(); sd.choice.actions=[{choice:"pass",pokemon:sd.active[0],index:0}]; sd.choice.forcedPassesLeft=0; if (battle.allChoicesDone()) battle.commitChoices();');
 }
 async function sinRepeatCapture(me) {
   const run = ST.sin.run, failed = run?.battle?.failedBall;
   if (me !== B || !me.sin || me.dead || me.over || me.sinThrowing || !failed || !sinSpendFate(run, "dialga", 1)) return;
-  delete run.battle.failedBall; save();
+  delete run.battle.failedBall; sinSave();
   return sinThrowBall(me, failed.key, failed);
 }
 async function sinThrowBall(me, key, repeat = null, pending = null) {
   const run = ST.sin.run, ball = SIN_BALLS[key];
   if (me !== B || !ball || (!repeat && (!sinCanThrow(me) || !(run.balls[key] > 0)))) return;
   const wild = me.mons[me.act.p2];
+  const encounter = run.battle, foeIndex = encounter.swarm ? sinSwarmIndex(encounter, me) : null;
+  const set = encounter.swarm ? encounter.foes[foeIndex] : encounter.wild;
+  if (!set || (encounter.swarm && encounter.captures[foeIndex])) return;
   me.sinThrowing = true; me.lastReq = me.req; me.req = null; me.shown = false; $("ctl").innerHTML = "";
   const captivating = repeat ? repeat.captivating : !!run.battle.captivating;
   if (!repeat) run.balls[key]--;
   run.battle.captivating = false;
   const target = repeat?.target || {hp: wild.hp, max: wild.max, status: wild.status};
-  const result = pending?.result || sinCaptureRoll(target.hp, target.max, sinCaptureRatio(run.battle), ball.bonus, target.status, captivating);
-  run.battle.ballAttempt = {key, captivating, target, result}; save();
+  const result = pending?.result || sinCaptureRoll(target.hp, target.max, sinCaptureRatio(encounter, set), ball.bonus, target.status, captivating);
+  run.battle.ballAttempt = {key, captivating, target, result, foeIndex}; sinSave();
   try {
     if (repeat) {
       // Reanudar conserva el objetivo del intento guardado, incluidos sus PS y estado.
@@ -962,15 +1104,27 @@ async function sinThrowBall(me, key, repeat = null, pending = null) {
     }
     if (me.dead || me.over) return;
     if (result.caught) {
-      me.sinCaught = true;
-      await say(me, `¡Ya está! ¡Has atrapado a ${esSp(run.battle.wild.species)}!`, 1.2);
-      if (!me.dead && !me.over) me.s.omniscient.write(">forcewin p1");
+      await say(me, `¡Ya está! ¡Has atrapado a ${esSp(set.species)}!`, 1.2);
+      if (!me.dead && !me.over) {
+        delete encounter.captureFailureTurn; encounter.captureFailureStreak = 0;
+        if (encounter.swarm) {
+          sinSwarmDefeated(encounter, me);
+          const captured = JSON.parse(JSON.stringify(set));
+          captured.hpMax = calcStat(Dex.species.get(set.species), set, "hp");
+          captured.hpNow = Math.max(1, Math.min(captured.hpMax, Math.ceil(target.hp / target.max * captured.hpMax)));
+          captured.status = SIN_STATUS[target.status] ? target.status : ""; captured.tier = encounter.swarmCards[foeIndex].tier;
+          encounter.captures[foeIndex] = captured; delete encounter.ballAttempt; sinSave();
+          // El capturado cuenta como caído solo en el motor; conserva sus PS y estado para incorporarse al final.
+          me.s.omniscient.write('>eval const p=battle.sides[1].active[0]; battle.sides.forEach(s=>s.clearChoice()); p.faint(); battle.faintMessages(); if(!battle.ended){battle.checkFainted();battle.makeRequest("switch");}');
+        } else { me.sinCaught = true; sinSave(); me.s.omniscient.write(">forcewin p1"); }
+      }
     } else {
       await say(me, "¡Oh, no! ¡El Pokémon se ha escapado!", 1.2);
       if (!me.dead && !me.over) {
+        if (!repeat || pending) sinCaptureFailure(run, me.turn);
         delete run.battle.ballAttempt;
         if (sinFatePayment(run, "dialga", 1)) {
-          run.battle.failedBall = {key, captivating, target}; save();
+          run.battle.failedBall = {key, captivating, target}; sinSave();
           $("ctl").innerHTML = sinFailedBallHTML(run);
         } else sinPassCapture(me);
       }
@@ -988,7 +1142,7 @@ function sinMoveTo(key) {
     const h = SIN_BY_CELL.get(step); run.pos = [h.c, h.r]; run.moved++;
     if (sinRevealHidden(run, step, messages)) break;
   }
-  run.notice = messages.join(" "); save();
+  run.notice = messages.join(" "); sinSave();
   if (run.offer && !run.offer.closed) renderSin(); else sinUpdateTurn();
 }
 function sinRevealHidden(run, key, messages) {
@@ -1034,14 +1188,38 @@ function sinSearch(index) {
   if (!run || run.searched || run.fought || run.battle || run.progress || (run.offer && !run.offer.closed) || run.revive || !run.team.some(sinAlive) || !t) return;
   const key = run.pos.join(","), hidden = run.hidden[key];
   if (t.n === "Alpha Pokémon" && hidden?.token === index && hidden.revealed && hidden.present) {
-    sinAlphaOffer(run, hidden, key); save(); return renderSin();
+    sinAlphaOffer(run, hidden, key); sinSave(); return renderSin();
   }
   if (!sinSearchToken(t) || t.cell.join(",") !== key) return;
   const [lo, hi] = SIN_WILD_LEVELS[t.tier];
   const cards = shuffle(sinWildCards(t).slice()).slice(0, SIN_OFFER_COUNT[t.tier]).map(c =>
     ({species: c.d.sp, img: c.img, level: lo + Math.floor(Math.random() * (hi - lo + 1))}));
   run.searched = true; run.offer = {cards, token: index, place: sinName(t), meta: sinMeta(t), closed: false};
-  save(); renderSin();
+  sinSave(); renderSin();
+}
+const sinSwarmGate = t => t?.kind === "Custom_Tile" && t.tags?.includes("Distortion Gate") && !t.tags.includes("Distortion World");
+function sinSwarmCards(token) {
+  return ["W", "M", "S"].map(tier => {
+    const c = shuffle(SIN_CARDS.filter(c => c.d?.sp && c.tier === tier && c.b === token.b))[0];
+    const [lo, hi] = SIN_WILD_LEVELS[tier];
+    return c && {species: c.d.sp, img: c.img, tier, move: sinSignatureMove(c), level: lo + Math.floor(Math.random() * (hi - lo + 1))};
+  });
+}
+async function sinSeekSwarm(index) {
+  const run = ST.sin.run, token = SIN.tokens[index];
+  if (!sinMapAction(run) || run.searched || run.fought || !run.team.some(sinAlive) || !sinSwarmGate(token) || token.cell.join(",") !== run.pos.join(",")) return;
+  SIN_BUSY = true;
+  try {
+    const cards = sinSwarmCards(token);
+    if (cards.some(c => !c)) { run.notice = "No hay cartas de los tres niveles para esta puerta."; return sinUpdateTurn(); }
+    const foes = await Promise.all(cards.map(c => sinInitialSet(c.species, c.level)));
+    run.searched = true;
+    run.battle = {swarm: true, foes, swarmCards: cards, captures: {}, defeated: [], token: index, captivating: !!run.captivating,
+      indices: run.team.map((s, i) => sinAlive(s) ? i : -1).filter(i => i >= 0),
+      start: {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: true}};
+    run.captivating = false; sinSave();
+  } finally { SIN_BUSY = false; }
+  return sinFight();
 }
 function sinOfferScreen() {
   const run = ST.sin.run, offer = run.offer;
@@ -1069,7 +1247,9 @@ function sinPre(team) {
     const i = team.findIndex(s => s.name === "Sinnoh" + (effect.index + 1));
     return i < 0 ? "" : `{const p=a[${i}];${sinGiratinaEval(effect.count)}}`;
   }).join("");
-  return pre || effects ? "const a=battle.sides[0].pokemon;" + pre + effects : "";
+  // Solo el enjambre restringe la solicitud rival al siguiente salvaje vivo, manteniendo la IA normal.
+  const order = ST.sin.run?.battle?.swarm ? `const request=battle.makeRequest; battle.makeRequest=function(type){const side=this.sides[1];if(side&&!side.sinOrder){const get=side.getRequestData;side.getRequestData=function(...args){const data=get.apply(this,args),next=this.pokemon.find(p=>!p.fainted&&!p.isActive);data.pokemon.forEach((p,i)=>{if(!p.active&&this.pokemon[i]!==next)p.condition="0 fnt";});return data;};side.sinOrder=true;}return request.call(this,type);};` : "";
+  return (pre || effects ? "const a=battle.sides[0].pokemon;" + pre + effects : "") + order;
 }
 const sinCanChallengeGrunts = run => run.act === 1 && run.grunts.includes(run.village) &&
   sinVillage(run)?.n === run.village && !run.fought && !run.revive && run.team.some(sinAlive);
@@ -1113,7 +1293,7 @@ function sinOfferHeart(color) {
   if (!sinMapAction(run) || run.act !== 3 || run.heart || run.originGod || !sinAtToken(run, "Origin Shrine") || !SIN_BONGURI[color] || !(run.bag[color] > 0)) return;
   run.bag[color]--; run.heart = true; run.items.push("heartofsinnoh");
   run.notice = "¡Restauraste el Corazón de Sinnoh! Está en la Bolsa: equipado potencia un 20 % los movimientos del mismo tipo que su portador. Desafía a Helio en el Templo de Sinnoh.";
-  save(); SIN_VIEW.panel = null; SIN_VIEW.selected = SIN_BY_CELL.get(run.pos.join(",")); sinUpdateTurn();
+  sinSave(); SIN_VIEW.panel = null; SIN_VIEW.selected = SIN_BY_CELL.get(run.pos.join(",")); sinUpdateTurn();
 }
 const sinShrineName = name => "Santuario " + name.replace(/ Shrine$/, "");
 const sinShrineOccupied = (run, name) => run.shrineLegends[name] || (name === "Origin Shrine" && run.originGod);
@@ -1146,7 +1326,7 @@ function sinOfferShrine(color, major = false) {
   run.bag[color]--; if (major) run.pv -= 7;
   run.offered = true;
   run.shrineEvent = {drawn, grade, selected: [], queue: major ? null : drawn.slice(), cursor: 0};
-  save(); renderSin();
+  sinSave(); renderSin();
 }
 function sinChooseShrine(index) {
   const run = ST.sin.run, e = run?.shrineEvent;
@@ -1155,7 +1335,7 @@ function sinChooseShrine(index) {
   if (e.selected.length === 2) {
     e.queue = e.selected.slice(); run.shrineDiscard.push(...e.drawn.filter(i => !e.selected.includes(i)));
   }
-  save(); sinShrineScreen();
+  sinSave(); sinShrineScreen();
 }
 function sinApplyShrine(run) {
   const e = run.shrineEvent;
@@ -1176,7 +1356,7 @@ function sinApplyShrine(run) {
     run.feast.remaining = Math.min(4 - run.feast.used.length, run.feast.remaining + e.grade);
     e.message = `Puedes elegir hasta ${e.grade} estofados distintos gratis en la Bolsa durante este turno. No gastan Bonguri ni su uso habitual.`;
   } else { e.done = false; e.remaining = e.grade; }
-  save();
+  sinSave();
 }
 function sinShrineDiscards(run, kind, grade) {
   const tiers = kind === "exchange" ? [["W"], ["M"], ["S"]][grade - 1] : [["W", "M"], ["W", "M", "S"], ["W", "M", "S", "L"]][grade - 1];
@@ -1213,7 +1393,7 @@ function sinShrineChoice(action, value) {
       sinAdvanceMoves(run); e.message = `Sabiduría Antigua: ${esMove(d.signature)}.`;
     }
   } else return;
-  save(); sinShrineScreen();
+  sinSave(); sinShrineScreen();
 }
 function sinNextShrine() {
   const run = ST.sin.run, e = run?.shrineEvent;
@@ -1221,7 +1401,7 @@ function sinNextShrine() {
   run.shrineDiscard.push(e.queue[e.cursor]); e.cursor++;
   if (e.cursor === e.queue.length) { run.notice = e.message || "Ofrenda de santuario resuelta."; delete run.shrineEvent; }
   else { delete e.started; delete e.done; delete e.discarded; delete e.infuse; }
-  save(); renderSin();
+  sinSave(); renderSin();
 }
 function sinShrineScreen() {
   const run = ST.sin.run, e = run.shrineEvent;
@@ -1268,7 +1448,7 @@ function sinSeekLegend(index) {
   run.searched = true;
   run.offer = {cards: [{species, img: card.img, level: SIN_LEGEND_LEVELS[toID(species)] || SIN_LEGEND_LEVEL}],
     token: index, legend: {species, ...(shrine ? {shrine: token.n} : {place: token.n})}, place: sinName(token), meta: "Encuentro legendario", closed: false};
-  save(); renderSin();
+  sinSave(); renderSin();
 }
 function sinLegendsHTML(run) {
   return `<h2>Legendarios</h2><p>Activos en santuarios:</p>${Object.keys(run.shrineLegends).length ? `<ul>${Object.entries(run.shrineLegends).map(([shrine, species]) => `<li>${esc(esSp(species))} · ${esc(sinShrineName(shrine))}</li>`).join("")}</ul>` : "<p>Ninguno.</p>"}
@@ -1298,17 +1478,20 @@ async function sinFight(index, trainerKey = false) {
         run.captivating = false; run.offer.closed = true;
       }
       run.battle.start = {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: run.searched};
-      save();
+      sinSave();
     }
     if (!run.battle.start) {
-      run.battle.start = {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: run.searched}; save();
+      run.battle.start = {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: run.searched}; sinSave();
     }
-    if (!run.battle.trainer && !run.battle.tier) { run.battle.tier = sinEncounterToken(run)?.tier; save(); }
+    if (!run.battle.trainer && !run.battle.swarm && !run.battle.tier) { run.battle.tier = sinEncounterToken(run)?.tier; sinSave(); }
     const mine = run.battle.indices.map(i => ({...run.team[i], name: "Sinnoh" + (i + 1)}));
     const trainer = run.battle.trainer;
-    const foes = (trainer ? run.battle.foes : [run.battle.wild]).map(s => ({...s}));
+    const swarm = run.battle.swarm;
+    const foes = (trainer || swarm ? run.battle.foes : [run.battle.wild]).map((s, i) => ({...s, ...(swarm ? {name: "Enjambre" + (i + 1)} : {})}))
+      .filter((s, i) => !swarm || (!run.battle.captures[i] && !run.battle.defeated.includes(i)));
     const spec = trainer && (trainer.name ? trainer : sinTrainerSpec(run, "grunt"));
-    sinLeave(); newBattle(mine, foes, {sin: true, aiDiff: spec ? spec.aiDiff : "easy", pre: sinPre(mine),
+    sinLeave(); newBattle(mine, foes, {sin: true, aiDiff: swarm ? "normal" : spec ? spec.aiDiff : "easy", pre: sinPre(mine),
+      ...(swarm ? {foeName: "Enjambre", intro: "¡Un enjambre de Pokémon salvajes sale de la Puerta de Distorsión!", bgm: "bgm_boss"} : {}),
       ...(run.battle.legend ? {bgm: run.battle.legend.god ? "bgm_final" : "bgm_boss"} : {}),
       ...(spec ? {foeName: spec.name, intro: spec.intro, bgm: spec.bgm} : {})});
   } catch (err) {
@@ -1320,9 +1503,10 @@ async function sinFight(index, trainerKey = false) {
   }
 }
 function sinPendingScreen() {
-  const battle = ST.sin.run.battle, foes = battle.trainer ? battle.foes : [battle.wild];
+  const battle = ST.sin.run.battle, foes = battle.trainer || battle.swarm ? battle.foes : [battle.wild];
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Combate pendiente</h1>
     ${battle.trainer ? `<p>${esc(battle.trainer.name || "Reclutas del Equipo Galaxia")}</p>` : ""}
+    ${battle.swarm ? "<p>Batalla Enjambre: Débil → Moderado → Fuerte. Las capturas y los caídos guardados se conservan; continúas con los restantes. Ganar los tres da 7 PV, sin Bonguri.</p>" : ""}
     <p>${foes.map(s => `${esc(esSp(s.species))} · Nv. ${esc(s.level)}`).join(" / ")}. Al salir o recargar se repite este mismo encuentro desde su inicio.</p>
     <button class="btn primary" data-act="sinresume">Reanudar combate</button><p id="sin-offer-error" role="alert"></p></div></div>`;
 }
@@ -1330,8 +1514,8 @@ function sinResult(won, me) {
   const run = ST.sin.run; if (!run || !run.battle) return;
   sinMigrateTeam(run);
   const encounter = run.battle, god = encounter.legend?.god;
-  const trainer = encounter.trainer, wild = encounter.wild, token = trainer ? null : sinEncounterToken(run), tier = encounter.tier || token?.tier;
-  const move = trainer ? null : sinSignatureMove(sinBattleCard(run)), fled = !trainer && won === null && !!me.sinFled;
+  const trainer = encounter.trainer, swarm = encounter.swarm, wild = encounter.wild, token = trainer || swarm ? null : sinEncounterToken(run), tier = encounter.tier || token?.tier;
+  const move = trainer || swarm ? null : sinSignatureMove(sinBattleCard(run)), fled = !trainer && !swarm && won === null && !!me.sinFled;
   run.battle.indices.forEach(i => {
     const s = run.team[i], m = me.mons["p1:Sinnoh" + (i + 1)];
     // me.mons solo contiene los que salieron al campo; los de la banca conservan su estado.
@@ -1353,14 +1537,19 @@ function sinResult(won, me) {
     delete run.battle.failedBall; delete run.battle.ballAttempt;
     me.sinOriginPending = true;
     run.notice = `¡El Aura Celestial restaura a ${SIN_GODS[god].species} en su Forma Origen! Tu equipo conserva sus PS y estados.`;
-    save(); return;
+    sinSave(); return;
   }
   if (won === false && encounter.start && sinFatePayment(run, "dialga", 3)) {
+    if (swarm) sinSwarmDefeated(encounter, me);
     run.retry = JSON.parse(JSON.stringify(encounter));
   }
-  if (won === true) {
+  if (swarm) {
+    run.progress = {won, kind: "swarm", rewards: [], pending: []};
+    if (!run.retry) sinSwarmRewards(run, encounter, won === true, me);
+  } else if (won === true) {
     sinGainExp(run, trainer ? run.battle.foes : wild, me, !!trainer);
     if (trainer) {
+      sinCheckStamps(run, {trainer: true});
       run.progress.kind = "trainer";
       if (trainer.kind === "grunt" && run.act === 1) {
         run.act = 2; run.grunts = run.grunts.filter(v => v !== run.village); run.moveBonus += 2;
@@ -1415,7 +1604,8 @@ function sinResult(won, me) {
       run.notice = `¡${me.sinCaught ? "Capturaste" : "Venciste"} a ${SIN_GODS[god].species}! Origin queda libre. ¡Juegas otro turno inmediatamente! ${stars}`;
     } else run.notice = `¡Origin queda libre de ${SIN_GODS[god].species}!`;
   }
-  save();
+  if (swarm && !run.revive) run.notice = won ? "¡Superaste los tres Pokémon del enjambre! Ganaste 7 PV, sin Bonguri. Tu turno terminó." : "El enjambre terminó sin victoria completa: 0 PV y ningún Bonguri. Tu turno terminó.";
+  sinSave();
 }
 function sinReturnHome(run) {
   const home = SIN.tokens.find(t => t.n === run.village && t.tags?.includes("Village Token"));
@@ -1428,14 +1618,17 @@ async function sinRepeatBattle() {
   const start = encounter.start;
   run.team = JSON.parse(JSON.stringify(start.team)); run.pos = [...start.pos]; run.moved = start.moved; run.searched = start.searched;
   run.fought = false; run.revive = false; run.battle = encounter; run.battle.fateEffects = [];
+  if (encounter.swarm) { encounter.captures = {}; encounter.defeated = []; }
+  delete encounter.captureFailureTurn; delete encounter.captureFailureStreak; delete encounter.captureTurn;
   delete run.battle.failedBall; delete run.battle.ballAttempt; delete run.progress; delete run.retry;
   run.notice = "¡Dialga rebobina el combate! Conservas las Balls gastadas; recuperas el equipo con que empezaste.";
-  save(); if (B) B.dead = true; B = null; VIEW = "sin"; return sinFight();
+  sinSave(); if (B) B.dead = true; B = null; VIEW = "sin"; return sinFight();
 }
 function sinAcceptDefeat() {
   const run = ST.sin.run; if (!run?.retry || run.progress?.won !== false) return;
   if (run.retry.hidden && run.hidden[run.retry.hidden]) run.hidden[run.retry.hidden].present = false;
-  delete run.retry; sinReturnHome(run); save(); sinRefreshProgress();
+  if (run.retry.swarm) sinSwarmRewards(run, run.retry, false);
+  delete run.retry; sinReturnHome(run); sinSave(); sinRefreshProgress();
 }
 function sinEndHTML(won) {
   // Los empates pasan directamente por showEnd en batalla.js.
@@ -1452,10 +1645,11 @@ function sinProgressHTML(won) {
   if (p) won = p.won;
   if (p?.act != null) requestAnimationFrame(sinFillImages);
   return `<div class="card"><p class="result">${p?.kind === "stew" ? "Estofado Infundido" : p?.escaped ? "Huiste del combate" : p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
-    <p class="note">${esc(run ? run.notice : "El combate terminó.")}</p>
+    <p class="note">${esc(run ? run.notice : "El combate terminó.")}</p>${run ? sinStampNotices(run) : ""}
     ${p?.act != null ? sinCampaignHTML(run) : ""}
     ${p?.fragment ? `<p>¡Obtuviste el ${esc(SIN_COMMANDERS.find(c => c.id === p.fragment).fragment)}!</p><p>+1 espacio en el equipo · +1 movimiento por turno · Equipo: ${esc(sinTeamSlots(run))} espacios.</p>` : ""}
     ${p?.caught ? `<p>${esc(esSp(p.caught.species))} ${p.caught.boxed ? "fue enviado a la Caja" : "se unió a tu equipo"}.</p>` : ""}
+    ${(p?.captures || []).map(c => `<p>${esc(esSp(c.species))} ${c.boxed ? "fue enviado a la Caja" : "se unió a tu equipo"}.</p>`).join("")}
     ${p?.pv != null ? `<p>Ganaste ${esc(p.pv)} ${p.pv === 1 ? "Punto" : "Puntos"} de Viaje.</p>` : ""}
     ${p?.fled && !Object.keys(p.bonguri || {}).length ? "<p>Recibiste 0 Bonguri.</p>" : ""}
     ${p?.bonguri && Object.keys(p.bonguri).length ? `<p>Recibiste ${Object.entries(p.bonguri).map(([k, n]) => `${esc(n)} Bonguri ${esc(SIN_BONGURI[k][n === 1 ? 0 : 1])}`).join(", ")}.</p>` : ""}
@@ -1487,10 +1681,10 @@ function sinTeachSignature(index) {
     if (!s || !sinAlive(s) || s.moves.some(m => toID(m) === offer.move)) return;
     p.pending.push({index, move: offer.move, kind: "signature"});
   }
-  offer.done = true; sinAdvanceMoves(run); save(); sinRefreshProgress();
+  offer.done = true; sinAdvanceMoves(run); sinSave(); sinRefreshProgress();
 }
 function sinProgressScreen() {
-  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${ST.sin.run.progress?.kind === "stew" ? "Subida de nivel" : "Resultado del combate"}</h1>${sinProgressHTML()}</div></div>`;
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${ST.sin.run.progress?.kind === "tm" ? "Movimiento de carta" : ST.sin.run.progress?.kind === "stew" ? "Subida de nivel" : "Resultado del combate"}</h1>${sinProgressHTML()}</div></div>`;
 }
 function sinLearn(slot) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
@@ -1498,7 +1692,7 @@ function sinLearn(slot) {
   const s = run.team[q.index], event = {move: q.move};
   if (slot === -1) event.skip = true;
   else { event.forgot = s.moves[slot]; s.moves[slot] = q.move; }
-  p.rewards[q.index].events.push(event); p.pending.shift(); sinAdvanceMoves(run); save();
+  p.rewards[q.index].events.push(event); p.pending.shift(); sinAdvanceMoves(run); sinSave();
   sinRefreshProgress();
 }
 function sinEvolve(accept) {
@@ -1517,7 +1711,7 @@ function sinEvolve(accept) {
       .filter((q, i, all) => all.findIndex(m => m.move === q.move) === i);
     p.pending.unshift(...moves);
   }
-  sinAdvanceMoves(run); save(); sinRefreshProgress();
+  sinAdvanceMoves(run); sinSave(); sinRefreshProgress();
 }
 function sinRefreshProgress() {
   if (ST.sin.run?.shrineEvent) return sinShrineScreen();
@@ -1543,7 +1737,7 @@ function sinBoxAction(action, index, other) {
     if (!Number.isInteger(other) || !run.team[index] || !run.box[other] || !sinCanDeposit(run, index, run.box[other])) return;
     [run.team[index], run.box[other]] = [run.box[other], run.team[index]];
   } else return;
-  SIN_VIEW.boxMember = null; save(); sinUpdateTurn();
+  SIN_VIEW.boxMember = null; sinSave(); sinUpdateTurn();
 }
 function sinBoxMember(s) {
   const max = s.hpMax ?? calcStat(Dex.species.get(s.species), s, "hp"), hp = s.hpNow ?? max;
@@ -1570,12 +1764,12 @@ function sinHeal() {
   if (!h || run.healed || run.revive || run.battle || run.progress || !sinCellTokens(h).some(t =>
     (t.tags || []).includes("Village Token") || (t.n === "Campsite" && t.hidden?.revealed))) return;
   run.team.forEach(s => { delete s.hpNow; delete s.status; });
-  run.healed = true; run.notice = "Tu equipo está completamente recuperado."; save(); sinUpdateTurn();
+  run.healed = true; run.notice = "Tu equipo está completamente recuperado."; sinSave(); sinUpdateTurn();
 }
 function sinEndTurn() {
   const run = ST.sin.run; if (!run || run.battle || run.progress || run.shrineEvent || run.fateTeleport || (run.offer && !run.offer.closed)) return;
   if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
-  run.notice = sinResetTurn(run); save(); sinUpdateTurn();
+  run.notice = sinResetTurn(run); sinSave(); sinUpdateTurn();
 }
 function sinResetTurn(run) {
   run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
@@ -1681,6 +1875,10 @@ function sinDraw() {
       sinHex(ctx, h.x, h.y); ctx.fillStyle = "#fff4"; ctx.fill(); ctx.strokeStyle = "#ffde75"; ctx.lineWidth = 3 / z; ctx.stroke();
     }
     const tokens = sinCellTokens(h);
+    if (tokens.some(sinSwarmGate)) {
+      sinHex(ctx, h.x, h.y); ctx.fillStyle = "#bc7cff44"; ctx.fill();
+      ctx.strokeStyle = "#ce9cff"; ctx.lineWidth = 4 / z; ctx.stroke();
+    }
     if (tokens.some(t => sinCampaignTarget(run, t))) {
       sinHex(ctx, h.x, h.y); ctx.fillStyle = "#ffe35d55"; ctx.fill();
       ctx.strokeStyle = "#ffe35d"; ctx.lineWidth = 4 / z; ctx.stroke();
@@ -1750,7 +1948,7 @@ function sinSaveCam(manual = false) {
   if (!SIN_VIEW || !SIN_VIEW.cam) return;
   if (manual === true) SIN_VIEW.camMoved = true;
   if (!SIN_VIEW.camMoved) return;
-  ST.sin.cam = {...SIN_VIEW.cam}; save();
+  ST.sin.cam = {...SIN_VIEW.cam}; sinSave();
 }
 function sinCenter() {
   const v = SIN_VIEW; if (!v) return;
@@ -1758,7 +1956,7 @@ function sinCenter() {
   v.cam = h ? {x: h.x, y: h.y, z: .9} :
     {x: (SIN_BOUNDS.x + SIN_BOUNDS.right) / 2, y: (SIN_BOUNDS.y + SIN_BOUNDS.bottom) / 2,
       z: Math.min(v.w / (SIN_BOUNDS.right - SIN_BOUNDS.x + 40), v.h / (SIN_BOUNDS.bottom - SIN_BOUNDS.y + 40))};
-  v.camMoved = false; ST.sin.cam = null; save(); sinClamp(v); sinRequestDraw();
+  v.camMoved = false; ST.sin.cam = null; sinSave(); sinClamp(v); sinRequestDraw();
 }
 function sinResize() {
   const v = SIN_VIEW; if (!v || !v.canvas.isConnected) return;
@@ -1800,6 +1998,7 @@ function sinShowCell(h) {
       const meta = sinMeta(t);
       const commander = SIN_COMMANDERS.find(c => c.token === t.n);
       return `<li><b>${esc(sinName(t))}</b>${meta ? `<small>${esc(meta)}</small>` : ""}${t.hidden ? "<small>Escondite revelado</small>" : ""}
+        ${sinSwarmGate(t) ? `<small>Puerta de Distorsión · Débil → Moderado → Fuerte · 7 PV al superar los tres. Captura permitida, sin Bonguri ni huida del rival.</small>${here ? `<button class="btn primary sin-move" data-act="sinswarm" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Batalla Enjambre</button>` : ""}` : ""}
         ${t.n === "Origin Shrine" && run.originGod ? `<small>${esc(SIN_GODS[run.originGod].species)} ocupa Origin. ${sinGodAura(run, run.originGod) ? "Aura Celestial: captura ×0,25 y segunda fase en Forma Origen." : "Tu artefacto celestial evita el Aura; un solo combate y captura normal."}</small>${here ? `<button class="btn primary sin-move" data-act="singod" ${canSearch ? "" : "disabled"}>Combatir contra ${esc(SIN_GODS[run.originGod].species)}</button>` : ""}` : ""}
         ${/ Shrine$/.test(t.n) ? run.shrineLegends[t.n] ? `<small>${esc(esSp(run.shrineLegends[t.n]))} está en el santuario. No permite ofrendas.</small>${here ? `<button class="btn primary sin-move" data-act="sinlegend" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Combatir contra ${esc(esSp(run.shrineLegends[t.n]))}</button>` : ""}` :
           `${here ? `<button class="btn sin-move" data-act="sinshrine" ${run.offered || run.revive || sinShrineOccupied(run, t.n) || !Object.values(run.bag).some(n => n > 0) ? "disabled" : ""}>Ofrenda de santuario${run.offered ? " (usada este turno)" : ""}</button>` : ""}` : ""}
@@ -1901,6 +2100,12 @@ document.addEventListener("click", e => {
   }
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const act = b.dataset.act;
+  if (act === "sinstampseen" && ST.sin.run && (VIEW === "sin" || B?.sin)) {
+    ST.sin.run.stampNotices = []; sinSave();
+    if (ST.sin.run.shrineEvent) return sinShrineScreen();
+    if (ST.sin.run.progress) return sinRefreshProgress();
+    return sinUpdateTurn();
+  }
   if (act === "quit" && VIEW === "battle" && B?.sin && !B.over && ST.sin.run?.battle?.wild?.alpha) {
     // Se intercepta antes del listener de batalla.js para descartar el Alfa al huir.
     e.stopImmediatePropagation();
@@ -1919,7 +2124,7 @@ document.addEventListener("click", e => {
   if ((act === "sinevolve" || act === "sincancelevolution") && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinEvolve(act === "sinevolve");
   if (act === "sinmap") {
     const run = ST.sin.run; if (!run || run.retry || !run.progress || run.progress.pending.length || (run.progress.signature && !run.progress.signature.done)) return;
-    delete run.progress; save(); if (B) B.dead = true; B = null; return go("sin");
+    delete run.progress; sinSave(); if (B) B.dead = true; B = null; return go("sin");
   }
   if (act === "sinhero" && (VIEW === "sin" || (VIEW === "battle" && B?.sin))) return sinHero();
   if (act === "sin") { if (B) B.dead = true; B = null; return go("sin"); }
@@ -1936,10 +2141,10 @@ document.addEventListener("click", e => {
     if (SIN_NEW.species) SIN_NEW.species = null; else SIN_NEW.village = null; return sinNewScreen();
   }
   if (act === "sinbegin") return sinBegin();
-  if (act === "sinexplore" && ST.sin.run?.won) { ST.sin.run.victorySeen = true; save(); return renderSin(); }
+  if (act === "sinexplore" && ST.sin.run?.won) { ST.sin.run.victorySeen = true; sinSave(); return renderSin(); }
   if (act === "sinabandon") {
     if (!confirm("¿Abandonar esta partida de Leyendas de Sinnoh? Se perderá su progreso.")) return;
-    sinLeave(); ST.sin.run = null; ST.sin.cam = null; SIN_NEW = {village: null, species: null, busy: false}; save(); return renderSin();
+    sinLeave(); ST.sin.run = null; ST.sin.cam = null; SIN_NEW = {village: null, species: null, busy: false}; sinSave(); return renderSin();
   }
   if (act === "sinfight") return sinFight(+b.dataset.offer);
   if (act === "singrunts") return sinFight(null, true);
@@ -1955,22 +2160,27 @@ document.addEventListener("click", e => {
   if (act === "sinshrineskip") {
     const run = ST.sin.run, e = run?.shrineEvent;
     if (!e?.queue || e.done || run.progress || !["exchange", "wisdom"].includes(SIN_SHRINE_EFFECTS[SIN_SHRINE_CARDS[e.queue[e.cursor]].img].kind)) return;
-    e.done = true; e.message = "Decidiste no usar este efecto."; save(); return sinShrineScreen();
+    e.done = true; e.message = "Decidiste no usar este efecto."; sinSave(); return sinShrineScreen();
   }
   if (act === "sinshrineprogress") {
     const run = ST.sin.run;
     if (!run?.shrineEvent || !run.progress || run.progress.pending.length) return;
-    delete run.progress; run.shrineEvent.done = true; save(); return sinShrineScreen();
+    delete run.progress; run.shrineEvent.done = true; sinSave(); return sinShrineScreen();
   }
   if (act === "sinstew" && ST.sin.run?.shrineEvent) return sinCraft(b.dataset.stew, "stew");
   if (act === "sininfuse" && ST.sin.run?.shrineEvent) return sinCraft("infused", "stew", +b.dataset.member);
   if (act === "sinskip" && ST.sin.run && ST.sin.run.offer && !ST.sin.run.offer.alpha && !ST.sin.run.battle) {
-    ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; save(); return renderSin();
+    ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; sinSave(); return renderSin();
   }
   if (!SIN_VIEW || !ST.sin.run) return;
-  if (act === "sinfatecancel" && ST.sin.run.fateTeleport) { delete ST.sin.run.fateTeleport; ST.sin.run.notice = "Teletransporte cancelado; conservas tus cartas."; save(); return sinUpdateTurn(); }
+  if (act === "sinfatecancel" && ST.sin.run.fateTeleport) { delete ST.sin.run.fateTeleport; ST.sin.run.notice = "Teletransporte cancelado; conservas tus cartas."; sinSave(); return sinUpdateTurn(); }
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
+  if (act === "sinstamps") return sinShowStamps();
+  if (act === "sinswarm") return sinSeekSwarm(+b.dataset.token);
+  if (act === "sintmselect") { SIN_VIEW.bagTM = +b.dataset.tm; return sinShowBag(); }
+  if (act === "sintmteach") return sinTeachTM(+b.dataset.tm, +b.dataset.member);
+  if (act === "sinnoble") return sinUseNoble(+b.dataset.member);
   if (act === "sinfate") return sinPlayMapFate(b.dataset.god, +b.dataset.count);
   if (act === "singod") return sinSeekGod();
   if (act === "sinshrine") return sinShowShrine();
