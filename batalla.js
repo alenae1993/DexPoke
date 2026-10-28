@@ -436,6 +436,7 @@ function newBattle(t1, t2, opts) {
   VIEW = "battle"; render();
   if (opts.intro) { me.chunks.push("|-intro|" + opts.intro); pump(me); }
   me.bg = opts.bg || pickBg(me); setBg(me.bg); bgm(opts.bgm || pickBgm(me));
+  if (typeof anilBattleIntro === "function") anilBattleIntro(me);
   (async () => { for await (const c of s.p1) { if (me.dead) return; me.chunks.push(c); pump(me); } })();
   aiLoop(me);
   if (me.trainer) { const r = me.trainer.r, pre = me.trainer.medal ? "El Líder de Gimnasio " : r.startsWith("Alto Mando") ? "El Alto Mando " : r.startsWith("Campeón") ? "El Campeón " : ""; me.chunks.push("|-intro|" + `¡${pre}${me.trainer.n} te desafía!`); pump(me); }

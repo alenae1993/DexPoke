@@ -633,16 +633,34 @@ const sinClassSprite = name => "tr/" + (SIN_CLASS_SPRITES[name] || "CHICO");
 // Rivales de entrenador: Añil no trae al Equipo Galaxia, se usan sus equivalentes del Equipo Rocket.
 const SIN_FOE_SPRITES = {grunt: ["tr/ROCKETO", "tr/ROCKETA"], "Comandante Venus": "tr/ATENEA1", "Comandante Ceres": "tr/ATENEA2",
   "Comandante Saturno": "tr/ATLAS1", "Helio": "tr/GIOVANNI1"};
+// Intro de los demás modos de batalla (Desafío, Batalla rápida, Mi equipo, Escalada, Competitivo):
+// el rival (líder de Kanto o un entrenador al azar) y tu entrenador de espalda aparecen un momento.
+const ANIL_RETO = {brock: "LIDER1", misty: "LIDER2", surge: "LIDER3", erika: "LIDER4", koga: "LIDER5", sabrina: "LIDER6", blaine: "LIDER7",
+  giovanni: "GIOVANNI1", lorelei: "ALTOMANDO1", bruno: "ALTOMANDO2", agatha: "ALTOMANDO3", lance: "ALTOMANDO4", blue: "AZUL6", red: "ROJO1"};
+const ANIL_RIVALS = [...Array.from({length: 36}, (_, i) => "TB" + (i + 1)), "CHICO", "CHICA", "GUAY", "GUAYA", "CAMPISTA", "CAMPISTO", "MOTORISTA",
+  "KARATEKA", "NADADORA", "CIENTIFICO", "MALABARISTA", "MATON", "JUGON", "VETERANO", "VETERANA", "MODELO", "DAMISELA"];
+// Los sprites de espalda de Añil están vacíos: se usa el protagonista de frente, reflejado.
+const ANIL_PLAYER = "tr/POKEMONTRAINER_RojoNeutro";
+function anilBattleIntro(me) {
+  if (typeof ANIL === "undefined" || me.sin) return;
+  const id = me.trainer?.id;
+  me.anilFoe ||= "tr/" + (id ? ANIL_RETO[id] || "CAMPEON" : ANIL_RIVALS[Math.floor(Math.random() * ANIL_RIVALS.length)]);
+  sinShowIntro(me.anilFoe, ANIL_PLAYER);
+}
+function sinShowIntro(foe, mine, back = false) {
+  const scene = $("scene"); if (!scene) return;
+  const box = document.createElement("div"); box.className = "sin-intro";
+  box.innerHTML = (foe ? sinAnilImg(foe, "sin-intro-foe") : "") + (mine ? sinAnilImg(mine, "sin-intro-me" + (back ? " back" : "")) : "");
+  scene.appendChild(box); sinFillAnil();
+  setTimeout(() => box.classList.add("out"), 2200); setTimeout(() => box.remove(), 3000);
+}
 // Al empezar un combate de Sinnoh, el entrenador rival y tu clase aparecen un momento en la escena.
 function sinBattleIntro(battle) {
   const scene = $("scene"); if (!scene || typeof ANIL === "undefined") return;
   const t = battle.trainer, run = ST.sin.run;
   const foe = !t ? null : t.kind === "grunt" || !t.name ? SIN_FOE_SPRITES.grunt[Math.floor(Math.random() * 2)] : SIN_FOE_SPRITES[t.name];
   const mine = run?.trainer ? sinClassSprite(SIN_TRAINERS[run.trainer.index].n) : null;
-  const box = document.createElement("div"); box.className = "sin-intro";
-  box.innerHTML = (foe ? sinAnilImg(foe, "sin-intro-foe") : "") + (mine ? sinAnilImg(mine, "sin-intro-me") : "");
-  scene.appendChild(box); sinFillAnil();
-  setTimeout(() => box.classList.add("out"), 2200); setTimeout(() => box.remove(), 3000);
+  sinShowIntro(foe, mine);
 }
 const SIN_BALL_SPRITES = {poke: "POKEBALL", great: "GREATBALL", ultra: "ULTRABALL", spirit: "DUSKBALL", glory: "CHERISHBALL"};
 const sinWait = ms => new Promise(r => setTimeout(r, ms));
@@ -1159,7 +1177,7 @@ sinStyle.textContent = `
   .sin-class{display:flex;align-items:center;gap:8px}.sin-class img,.sin-trainers .sin-class img{width:56px;height:56px;aspect-ratio:auto;object-fit:contain;image-rendering:pixelated;flex:none;background:none}
   .sin-intro{position:absolute;inset:0;z-index:7;pointer-events:none;transition:opacity .7s}.sin-intro.out{opacity:0}
   .sin-intro img{position:absolute;image-rendering:pixelated;animation:sinIn .5s ease-out}
-  .sin-intro-foe{right:8%;top:2%;height:48%}.sin-intro-me{left:4%;bottom:0;height:52%;transform:scaleX(-1)}
+  .sin-intro-foe{right:8%;top:2%;height:48%}.sin-intro-me{left:4%;bottom:0;height:52%;transform:scaleX(-1)}.sin-intro-me.back{transform:none;height:62%}
   @keyframes sinIn{from{opacity:0;translate:0 12px}}
   .sin-ball{position:absolute;z-index:5;width:48px;height:48px;left:14%;top:70%;transform:translate(-50%,-50%);background-repeat:no-repeat;background-size:384px 96px;background-position:0 0;image-rendering:pixelated;transition:left .55s cubic-bezier(.3,.6,.6,1),top .55s cubic-bezier(.2,-.6,.6,1)}
   .sin-ball.fly{left:73%;top:20%}.sin-ball.land{top:35%;transition:top .3s ease-in}
