@@ -407,7 +407,8 @@ function sinBiomeBonus(run) {
   return (biome.startsWith("!") ? here !== biome.slice(1) : here === biome) ? 2 : 0;
 }
 function sinTrainerOffer(count, exclude = []) {
-  return shuffle(SIN_TRAINERS.map((_, i) => i).filter(i => !exclude.includes(i))).slice(0, count);
+  // No se ofrecen tarjetas cuyas dos habilidades quedaron sin efecto en esta versión.
+  return shuffle(SIN_TRAINERS.map((_, i) => i).filter(i => !exclude.includes(i) && ["blue", "red"].some(c => SIN_TRAINERS[i][c].fx || SIN_TRAINERS[i][c].perks))).slice(0, count);
 }
 // Texto para mostrar: la adaptación, o el texto original cuando la adaptación es "Igual".
 const sinAbilityText = a => a.a.startsWith("Igual") ? a.t + (a.a.length > 6 ? " " + a.a.replace(/^Igual[.:]?\s*/, "") : "") : a.a;
@@ -415,7 +416,7 @@ function sinTrainerScreen() {
   const run = ST.sin.run, offer = run.trainerOffer, future = run.trainerFuture;
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${future ? "Carrera Futura" : "Tarjeta de Entrenador"}</h1>
     <p>${future ? "Elige tu nueva tarjeta. Sus dos habilidades quedan desbloqueadas." : "Elige tu clase de entrenador. La habilidad azul se desbloquea al derrotar u obtener un Pokémon Moderado; la roja, con un Fuerte, Alfa o legendario."}</p>
-    <div class="sin-trainers">${offer.map(i => `<div class="sin-choice">${sinCardImage(SIN_TRAINER_CARDS[i]?.img, SIN_TRAINERS[i].n)}<b>${esc(SIN_TRAINERS[i].n)}</b>
+    <div class="sin-trainers">${offer.map(i => `<div class="sin-choice">${sinCardImage(SIN_TRAINER_CARDS[i]?.img, SIN_TRAINERS[i].n)}<b class="sin-class">${sinAnilImg(sinClassSprite(SIN_TRAINERS[i].n), "", SIN_TRAINERS[i].n)}${esc(SIN_TRAINERS[i].n)}</b>
       ${["blue", "red"].map(c => `<p><b>${c === "blue" ? "Azul" : "Roja"} · ${esc(SIN_TRAINERS[i][c].name)}:</b> ${esc(sinAbilityText(SIN_TRAINERS[i][c]))}</p>`).join("")}
       <button class="btn primary" data-act="sintrainer" data-trainer="${i}">Elegir</button></div>`).join("")}</div></div></div>`;
   sinFillImages();
@@ -553,7 +554,7 @@ function sinTrainerPanel() {
   SIN_VIEW.panel = "trainer"; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.selected = null;
   const ability = (color, label, how) => `<div class="sin-progress"><b>${run.trainer[color] ? "🔓" : "🔒"} ${esc(t[color].name)}</b> <small>(${label} · ${run.trainer[color] ? "desbloqueada" : how})</small>
     <p>${esc(t[color].t)}</p><p><b>En este juego:</b> ${esc(t[color].a)}</p></div>`;
-  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Entrenador · ${esc(t.n)}</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
+  $("sin-card").innerHTML = `<div class="sin-card-head"><h2 class="sin-class">${sinAnilImg(sinClassSprite(t.n), "", t.n)}Entrenador · ${esc(t.n)}</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
     ${sinCardImage(SIN_TRAINER_CARDS[run.trainer.index]?.img, t.n, "sin-ginkgo")}
     ${ability("blue", "azul", "se desbloquea al derrotar u obtener un Pokémon Moderado")}${ability("red", "roja", "se desbloquea con un Fuerte, Alfa o legendario")}
     ${sinFx(run, "pick") ? `<button class="btn" data-act="sinpick" ${run.picked || !sinTreeHere(run) || !sinMapAction(run) ? "disabled" : ""}>Recoger 1 Bonguri del árbol${run.picked ? " (usado este turno)" : ""}</button>` : ""}
@@ -573,6 +574,82 @@ function sinSwapBonguri(from, to) {
   const run = ST.sin.run;
   if (!sinMapAction(run) || !sinFx(run, "exchange") || !SIN_EXCHANGES.some(([a, b]) => a === from && b === to) || !(run.bag[from] > 0)) return;
   run.bag[from]--; run.bag[to]++; run.notice = `Cambiaste 1 Bonguri ${SIN_BONGURI[from][0]} por 1 ${SIN_BONGURI[to][0]}.`; sinSave(); sinUpdateTurn();
+}
+/* ---------- Recursos de Pokémon Añil (solo local): sprites de entrenadores y animación de captura ----------
+   Los genera herramientas/sinnoh/generar_anil.py en spr/anil_0.bin con el índice ANIL (anil_datos.js). */
+const sinAnilURL = key => {
+  const e = typeof ANIL !== "undefined" && (ANIL.img[key] || ANIL.snd[key]);
+  if (!e) return Promise.resolve(null);
+  return packURL(`spr/anil${ANIL.v}/${key}`, ANIL.packs[e[0]], e[1], e[2], ANIL.snd[key] ? "audio/ogg" : "image/png");
+};
+const sinAnilImg = (key, cls = "", alt = "") => typeof ANIL !== "undefined" && ANIL.img[key] ? `<img class="${esc(cls)}" data-anil="${esc(key)}" alt="${esc(alt)}">` : "";
+function sinFillAnil() {
+  document.querySelectorAll("img[data-anil]:not([data-anil-done])").forEach(el => {
+    el.dataset.anilDone = 1; sinAnilURL(el.dataset.anil).then(u => { if (u && el.isConnected) el.src = u; });
+  });
+}
+function sinAnilSound(key, vol = .7) {
+  if (typeof sndOn === "function" && !sndOn("sfx")) return;
+  sinAnilURL(key).then(u => { if (!u) return; const a = new Audio(u); a.volume = vol; a.play().catch(() => {}); });
+}
+// Sprite de Añil para cada clase de Tarjeta de Entrenador (las que no tienen uno propio usan uno parecido).
+const SIN_CLASS_SPRITES = {
+  "Criador Pokémon": "CAMPISTA", "Patinadora": "CHICA", "Pokéfan": "POKEMANIACO", "Dominguera": "CAMPISTA", "Nadador": "NADADOR",
+  "Soldado Equipo Rocket": "ROCKETO", "Triatleta": "MOTORISTA", "Señorita Aroma": "JOVENRICA", "Modelo": "MODELO", "Pokéabu": "VETERANA",
+  "Domadragón": "TB28", "Bruja": "BRUJITA", "Periodistas": "FOTOGRAFA", "Médium": "MEDIUM", "Veterana": "VETERANA", "Artista": "MALABARISTA",
+  "Jardinero": "VETERANO", "Guitarrista": "TB21", "Cazabichos": "CAZABICHOS", "Karateka": "KARATEKA", "Entrenador Guay": "GUAY",
+  "Macarra": "MACARRA", "Ornitólogo": "ORNITOLOGO", "Niña Soñadora": "ESTUDIANTA", "Acólita de Diamante": "EXORCISTA", "Pokécolector": "CEREBRITO",
+  "Pescador": "PESCADOR", "Chef": "MARINERO", "Mochilero": "CAMPISTO", "Damisela": "DAMISELA", "Joven": "CHICO", "Aristócrata": "CABALLERO",
+  "Mercader Ginkgo": "JUGON", "Esprit": "NINJAA", "Montañero": "MONTANERO", "Prendefuegos": "TB29", "Acólita de Perla": "CABALLERA",
+  "Entrenador Aéreo": "TB35", "Operario": "MECANICO", "Turista": "FOTOGRAFA", "Acólita Imparcial": "EXORCISTA", "Buceador": "NADADORA",
+  "Dama Parasol": "JOVENRICA", "Chico Ninja": "NINJA", "Soldado Equipo Magma": "TB14", "Científica": "CIENTIFICA", "Soldado Equipo Aqua": "MARINERO",
+  "Ruinamaníaco": "CIENTIFICO", "Pokémaníaco": "POKEMANIACO", "Acólita de Platino": "BRUJITA", "Pokémon Ranger": "TB36"
+};
+const sinClassSprite = name => "tr/" + (SIN_CLASS_SPRITES[name] || "CHICO");
+// Rivales de entrenador: Añil no trae al Equipo Galaxia, se usan sus equivalentes del Equipo Rocket.
+const SIN_FOE_SPRITES = {grunt: ["tr/ROCKETO", "tr/ROCKETA"], "Comandante Venus": "tr/ATENEA1", "Comandante Ceres": "tr/ATENEA2",
+  "Comandante Saturno": "tr/ATLAS1", "Helio": "tr/GIOVANNI1"};
+// Al empezar un combate de Sinnoh, el entrenador rival y tu clase aparecen un momento en la escena.
+function sinBattleIntro(battle) {
+  const scene = $("scene"); if (!scene || typeof ANIL === "undefined") return;
+  const t = battle.trainer, run = ST.sin.run;
+  const foe = !t ? null : t.kind === "grunt" || !t.name ? SIN_FOE_SPRITES.grunt[Math.floor(Math.random() * 2)] : SIN_FOE_SPRITES[t.name];
+  const mine = run?.trainer ? sinClassSprite(SIN_TRAINERS[run.trainer.index].n) : null;
+  const box = document.createElement("div"); box.className = "sin-intro";
+  box.innerHTML = (foe ? sinAnilImg(foe, "sin-intro-foe") : "") + (mine ? sinAnilImg(mine, "sin-intro-me") : "");
+  scene.appendChild(box); sinFillAnil();
+  setTimeout(() => box.classList.add("out"), 2200); setTimeout(() => box.remove(), 3000);
+}
+const SIN_BALL_SPRITES = {poke: "POKEBALL", great: "GREATBALL", ultra: "ULTRABALL", spirit: "DUSKBALL", glory: "CHERISHBALL"};
+const sinWait = ms => new Promise(r => setTimeout(r, ms));
+// Animación de captura: fases "throw" (lanzar y absorber), "shake" (una sacudida), "caught" y "escape".
+async function sinBallFx(me, key, phase) {
+  const scene = $("scene"); if (!scene || me.dead || typeof ANIL === "undefined") return;
+  let ball = scene.querySelector(".sin-ball");
+  const foe = $("mon-p2"), sheet = "ball/" + (SIN_BALL_SPRITES[key] || "POKEBALL");
+  if (phase === "throw") {
+    ball?.remove();
+    ball = document.createElement("div"); ball.className = "sin-ball spin";
+    scene.appendChild(ball);
+    const url = await sinAnilURL(sheet); if (url) ball.style.backgroundImage = `url("${url}")`;
+    sinAnilSound("throw");
+    await sinWait(30); ball.classList.add("fly"); await sinWait(550);
+    sinAnilSound("hit"); ball.classList.remove("spin"); foe?.classList.add("sin-absorbed");
+    await sinWait(350); sinAnilSound("drop"); ball.classList.add("land"); await sinWait(400);
+  } else if (phase === "shake" && ball) {
+    sinAnilSound("shake"); ball.classList.remove("wobble"); void ball.offsetWidth; ball.classList.add("wobble"); await sinWait(650);
+  } else if (phase === "caught" && ball) {
+    sinAnilSound("click"); ball.classList.add("done");
+    const star = await sinAnilURL("fx/ballBurst_star");
+    if (star) for (let i = 0; i < 3; i++) {
+      const s = document.createElement("span"); s.className = "sin-star s" + i; s.style.backgroundImage = `url("${star}")`; ball.appendChild(s);
+    }
+    await sinWait(900);
+  } else if (phase === "escape") {
+    const open = await sinAnilURL(sheet + "_open");
+    if (ball && open) { ball.style.backgroundImage = `url("${open}")`; ball.classList.add("open"); }
+    sinAnilSound("recall"); foe?.classList.remove("sin-absorbed"); await sinWait(450); ball?.remove();
+  }
 }
 function sinCheckStamps(run, event = {}) {
   if (!run?.bag || !run.team || !run.box || !run.fate) return false;
@@ -884,6 +961,20 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
+  .sin-class{display:flex;align-items:center;gap:8px}.sin-class img,.sin-trainers .sin-class img{width:56px;height:56px;aspect-ratio:auto;object-fit:contain;image-rendering:pixelated;flex:none;background:none}
+  .sin-intro{position:absolute;inset:0;z-index:7;pointer-events:none;transition:opacity .7s}.sin-intro.out{opacity:0}
+  .sin-intro img{position:absolute;image-rendering:pixelated;animation:sinIn .5s ease-out}
+  .sin-intro-foe{right:8%;top:2%;height:48%}.sin-intro-me{left:4%;bottom:0;height:52%;transform:scaleX(-1)}
+  @keyframes sinIn{from{opacity:0;translate:0 12px}}
+  .sin-ball{position:absolute;z-index:5;width:48px;height:48px;left:14%;top:70%;transform:translate(-50%,-50%);background-repeat:no-repeat;background-size:384px 96px;background-position:0 0;image-rendering:pixelated;transition:left .55s cubic-bezier(.3,.6,.6,1),top .55s cubic-bezier(.2,-.6,.6,1)}
+  .sin-ball.fly{left:73%;top:20%}.sin-ball.land{top:35%;transition:top .3s ease-in}
+  .sin-ball.spin{animation:sinSpin .3s steps(8) infinite}@keyframes sinSpin{to{background-position-x:-384px}}
+  .sin-ball.wobble{animation:sinWobble .6s ease-in-out}@keyframes sinWobble{25%{transform:translate(-50%,-50%) rotate(-25deg)}75%{transform:translate(-50%,-50%) rotate(25deg)}}
+  .sin-ball.done{filter:brightness(.75)}.sin-ball.open{background-size:48px 96px}
+  .sin-star{position:absolute;left:12px;top:12px;width:24px;height:24px;background-size:contain;background-repeat:no-repeat;animation:sinStar .8s ease-out forwards}
+  .sin-star.s0{--x:-34px;--y:-30px}.sin-star.s1{--x:0px;--y:-42px}.sin-star.s2{--x:34px;--y:-30px}
+  @keyframes sinStar{to{transform:translate(var(--x),var(--y));opacity:0}}
+  .mon.sin-absorbed{opacity:0;transform:scale(.2)}
   .sin-trainers{display:grid;gap:12px}.sin-trainers .sin-choice{cursor:default;text-align:left}.sin-trainers img{width:100%;height:auto;aspect-ratio:auto;background:none;object-fit:contain;border-radius:8px}.sin-trainers p{margin:6px 0}
   .sin-mon{display:flex;justify-content:center;align-items:flex-end;height:104px;overflow:hidden}
   .sin-mon img{width:96px;height:96px;object-fit:contain}
@@ -929,7 +1020,7 @@ function sinFillImages() {
   document.querySelectorAll("img[data-sin-img]").forEach(el => {
     const im = sinImage(el.dataset.sinImg); if (im && el.getAttribute("src") !== im.src) el.src = im.src;
   });
-  sinFillSprites();
+  sinFillSprites(); sinFillAnil();
 }
 // Retrato del Pokémon al elegirlo: sprite animado de frente (Essentials) con la ilustración oficial de respaldo.
 // Las imágenes de las cartas Pokémon siguen en sinnoh_datos.js; sinCardImage puede dibujarlas al replicar el juego original.
@@ -1462,14 +1553,15 @@ async function sinThrowBall(me, key, repeat = null, pending = null) {
       me.s.omniscient.write(`>eval const p=battle.sides[1].active[0]; p.sethp(${Math.max(1, Math.floor(target.hp))}); ${status ? `p.setStatus(${JSON.stringify(status)});` : "p.cureStatus();"} battle.add('-damage',p,()=>p.getHealth());`);
       wild.hp = target.hp; wild.max = target.max; wild.status = status;
     }
-    await say(me, `¡Lanzaste una ${ball.name}!`, 1);
+    const thrown = sinBallFx(me, key, "throw");
+    await say(me, `¡Lanzaste una ${ball.name}!`, 1); await thrown;
     for (let i = 0; i < Math.min(3, result.checks); i++) {
       if (me.dead || me.over) return;
-      await say(me, "La Ball se movió…", .7);
+      await Promise.all([say(me, "La Ball se movió…", .7), sinBallFx(me, key, "shake")]);
     }
     if (me.dead || me.over) return;
     if (result.caught) {
-      await say(me, `¡Ya está! ¡Has atrapado a ${esSp(set.species)}!`, 1.2);
+      await Promise.all([say(me, `¡Ya está! ¡Has atrapado a ${esSp(set.species)}!`, 1.2), sinBallFx(me, key, "caught")]);
       if (!me.dead && !me.over) {
         delete encounter.captureFailureTurn; encounter.captureFailureStreak = 0;
         if (encounter.swarm) {
@@ -1480,11 +1572,12 @@ async function sinThrowBall(me, key, repeat = null, pending = null) {
           captured.status = SIN_STATUS[target.status] ? target.status : ""; captured.tier = encounter.swarmCards[foeIndex].tier;
           encounter.captures[foeIndex] = captured; delete encounter.ballAttempt; sinSave();
           // El capturado cuenta como caído solo en el motor; conserva sus PS y estado para incorporarse al final.
+          $("scene")?.querySelector(".sin-ball")?.remove(); $("mon-p2")?.classList.remove("sin-absorbed");
           me.s.omniscient.write('>eval const p=battle.sides[1].active[0]; battle.sides.forEach(s=>s.clearChoice()); p.faint(); battle.faintMessages(); if(!battle.ended){battle.checkFainted();battle.makeRequest("switch");}');
         } else { me.sinCaught = true; sinSave(); me.s.omniscient.write(">forcewin p1"); }
       }
     } else {
-      await say(me, "¡Oh, no! ¡El Pokémon se ha escapado!", 1.2);
+      await Promise.all([sinBallFx(me, key, "escape"), say(me, "¡Oh, no! ¡El Pokémon se ha escapado!", 1.2)]);
       if (!me.dead && !me.over) {
         if (!repeat || pending) sinCaptureFailure(run, me.turn);
         delete run.battle.ballAttempt;
@@ -1861,6 +1954,7 @@ async function sinFight(index, trainerKey = false) {
       ...(swarm ? {foeName: "Enjambre", intro: "¡Un enjambre de Pokémon salvajes sale de la Puerta de Distorsión!", bgm: "bgm_boss"} : {}),
       ...(run.battle.legend ? {bgm: run.battle.legend.god ? "bgm_final" : "bgm_boss"} : {}),
       ...(spec ? {foeName: spec.name, intro: spec.intro, bgm: spec.bgm} : {})});
+    sinBattleIntro(run.battle);
   } catch (err) {
     const message = "No se pudo preparar el combate. Intenta nuevamente.";
     const el = $("sin-offer-error"); if (el) el.textContent = message;
