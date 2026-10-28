@@ -470,6 +470,10 @@ function sinPerkData(run, team) {
     .filter(p => !p.perFrag || run.frag > 0);
   if (run.battle && !run.battle.trainer && !run.battle.swarm && sinFx(run, "opportune") && run.battle.start?.moved === 0) perks.push({k: "first"});
   if (run.battle?.masterStew) perks.push({k: "typePow", types: "stab", m: 1.2});
+  // Armadura Prismática: cada 2 fichas reducen un 8 % el daño que haces al Ultraente o a Necrozma.
+  const armor = run.battle?.legend?.ub ? run.ubsDefeated : run.battle?.legend?.necro ? 9 - run.ubsDefeated : 0;
+  if (Math.floor(armor / 2)) perks.push({k: "armor", m: 1 - Math.floor(armor / 2) * .08});
+  if (team.some(s => s.breach)) perks.push({k: "breach"});
   if (perks.some(p => p.k === "masterpiece")) {
     const types = new Set(team.flatMap(s => s.moves.map(m => Dex.moves.get(m).type)));
     if (types.size >= 12) perks.push({k: "typePow", types: "all", m: 1.3});
@@ -484,7 +488,16 @@ Dex.data.Conditions.sinperks = {
       if (p.k !== "boost" || !sinPerkFits(p, pokemon)) return;
       this.boost(p.boosts, pokemon, pokemon);
     });
+    // Cartas de Brecha al entrar.
+    if (pokemon.sinBreach === "gravity") this.boost({spe: -1, def: 1, spd: 1}, pokemon, pokemon);
+    if (pokemon.sinBreach === "agile") this.boost({spe: 1}, pokemon, pokemon);
+    if (pokemon.sinBreach === "overload") {
+      const st = ["brn", "par", "psn"][this.random(3)], foe = pokemon.side.foe.active[0];
+      pokemon.trySetStatus(st, pokemon); if (foe && foe.hp > 0) foe.trySetStatus(st, pokemon);
+    }
   },
+  onModifyPriority(priority, pokemon) { return pokemon.sinBreach === "quick" ? priority + 1 : priority; },
+  onModifyType(move, pokemon) { if (pokemon.sinBreach === "chromatic" && move.category !== "Status") move.type = "???"; },
   onBasePowerPriority: 15,
   onBasePower(bp, user, target, move) {
     let m = 1;
@@ -494,11 +507,20 @@ Dex.data.Conditions.sinperks = {
       if (p.k === "artifactTypes" && (p.map[user.item] || []).includes(move.type)) m *= 1.1;
       if (p.k === "first" && !this.effectState.firstUsed) { m *= 2; this.effectState.firstUsed = true; }
     });
-    if (m !== 1) return this.chainModify(m);
+    if (user.sinBreach === "chromatic") m *= 1.2;
+    if (m !== 1) this.chainModify(m);
+    if (user.sinBreach === "quick" && bp > 60) return 60;
   },
   onModifyCritRatio(ratio) { return (this.effectState.perks || []).some(p => p.k === "crit") ? ratio + 1 : ratio; },
   onModifyDamage(damage, source, target, move) {
-    if ((this.effectState.perks || []).some(p => p.k === "weakness") && target.getMoveHitData(move).typeMod > 0) return this.chainModify(1.2);
+    let m = 1;
+    const se = target.getMoveHitData(move).typeMod > 0;
+    (this.effectState.perks || []).forEach(p => {
+      if (p.k === "weakness" && se) m *= 1.2;
+      if (p.k === "armor") m *= p.m;
+    });
+    if (source.sinBreach === "reckless" && se) m *= 1.2;
+    if (m !== 1) return this.chainModify(m);
   },
   onSourceModifyDamage(damage, source, target, move) {
     let m = 1;
@@ -509,6 +531,7 @@ Dex.data.Conditions.sinperks = {
       if (p.maxBP && move.basePower > p.maxBP) return;
       m *= p.m;
     });
+    if (target.sinBreach === "reckless" && target.getMoveHitData(move).typeMod > 0) m *= 1.2;
     if (m !== 1) return this.chainModify(m);
   },
   onDamage(damage, target, source, effect) {
@@ -523,6 +546,7 @@ Dex.data.Conditions.sinperks = {
       if (p.k === "cleanse" && p.types.includes(move.type) && source.status) source.cureStatus();
       if (p.k === "sentence" && target && target !== source && target.hp > 0 && target.hp <= target.maxhp * .1 && move.category !== "Status") target.faint();
     });
+    if (source.sinBreach === "agile" && move.category !== "Status" && source.hp > 0) this.damage(Math.max(1, Math.floor(source.baseMaxhp / 16)), source, source);
   },
   onFaint(target) {
     if (!(this.effectState.perks || []).some(p => p.k === "retribution")) return;
@@ -546,7 +570,7 @@ function sinPerkFits(p, pokemon) {
 // Código que se agrega al >eval inicial del combate: niveles de encuentro y condición de efectos.
 function sinPerkEval(run, team) {
   const perks = sinPerkData(run, team);
-  const tiers = team.map((s, i) => `${s.tier ? `a[${i}].sinTier=${JSON.stringify(s.tier)};` : ""}${s.dragon ? `a[${i}].sinDragon=true;` : ""}`).join("");
+  const tiers = team.map((s, i) => `${s.tier ? `a[${i}].sinTier=${JSON.stringify(s.tier)};` : ""}${s.dragon ? `a[${i}].sinDragon=true;` : ""}${s.breach ? `a[${i}].sinBreach=${JSON.stringify(s.breach)};` : ""}`).join("");
   return perks.length ? `{const a=battle.sides[0].pokemon;${tiers}const sd=battle.sides[0];sd.sideConditions.sinperks=battle.initEffectState({id:"sinperks",target:sd});sd.sideConditions.sinperks.perks=${JSON.stringify(perks)};}` : "";
 }
 function sinTrainerPanel() {
@@ -650,6 +674,177 @@ async function sinBallFx(me, key, phase) {
     if (ball && open) { ball.style.backgroundImage = `url("${open}")`; ball.classList.add("open"); }
     sinAnilSound("recall"); foe?.classList.remove("sin-absorbed"); await sinWait(450); ball?.remove();
   }
+}
+const sinAnyCard = species => SIN_CARDS.find(c => c.d?.sp && toID(c.d.sp) === toID(species));
+/* ---------- Campaña Ultra Explosión (reglamento p. 23–25, adaptada a un jugador) ----------
+   Los 9 Ultraentes recorren Sinnoh y destruyen árboles, arrecifes y santuarios; cada destrucción sube la brecha.
+   Cada 10 % de brecha, un Pokémon recibe una carta de Brecha. Con la brecha en el 70 % se pierde la partida.
+   Se gana derrotando las 3 fases de Necrozma en el Ultra Estallido (Mundo Distorsión). */
+const SIN_UB = ["Nihilego", "Buzzwole", "Pheromosa", "Xurkitree", "Celesteela", "Kartana", "Guzzlord", "Stakataka", "Blacephalon"];
+const SIN_DIFFICULTY = {new: {name: "Nuevo Entrenador", bless: 3}, veteran: {name: "Entrenador Veterano", bless: 1}, master: {name: "Entrenador Maestro", bless: 0}};
+const SIN_UB_LEVEL = 45, SIN_NECRO_LEVELS = [55, 60, 65], SIN_BREACH_LOSS = 70;
+// Brecha que suma cada objetivo destruido (decisión de diseño: el mod lo calcula con su tablero).
+const SIN_BREACH_HIT = {tree: .4, shrine: .8};
+const SIN_BREACH_CARDS = [
+  {id: "reckless", name: "Ataque Imprudente", t: "Cuando el usuario ataca o es atacado, el daño por efectividad aumenta en 2.", a: "Sus ataques súper eficaces y los súper eficaces que recibe hacen un 20 % más de daño."},
+  {id: "quick", name: "Golpes Rápidos", t: "El usuario siempre va primero, pero sus movimientos de más de 3 de fuerza bajan a 3.", a: "Sus movimientos tienen +1 de prioridad, pero su potencia máxima es 60."},
+  {id: "gravity", name: "Arrastre Gravitacional", t: "Reduce la iniciativa del usuario en 3, pero aumenta su salud base en 3.", a: "Entra con −1 Velocidad, +1 Defensa y +1 Def. Esp."},
+  {id: "agile", name: "Estructura Ágil", t: "Cuando el usuario ataca, recibe 1 de daño, pero puede cambiarse después.", a: "Entra con +1 Velocidad, pero pierde 1/16 de sus PS después de atacar."},
+  {id: "chromatic", name: "Unión Cromática", t: "Los movimientos del usuario son Sin Tipo, pero su fuerza aumenta en 1.", a: "Sus movimientos no tienen tipo (sin efectividad), pero son un 20 % más fuertes."},
+  {id: "overload", name: "Estado Sobrecargado", t: "Al entrar en combate, tira un dado de estado e inflige el resultado al usuario y al objetivo.", a: "Al entrar, él y el rival sufren un estado al azar (quemadura, parálisis o veneno)."}
+];
+const sinBreachCard = id => SIN_BREACH_CARDS.find(c => c.id === id);
+const SIN_ULTRA_BURST = SIN.tokens.findIndex(t => t.n === "The Ultra Burst");
+const sinGateTwin = t => SIN.tokens.find(o => o !== t && o.n === t.n && o.tags?.includes("Distortion Gate"));
+const sinUltraTargetToken = t => /Apricorn (Tree|Reef)$/.test(t.n) || / Shrine$/.test(t.n);
+const sinUltraForbidden = h => h.dw || sinCellTokens(h).some(t => t.tags?.includes("Village Token") || t.tags?.includes("Legendary Encounter Card") || t.tags?.includes("Distortion Gate"));
+function sinUltraSetup(run, difficulty) {
+  const d = SIN_DIFFICULTY[difficulty] || SIN_DIFFICULTY.new;
+  Object.assign(run, {campaign: "ultra", difficulty, act: 0, grunts: [], blessings: d.bless, breach: 0, breachGiven: 0,
+    breachDeck: shuffle(SIN_BREACH_CARDS.flatMap(c => Array(6).fill(c.id))), destroyed: {}, ubsDefeated: 0, necroPhase: 1, necroForm: null});
+  run.bag.red = 3; run.bag.blue = 3; run.bag.yellow = 3;
+  const free = shuffle(SIN_CELLS.filter(h => !sinUltraForbidden(h) && Math.abs(h.c - run.pos[0]) + Math.abs(h.r - run.pos[1]) / 2 > 4));
+  run.ubs = SIN_UB.map((species, i) => ({species, pos: [free[i].c, free[i].r]}));
+  run.notice = `Ultra Explosión · ${d.name}: los Ultraentes aparecieron en Sinnoh. Recibiste 3 Bonguri rojos, azules y amarillos.`;
+}
+const sinUltra = run => run?.campaign === "ultra";
+const sinDestroyed = (run, h) => !!run?.destroyed?.[h.c + "," + h.r];
+function sinUltraDestroy(run, h, who, messages) {
+  const key = h.c + "," + h.r; if (run.destroyed[key]) return;
+  const shrine = sinCellTokens(h).some(t => / Shrine$/.test(t.n));
+  run.destroyed[key] = true; run.breach = Math.min(100, Math.round((run.breach + (shrine ? SIN_BREACH_HIT.shrine : SIN_BREACH_HIT.tree)) * 10) / 10);
+  messages.push(`${who} destruyó ${shrine ? "un santuario" : "un árbol de Bonguri"}.`);
+}
+// Paso hacia el objetivo más cercano (búsqueda por anchura sin elevación; los Ultraentes vuelan).
+function sinUltraStep(run, ub) {
+  const start = ub.pos.join(","), seen = new Map([[start, null]]), queue = [SIN_BY_CELL.get(start)];
+  const busy = new Set(run.ubs.filter(o => o !== ub).map(o => o.pos.join(",")));
+  for (let i = 0; i < queue.length && i < 400; i++) {
+    const h = queue[i], key = h.c + "," + h.r;
+    if (key !== start && sinCellTokens(h).some(sinUltraTargetToken) && !run.destroyed[key]) {
+      let step = key; while (seen.get(step) !== start) step = seen.get(step);
+      return SIN_BY_CELL.get(step);
+    }
+    [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 2], [0, -2]].forEach(([dc, dr]) => {
+      const k = (h.c + dc) + "," + (h.r + dr), n = SIN_BY_CELL.get(k);
+      if (!n || seen.has(k) || busy.has(k) || n.dw || sinCellTokens(n).some(t => t.tags?.includes("Village Token"))) return;
+      seen.set(k, key); queue.push(n);
+    });
+  }
+  return null;
+}
+// Turno de los Ultraentes y de Necrozma al terminar el turno del jugador.
+function sinUltraRound(run) {
+  if (!sinUltra(run) || run.ultraWon || run.lost) return "";
+  const messages = [];
+  if (run.blessSkip) { delete run.blessSkip; messages.push("Bendición de Arceus: los Ultraentes no se mueven esta ronda."); }
+  else {
+    // Moverse cuesta casillas compartidas; con menos Ultraentes en pie, menos movimientos.
+    const moves = Math.min(run.ubs.length, 4 + Math.floor(run.breach / 10));
+    for (let m = 0; m < moves && run.ubs.length; m++) {
+      const ub = run.ubs[Math.floor(Math.random() * run.ubs.length)], next = sinUltraStep(run, ub);
+      if (!next) continue;
+      ub.pos = [next.c, next.r];
+      const key = next.c + "," + next.r, hidden = run.hidden?.[key];
+      if (hidden?.present && !hidden.revealed && !sinCellTokens(next).some(t => t.n === "Campsite")) hidden.present = false;
+      if (sinCellTokens(next).some(sinUltraTargetToken)) sinUltraDestroy(run, next, esSp(ub.species), messages);
+    }
+  }
+  const targets = SIN_CELLS.filter(h => !h.dw && !run.destroyed[h.c + "," + h.r] && sinCellTokens(h).some(sinUltraTargetToken));
+  if (targets.length) sinUltraDestroy(run, targets[Math.floor(Math.random() * targets.length)], "Necrozma", messages);
+  else { run.breach = Math.min(100, run.breach + 2); messages.push("Sin nada más que destruir, Necrozma ensancha la brecha."); }
+  while (Math.floor(run.breach / 10) > run.breachGiven) {
+    run.breachGiven++;
+    if (!run.breachDeck.length) run.breachDeck = shuffle(SIN_BREACH_CARDS.flatMap(c => Array(6).fill(c.id)));
+    const id = run.breachDeck.pop(), free = run.team.filter(s => !s.breach);
+    const s = (free.length ? free : run.team)[Math.floor(Math.random() * (free.length || run.team.length))];
+    if (s) { s.breach = id; messages.push(`¡Brecha al ${run.breachGiven * 10} %! ${esSp(s.species)} recibe ${sinBreachCard(id).name}.`); }
+  }
+  if (run.breach >= SIN_BREACH_LOSS) run.lost = {reason: "La brecha alcanzó el 70 %: la luz de Sinnoh se apagó."};
+  return messages.join(" ");
+}
+function sinSeekUltra(kind) {
+  const run = ST.sin.run;
+  if (!sinUltra(run) || !sinMapAction(run) || run.searched || run.fought || !run.team.some(sinAlive)) return;
+  if (kind === "ub") {
+    const ub = run.ubs.find(u => u.pos.join(",") === run.pos.join(",")); if (!ub) return;
+    run.offer = {cards: [{species: ub.species, img: sinAnyCard(ub.species)?.img, level: SIN_UB_LEVEL}], legend: {species: ub.species, ub: true},
+      place: "Ultraente", meta: `Armadura Prismática del Ultraente: ${run.ubsDefeated}`, closed: false};
+  } else {
+    if (run.pos.join(",") !== SIN.tokens[SIN_ULTRA_BURST].cell.join(",")) return;
+    if (run.necroPhase === 2 && !run.necroForm) run.necroForm = Math.random() < .5 ? "Necrozma-Dusk-Mane" : "Necrozma-Dawn-Wings";
+    const species = run.necroPhase === 1 ? "Necrozma" : run.necroPhase === 2 ? run.necroForm : "Necrozma-Ultra";
+    run.offer = {cards: [{species, img: sinAnyCard("Necrozma")?.img, level: SIN_NECRO_LEVELS[run.necroPhase - 1]}], legend: {species, necro: run.necroPhase},
+      place: "Ultra Estallido", meta: `Necrozma · Fase ${run.necroPhase} · Armadura Prismática: ${9 - run.ubsDefeated}`, closed: false};
+  }
+  run.searched = true; sinSave(); renderSin();
+}
+function sinUltraGate() {
+  const run = ST.sin.run, gate = sinCellTokens(SIN_BY_CELL.get(run.pos.join(","))).find(t => t.tags?.includes("Distortion Gate"));
+  const twin = gate && sinGateTwin(gate);
+  if (!sinUltra(run) || !sinMapAction(run) || !twin) return;
+  run.pos = [...twin.cell]; run.moved = sinMaxMoves(run);
+  run.notice = twin.tags.includes("Distortion World") ? "Entraste al Mundo Distorsión." : "Volviste a Sinnoh.";
+  sinSave(); sinCenter(); sinShowCell(SIN_BY_CELL.get(run.pos.join(","))); sinUpdateTurn();
+}
+// Resultado de los combates contra Ultraentes y Necrozma (se llama desde sinResult).
+function sinUltraResult(run, encounter, won) {
+  const legend = encounter.legend;
+  if (won === true && legend.ub) {
+    run.ubs = run.ubs.filter(u => u.species !== legend.species); run.ubsDefeated++;
+    const s = [...run.team].reverse().find(m => m.breach);
+    if (s) { delete s.breach; run.notice += ` Al caer el Ultraente, ${esSp(s.species)} se libera de su carta de Brecha.`; }
+    run.notice += ` La Armadura Prismática de Necrozma baja a ${9 - run.ubsDefeated}.`;
+  } else if (won === true && legend.necro) {
+    run.necroPhase++;
+    if (run.necroPhase > 3) { run.ultraWon = true; run.victory = {turns: run.turn, team: run.team.map(s => ({species: s.species, level: s.level})), pv: run.pv, caught: run.caught}; }
+    else run.notice = `¡Necrozma cae y pasa a su fase ${run.necroPhase}!`;
+  } else if (won === false && legend.necro) {
+    if (run.blessings > 0) { run.blessings--; run.notice = "Necrozma te derrotó, pero una Bendición de Arceus te devuelve a la aventura."; }
+    else run.lost = {reason: "Necrozma derrotó a tu equipo y quedaste eliminado."};
+  }
+}
+function sinUltraHTML(run) {
+  const d = SIN_DIFFICULTY[run.difficulty] || SIN_DIFFICULTY.new;
+  const marked = run.team.filter(s => s.breach);
+  return `<p>${esc(d.name)} · Bendiciones de Arceus: ${esc(run.blessings)}</p>
+    <p><b>Brecha: ${esc(Math.floor(run.breach))} %</b> (se pierde al llegar al ${SIN_BREACH_LOSS} %). Destruidos: ${esc(Object.keys(run.destroyed).length)}.</p>
+    <p>Ultraentes restantes: ${esc(run.ubs.length)}/9 · Armadura Prismática de Necrozma: ${esc(9 - run.ubsDefeated)} (−${esc(Math.floor((9 - run.ubsDefeated) / 2) * 8)} % de daño).</p>
+    <p>Necrozma: fase ${esc(Math.min(3, run.necroPhase))} de 3, en el Ultra Estallido del Mundo Distorsión. Entra por cualquier Puerta de Distorsión.</p>
+    <h2>Cartas de Brecha</h2>${marked.length ? `<ul>${marked.map(s => `<li><b>${esc(esSp(s.species))}:</b> ${esc(sinBreachCard(s.breach).name)} — ${esc(sinBreachCard(s.breach).a)}</li>`).join("")}</ul>` : "<p>Ninguna por ahora.</p>"}
+    <p>Al final de cada turno los Ultraentes se mueven ${esc(Math.min(run.ubs.length, 4 + Math.floor(run.breach / 10)))} casillas en total y Necrozma destruye un objetivo. Derrotar a un Ultraente quita una carta de Brecha y debilita la armadura de Necrozma.</p>`;
+}
+function sinUltraCellHTML(run, h, here) {
+  if (!sinUltra(run)) return "";
+  const ub = run.ubs.find(u => u.pos.join(",") === h.c + "," + h.r), gate = sinCellTokens(h).find(t => t.tags?.includes("Distortion Gate"));
+  const can = here && !run.searched && !run.fought && !run.revive && run.team.some(sinAlive);
+  return `${sinDestroyed(run, h) ? "<p>Destruido por los Ultraentes.</p>" : ""}
+    ${ub ? `<p><b>${esc(esSp(ub.species))}</b> (Ultraente). No se puede capturar.</p>${here ? `<button class="btn primary sin-move" data-act="sinub" ${can ? "" : "disabled"}>Combatir contra ${esc(esSp(ub.species))}</button>` : ""}` : ""}
+    ${gate && here && sinGateTwin(gate) ? `<button class="btn sin-move" data-act="singate">${h.dw ? "Volver a Sinnoh" : "Entrar al Mundo Distorsión"}</button>` : ""}
+    ${here && SIN.tokens[SIN_ULTRA_BURST]?.cell.join(",") === h.c + "," + h.r && run.necroPhase <= 3 ? `<button class="btn primary sin-move" data-act="sinnecro" ${can ? "" : "disabled"}>Combatir contra Necrozma (fase ${esc(run.necroPhase)})</button>` : ""}`;
+}
+function sinDrawUltra(ctx, run, z) {
+  if (!sinUltra(run)) return;
+  SIN_CELLS.forEach(h => {
+    if (!run.destroyed[h.c + "," + h.r]) return;
+    sinHex(ctx, h.x, h.y); ctx.fillStyle = "#1b0d2bb0"; ctx.fill();
+  });
+  run.ubs.forEach(u => {
+    const h = SIN_BY_CELL.get(u.pos.join(",")); if (!h) return;
+    const picture = sinPlayerImage(u.species), r = SIN_H * .62;
+    ctx.save(); ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#2b1145"; ctx.fill(); ctx.strokeStyle = "#ff5ad2"; ctx.lineWidth = 4 / z; ctx.stroke(); ctx.clip();
+    if (picture) { const w = picture.strip ? picture.im.width / 2 : picture.im.width; ctx.drawImage(picture.im, 0, 0, w, picture.im.height, h.x - r, h.y - r, r * 2, r * 2); }
+    ctx.restore();
+  });
+}
+function sinUltraEndScreen() {
+  const run = ST.sin.run, won = run.ultraWon, v = run.victory;
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${won ? "¡Sinnoh está a salvo!" : "Fin de la Ultra Explosión"}</h1>
+    <p>${won ? "Derrotaste las tres fases de Necrozma y cerraste la brecha. ¡Ganaste la campaña Ultra Explosión!" : esc(run.lost.reason)}</p>
+    ${won && v ? `<p>Turnos jugados: ${esc(v.turns)} · PV: ${esc(v.pv)} · Pokémon capturados: ${esc(v.caught)}.</p>
+    <h2>Equipo final</h2><ul>${v.team.map(s => `<li>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</li>`).join("")}</ul>` : ""}
+    <div class="btns">${won ? '<button class="btn primary" data-act="sinexplore">Seguir explorando</button>' : ""}<button class="btn" data-act="sinabandon">Nueva partida</button></div></div></div>`;
 }
 function sinCheckStamps(run, event = {}) {
   if (!run?.bag || !run.team || !run.box || !run.fate) return false;
@@ -868,7 +1063,7 @@ function sinGainExp(run, rivals, me, trainer = false) {
   p.rewards.filter(r => r.levels.length).forEach(r => p.pending.push({index: r.index, kind: "evolution", hour}));
   sinAdvanceMoves(run);
 }
-const sinSearchToken = t => !!(SIN_OFFER_COUNT[t.tier] && t.b && t.k && /Apricorn (Tree|Reef)/.test(t.n));
+const sinSearchToken = t => !!(SIN_OFFER_COUNT[t.tier] && t.b && t.k && /Apricorn (Tree|Reef)/.test(t.n) && !ST.sin.run?.destroyed?.[t.cell?.join(",")]);
 const sinWildCards = t => SIN_CARDS.filter(c => c.d && c.d.sp && c.tier === t.tier && c.b === t.b && c.k === t.k);
 const sinAlive = s => s.hpNow == null || s.hpNow > 0;
 let SIN_BUSY = false;
@@ -1057,7 +1252,9 @@ function sinNewScreen() {
       `<button class="sin-choice" data-act="sinstarter" data-species="${esc(s)}">${sinMonInfo(s, "<span>Nv. 5</span>")}</button>`).join("")}</div>
       <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los pueblos</button></div>` :
       `<h2>Prólogo · La Incursión</h2><p>${esc(v.name)} · ${esc(esSp(sp))} · Nivel 5</p>${sinCardImage(SIN_PROLOGUE.img, "Prólogo: La Incursión", "sin-prologue")}
-      <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los iniciales</button><button class="btn primary" data-act="sinbegin">Comenzar</button></div><p id="sin-new-error" role="alert"></p>`}
+      <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los iniciales</button><button class="btn primary" data-act="sinbegin">Corazón de Sinnoh</button></div>
+      <h2>Ultra Explosión</h2><p>Campaña alternativa: detén a los Ultraentes y derrota a Necrozma antes de que la brecha llegue al 70 %. Elige la dificultad (Bendiciones de Arceus):</p>
+      <div class="sin-new-actions">${Object.entries(SIN_DIFFICULTY).map(([k, d]) => `<button class="btn" data-act="sinbeginultra" data-diff="${k}">${esc(d.name)} (${d.bless})</button>`).join("")}</div><p id="sin-new-error" role="alert"></p>`}
     </div></div>`;
   sinFillImages();
 }
@@ -1084,7 +1281,7 @@ async function sinInitialSet(species, level = 5, alpha = false) {
   const natures = Dex.natures.all(); set.nature = natures[Math.floor(Math.random() * natures.length)].name;
   return set;
 }
-async function sinBegin() {
+async function sinBegin(difficulty = null) {
   if (SIN_NEW.busy || !SIN_NEW.village || !SIN_NEW.species || ST.sin.run) return;
   const v = SIN_NEW.village, species = SIN_NEW.species;
   const token = SIN.tokens.find(t => t.n === v.village && (t.tags || []).includes("Village Token"));
@@ -1099,6 +1296,7 @@ async function sinBegin() {
       campaign: "heart", act: 1, moveBonus: 0, grunts: [v.village], fragments: [], heart: false, originGod: null, won: false, caught: 0,
       notice: "Acto I · El Viaje: recibiste 3 Bonguri Rojos. Los Reclutas del Equipo Galaxia ocupan tu pueblo natal."};
     ST.sin.run.bag.red = 3;
+    if (difficulty) sinUltraSetup(ST.sin.run, difficulty);
     // La cámara del antiguo visor no se hereda a una partida nueva.
     ST.sin.cam = null; sinSave(); renderSin();
   } catch (err) {
@@ -1139,12 +1337,13 @@ function sinUpdateTurn() {
   const run = ST.sin.run; if (!run || !SIN_VIEW) return;
   const max = sinMaxMoves(run), left = run.fought || run.revive ? 0 : Math.max(0, max - run.moved);
   SIN_VIEW.reachable = run.fateTeleport ? sinTeleportCells(run) : sinReachable(run.pos, left);
-  $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)} · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}</div>
+  $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)} · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}${sinUltra(run) ? ` · <b>Brecha ${esc(Math.floor(run.breach))} %</b>` : ""}</div>
     <div class="sin-team">${sinTeamHTML(run)}</div>
     <button class="btn" data-act="sinbag">Bolsa</button>
     <button class="btn" data-act="sincampaign">Campaña</button>
     <button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>
     ${run.trainer ? '<button class="btn" data-act="sintrainerpanel">Entrenador</button>' : ""}
+    ${sinUltra(run) && run.blessings > 0 ? `<button class="btn" data-act="sinbless" ${run.blessSkip ? "disabled" : ""}>Bendición de Arceus (${esc(run.blessings)})${run.blessSkip ? ": activa" : ""}</button>` : ""}
     ${sinFx(run, "flyAnywhere") && !sinVillage(run) ? `<button class="btn" data-act="sinflyopen" ${run.flown || run.fought ? "disabled" : ""}>Volar</button>` : ""}
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
     ${run.fateTeleport ? '<p>Palkia: toca una casilla resaltada. <button class="btn" data-act="sinfatecancel">Cancelar teletransporte</button></p>' : ""}
@@ -1191,7 +1390,7 @@ function sinVictoryScreen() {
 function sinShowCampaign() {
   const run = ST.sin.run; if (!run || !SIN_VIEW) return;
   SIN_VIEW.panel = "campaign"; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.selected = null;
-  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Campaña · Corazón de Sinnoh</h2><button class="btn" data-act="sinclose">Cerrar</button></div>${sinCampaignHTML(run)}`;
+  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Campaña · ${sinUltra(run) ? "Ultra Explosión" : "Corazón de Sinnoh"}</h2><button class="btn" data-act="sinclose">Cerrar</button></div>${sinUltra(run) ? sinUltraHTML(run) : sinCampaignHTML(run)}`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
 }
 const sinCanPay = (run, recipe) => Object.entries(recipe).every(([k, n]) => run.bag[k] >= n);
@@ -1458,7 +1657,8 @@ function sinCaptureRoll(hp, max, ratio, bonus, status, captivating = false) {
 }
 const sinCanBattleFate = me => !!(me && me === B && me.sin && !me.over && !me.dead && !me.sinThrowing && !me.sinFateBusy &&
   me.req?.active && !me.req.wait && !me.req.forceSwitch && !me.req.teamPreview && ST.sin.run?.battle && !ST.sin.run.battle.failedBall && !ST.sin.run.battle.ballAttempt);
-const sinCanThrow = me => sinCanBattleFate(me) && !ST.sin.run.battle.trainer && me.mons[me.act.p2]?.hp > 0;
+const sinNoCapture = battle => !!(battle.trainer || battle.legend?.ub || battle.legend?.necro);
+const sinCanThrow = me => sinCanBattleFate(me) && !sinNoCapture(ST.sin.run.battle) && me.mons[me.act.p2]?.hp > 0;
 const sinCaptureRatio = (battle, target = battle.wild) => (sinSpeciesData(target.species)?.cr ?? 3) * (target.alpha ? .5 : 1) * (battle.legend?.aura ? .25 : 1) *
   (/Apricorn Tree$/.test(SIN.tokens[battle.token]?.n || "") ? sinFx(ST.sin.run, "catchTree") || 1 : /Apricorn Reef$/.test(SIN.tokens[battle.token]?.n || "") ? sinFx(ST.sin.run, "catchReef") || 1 : 1);
 function sinCaptureFailure(run, turn) {
@@ -1486,7 +1686,7 @@ function sinBallsHTML(me) {
     requestAnimationFrame(() => { if (B === me && run.battle?.failedBall && $("ctl")) $("ctl").innerHTML = sinFailedBallHTML(run); });
     return sinFailedBallHTML(run);
   }
-  return (run.battle.trainer ? "" : Object.entries(SIN_BALLS).filter(([key, b]) => b.recipe || run.balls[key] > 0).map(([key, ball]) => `<button class="btn" data-act="sinthrow" data-ball="${key}" ${sinCanThrow(me) && run.balls[key] > 0 ? "" : "disabled"}>${esc(ball.name)} ×${esc(run.balls[key])}</button>`).join("")) +
+  return (sinNoCapture(run.battle) ? "" : Object.entries(SIN_BALLS).filter(([key, b]) => b.recipe || run.balls[key] > 0).map(([key, ball]) => `<button class="btn" data-act="sinthrow" data-ball="${key}" ${sinCanThrow(me) && run.balls[key] > 0 ? "" : "disabled"}>${esc(ball.name)} ×${esc(run.balls[key])}</button>`).join("")) +
     [1, 3].map(count => `<button class="btn" data-act="singiratina" data-count="${count}" ${sinCanBattleFate(me) && sinFatePayment(run, "giratina", count) ? "" : "disabled"}>Giratina ${count === 1 ? "×1: −1/8 PS, +1 Atq./At. Esp." : "Juega 3: 1 PS, +2 Atq./At. Esp., +1 Vel."}</button>`).join("") +
     (sinFx(run, "hyper") ? `<button class="btn" data-act="sinhyper" ${sinCanBattleFate(me) && !run.battle.hyperUsed ? "" : "disabled"}>Hiperpoción${run.battle.hyperUsed ? " (usada)" : ""}</button>` : "");
 }
@@ -1685,7 +1885,7 @@ function sinOfferScreen() {
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Pokémon salvajes</h1>
     <p>${esc(offer.place)} · ${esc(offer.meta)}</p>
     ${offer.alpha ? "<p>¡Alfa! Combate obligatorio: nivel Fuerte +5, IVs perfectos, ratio de captura a la mitad y recompensa de 4 PV (+2 al debilitar). No huye al debilitar a uno de los tuyos.</p>" : ""}
-    ${offer.legend ? "<p>Legendario: no huye al debilitar a uno de los tuyos. Capturarlo da 4 PV; derrotarlo da 6 PV. No da Bonguri. Su ficha permanece si pierdes.</p>" : ""}
+    ${offer.legend?.ub || offer.legend?.necro ? `<p>${offer.legend.necro ? "Necrozma" : "Ultraente"}: no se puede capturar ni huye. Derrotarlo da 6 PV${offer.legend.ub ? ", quita una carta de Brecha de tu equipo y debilita la Armadura Prismática de Necrozma" : offer.legend.necro < 3 ? " y lo hace pasar a su siguiente fase" : " y gana la campaña"}. Si Necrozma te derrota sin Bendiciones de Arceus, la partida termina.</p>` : offer.legend ? "<p>Legendario: no huye al debilitar a uno de los tuyos. Capturarlo da 4 PV; derrotarlo da 6 PV. No da Bonguri. Su ficha permanece si pierdes.</p>" : ""}
     ${offer.legend?.god ? `<p>${offer.legend.aura ? "Aura Celestial: captura ×0,25. Al derrotar su primera forma combatirás inmediatamente contra su Forma Origen, totalmente restaurada, conservando tus PS y estados." : "Tu artefacto celestial anula el Aura: captura normal y un solo combate. El artefacto se conserva."} Vencer o capturar concede otro turno inmediato en Corazón de Sinnoh.</p>` : ""}
     ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
       ${sinMonInfo(s.species, `<span>Nv. ${esc(s.level)}</span>`)}
@@ -1755,7 +1955,8 @@ function sinOfferHeart(color) {
   sinSave(); SIN_VIEW.panel = null; SIN_VIEW.selected = SIN_BY_CELL.get(run.pos.join(",")); sinUpdateTurn();
 }
 const sinShrineName = name => "Santuario " + name.replace(/ Shrine$/, "");
-const sinShrineOccupied = (run, name) => run.shrineLegends[name] || (name === "Origin Shrine" && run.originGod);
+const sinShrineOccupied = (run, name) => run.shrineLegends[name] || (name === "Origin Shrine" && run.originGod) ||
+  !!run.destroyed?.[SIN.tokens.find(t => t.n === name)?.cell?.join(",")];
 const sinHereShrine = run => SIN.tokens.find(t => / Shrine$/.test(t.n) && t.cell?.join(",") === run.pos.join(","));
 function sinDrawShrine(run, count) {
   const cards = [];
@@ -2077,6 +2278,7 @@ function sinResult(won, me) {
   }
   if (run.frenzy) { delete run.frenzy; const stars = sinResetTurn(run); run.frenzyTurn = true; run.notice = `¡Frenesí de Captura! +2 PV y juegas otro turno. ${stars}`; }
   if (unlockTiers.length) sinTrainerProgress(run, unlockTiers);
+  if (encounter.legend?.ub || encounter.legend?.necro) sinUltraResult(run, encounter, won);
   if (swarm && !run.revive) run.notice = won ? "¡Superaste los tres Pokémon del enjambre! Ganaste 7 PV, sin Bonguri. Tu turno terminó." : "El enjambre terminó sin victoria completa: 0 PV y ningún Bonguri. Tu turno terminó.";
   sinSave();
 }
@@ -2243,7 +2445,9 @@ function sinEndTurn() {
   const run = ST.sin.run; if (!run || run.battle || run.progress || run.shrineEvent || run.fateTeleport || (run.offer && !run.offer.closed)) return;
   delete run.frenzyTurn;
   if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
-  run.notice = sinResetTurn(run); sinSave(); sinUpdateTurn();
+  run.notice = [sinResetTurn(run), sinUltraRound(run)].filter(Boolean).join(" "); sinSave();
+  if (run.lost) return renderSin();
+  sinUpdateTurn();
 }
 function sinResetTurn(run) {
   run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
@@ -2388,6 +2592,7 @@ function sinDraw() {
       }
     }
   });
+  sinDrawUltra(ctx, run, z);
   // La ficha se dibuja al final para quedar siempre por encima de todos los tokens.
   const h = run && SIN_BY_CELL.get(run.pos.join(","));
   if (h) {
@@ -2468,6 +2673,7 @@ function sinShowCell(h) {
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Casilla (${esc(h.c)}, ${esc(h.r)})</h2><button class="btn" data-act="sinclose" aria-label="Cerrar ficha">Cerrar</button></div>
     <p>Nivel de elevación: ${esc(h.l)} · ${esc(h.w ? "Agua" : "Tierra")}${h.dw ? " · Mundo Distorsión" : ""}</p>
     ${cost ? `<button class="btn primary sin-move" data-act="sinmove" data-cell="${esc(h.c + "," + h.r)}">Moverme aquí (${esc(cost)})</button>` : ""}
+    ${sinUltraCellHTML(run, h, here)}
     ${tokens.length ? `<ul class="sin-tokens">${tokens.map(t => {
       if (t.hidden && !t.hidden.revealed) return `<li><b>Escondite ${sinHiddenSpecial(t) ? "especial" : "regular"}</b><small>Boca abajo · Se revela al pasar por aquí.</small></li>`;
       const meta = sinMeta(t);
@@ -2540,6 +2746,7 @@ function renderSin() {
   if (ST.sin.run.trainerOffer && !ST.sin.run.battle && !ST.sin.run.progress) return sinTrainerScreen();
   if (ST.sin.run.shrineEvent) return sinShrineScreen();
   if (ST.sin.run.progress) return sinProgressScreen();
+  if (ST.sin.run.lost || (ST.sin.run.ultraWon && !ST.sin.run.victorySeen)) return sinUltraEndScreen();
   if (ST.sin.run.battle) return sinPendingScreen();
   if (ST.sin.run.offer && !ST.sin.run.offer.closed) return sinOfferScreen();
   if (ST.sin.run.act === 4 && !ST.sin.run.won) return sinFinalScreen();
@@ -2618,6 +2825,7 @@ document.addEventListener("click", e => {
     if (SIN_NEW.species) SIN_NEW.species = null; else SIN_NEW.village = null; return sinNewScreen();
   }
   if (act === "sinbegin") return sinBegin();
+  if (act === "sinbeginultra") return sinBegin(b.dataset.diff);
   if (act === "sintrainer") return sinChooseTrainer(+b.dataset.trainer);
   if (act === "sinresearch") { const run = ST.sin.run, t = run?.offer?.token; if (!run || run.researched || !sinFx(run, "research") || !Number.isInteger(t)) return; run.researched = true; run.searched = false; run.offer = null; return sinSearch(t); }
   if (act === "sinexplore" && ST.sin.run?.won) { ST.sin.run.victorySeen = true; sinSave(); return renderSin(); }
@@ -2656,6 +2864,10 @@ document.addEventListener("click", e => {
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
   if (act === "sinstamps") return sinShowStamps();
+  if (act === "sinub") return sinSeekUltra("ub");
+  if (act === "sinnecro") return sinSeekUltra("necro");
+  if (act === "singate") return sinUltraGate();
+  if (act === "sinbless" && sinUltra(ST.sin.run) && ST.sin.run.blessings > 0 && !ST.sin.run.blessSkip) { ST.sin.run.blessings--; ST.sin.run.blessSkip = true; ST.sin.run.notice = "Bendición de Arceus: los Ultraentes no se moverán al terminar este turno."; sinSave(); return sinUpdateTurn(); }
   if (act === "sintrainerpanel") return sinTrainerPanel();
   if (act === "sinpick") return sinPickBonguri();
   if (act === "sinswap") return sinSwapBonguri(b.dataset.from, b.dataset.to);
