@@ -257,6 +257,8 @@ if (!Dex.data.Items.luckyegg) Dex.data.Items.luckyegg = {name: "Lucky Egg", num:
 const sinEmptyBag = () => Object.fromEntries(Object.keys(SIN_BONGURI).map(k => [k, 0]));
 const sinStartingBalls = () => ({poke: 3, great: 0, ultra: 0, spirit: 0});
 const SIN_EXP_SHARE = .5;
+// Regla del juego de mesa: enseñar el movimiento de la carta del salvaje debilitado. Se activa al replicar el juego original.
+const SIN_SIGNATURE_TEACH = false;
 const SIN_STAMPS = [
   "Fallar la captura de un Pokémon salvaje en 2 turnos seguidos del mismo combate.",
   "Ganar contra otro entrenador o un Ultraente (Reclutas, Comandantes o Helio en solitario).",
@@ -370,6 +372,7 @@ function sinGender(species) {
 function sinMigrateTeam(run) {
   if (!run) return;
   let changed = false;
+  if (!SIN_SIGNATURE_TEACH && run.progress?.signature) { delete run.progress.signature; changed = true; }
   if (!run.bag) { run.bag = sinEmptyBag(); changed = true; }
   if (!run.campaign) {
     run.campaign = "heart"; run.act = 1; run.moveBonus = 0; run.grunts = [run.village]; run.bag.red += 3;
@@ -576,6 +579,11 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
+  .sin-mon{display:flex;justify-content:center;align-items:flex-end;height:104px;overflow:hidden}
+  .sin-mon img{width:96px;height:96px;object-fit:contain}
+  .sin-mon .spr{display:none;width:var(--w);height:var(--s);flex:none;background-repeat:no-repeat;background-size:auto 100%;image-rendering:pixelated;animation:sprA var(--d) steps(var(--n)) infinite}
+  .sin-mon.sp .spr{display:block}.sin-mon.sp img{display:none}
+  .sin-types{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin:4px 0}
   .sin-offer .btn{margin-top:8px;min-height:44px}
   .sin-notice{flex-basis:100%;margin:0;color:var(--ink2);font-size:13px}
   .sin-turn .btn{min-height:44px}
@@ -615,6 +623,28 @@ function sinFillImages() {
   document.querySelectorAll("img[data-sin-img]").forEach(el => {
     const im = sinImage(el.dataset.sinImg); if (im && el.getAttribute("src") !== im.src) el.src = im.src;
   });
+  sinFillSprites();
+}
+// Retrato del Pokémon al elegirlo: sprite animado de frente (Essentials) con la ilustración oficial de respaldo.
+// Las imágenes de las cartas Pokémon siguen en sinnoh_datos.js; sinCardImage puede dibujarlas al replicar el juego original.
+function sinMonPic(species) {
+  const id = typeof sprUrl === "function" ? sprUrl(species, false, false) : null;
+  return `<span class="sin-mon"${id ? ` data-sin-spr="${esc(id)}"` : ""}><img src="${esc(img(species))}" alt="${esc(esSp(species))}" loading="lazy"><span class="spr" aria-hidden="true"></span></span>`;
+}
+function sinMonInfo(species, extra = "") {
+  return `${sinMonPic(species)}<b>${esc(esSp(species))}</b><span class="sin-types">${Dex.species.get(species).types.map(tchip).join("")}</span>${extra}`;
+}
+function sinFillSprites() {
+  document.querySelectorAll(".sin-mon[data-sin-spr]:not([data-loaded])").forEach(el => {
+    el.dataset.loaded = 1;
+    const id = el.dataset.sinSpr, e = sprEntry(id), box = el.querySelector(".spr");
+    sprLoad(id).then(u => {
+      if (!u || !el.isConnected) return;
+      const h = 96, w = h * e[4] / e[5];
+      box.style.cssText = `--s:${h}px;--w:${w.toFixed(2)}px;--n:${e[3]};--d:${Math.max(.4, e[3] / 26).toFixed(2)}s;background-image:url("${u}")`;
+      el.classList.add("sp");
+    });
+  });
 }
 function sinCardImage(key, name, cls = "") {
   return `<img class="${esc(cls)}" data-sin-img="${esc(key)}" alt="${esc(name)}">`;
@@ -627,7 +657,7 @@ function sinNewScreen() {
       const card = SIN_HOME.find(c => c.gm === v.color);
       return `<button class="sin-choice" data-act="sinvillage" data-village="${esc(v.village)}">${sinCardImage(card.img, "Carta de " + v.name)}<b>${esc(v.name)}</b></button>`;
     }).join("")}</div>` : step === 2 ? `<h2>${esc(v.name)} · Elige tu inicial</h2><div class="sin-choices sin-starters">${v.starters.map(s =>
-      `<button class="sin-choice" data-act="sinstarter" data-species="${esc(s)}">${sinCardImage(sinStarterCard(s).img, "Carta de " + esSp(s))}<b>${esc(esSp(s))}</b></button>`).join("")}</div>
+      `<button class="sin-choice" data-act="sinstarter" data-species="${esc(s)}">${sinMonInfo(s, "<span>Nv. 5</span>")}</button>`).join("")}</div>
       <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los pueblos</button></div>` :
       `<h2>Prólogo · La Incursión</h2><p>${esc(v.name)} · ${esc(esSp(sp))} · Nivel 5</p>${sinCardImage(SIN_PROLOGUE.img, "Prólogo: La Incursión", "sin-prologue")}
       <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los iniciales</button><button class="btn primary" data-act="sinbegin">Comenzar</button></div><p id="sin-new-error" role="alert"></p>`}
@@ -1226,10 +1256,10 @@ function sinOfferScreen() {
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Pokémon salvajes</h1>
     <p>${esc(offer.place)} · ${esc(offer.meta)}</p>
     ${offer.alpha ? "<p>¡Alfa! Combate obligatorio: nivel Fuerte +5, IVs perfectos, ratio de captura a la mitad y recompensa de 4 PV (+2 al debilitar). No huye al debilitar a uno de los tuyos.</p>" : ""}
-    ${offer.legend ? "<p>Legendario: no huye al debilitar a uno de los tuyos. Capturarlo da 4 PV; derrotarlo da 6 PV y permite aprender su movimiento característico. No da Bonguri. Su ficha permanece si pierdes.</p>" : ""}
+    ${offer.legend ? "<p>Legendario: no huye al debilitar a uno de los tuyos. Capturarlo da 4 PV; derrotarlo da 6 PV. No da Bonguri. Su ficha permanece si pierdes.</p>" : ""}
     ${offer.legend?.god ? `<p>${offer.legend.aura ? "Aura Celestial: captura ×0,25. Al derrotar su primera forma combatirás inmediatamente contra su Forma Origen, totalmente restaurada, conservando tus PS y estados." : "Tu artefacto celestial anula el Aura: captura normal y un solo combate. El artefacto se conserva."} Vencer o capturar concede otro turno inmediato en Corazón de Sinnoh.</p>` : ""}
     ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
-      ${sinCardImage(s.img, "Carta de " + esSp(s.species))}<b>${esc(esSp(s.species))}</b><span>Nv. ${esc(s.level)}</span>
+      ${sinMonInfo(s.species, `<span>Nv. ${esc(s.level)}</span>`)}
       <div><button class="btn primary" data-act="sinfight" data-offer="${i}">Combatir</button></div></div>`).join("")}</div>` :
       '<p role="status">No hay cartas de Pokémon para este bioma, clima y nivel. La búsqueda de este turno ya fue usada.</p>'}
     ${offer.alpha ? "" : '<div class="sin-new-actions"><button class="btn" data-act="sinskip">No combatir</button></div>'}
@@ -1565,7 +1595,7 @@ function sinResult(won, me) {
       run.progress.bonguri = run.battle.legend ? {} : sinBonguriReward(run, token);
       run.progress.pv = (wild.alpha ? 4 : SIN_PV[tier] || 0) + (me.sinCaught ? 0 : 2);
       run.pv += run.progress.pv;
-      if (!me.sinCaught && move) run.progress.signature = {move};
+      if (SIN_SIGNATURE_TEACH && !me.sinCaught && move) run.progress.signature = {move};
       if (!me.sinCaught) run.discard.push({species: wild.species, tier, signature: move});
       if (run.battle.legend) {
         run.legendsDone[toID(wild.species)] = me.sinCaught ? "caught" : "defeated";
