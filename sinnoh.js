@@ -864,6 +864,37 @@ function sinUltraEndScreen() {
     <h2>Equipo final</h2><ul>${v.team.map(s => `<li>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</li>`).join("")}</ul>` : ""}
     <div class="btns">${won ? '<button class="btn primary" data-act="sinexplore">Seguir explorando</button>' : ""}<button class="btn" data-act="sinabandon">Nueva partida</button></div></div></div>`;
 }
+/* ---------- Evoluciones por objeto o intercambio ----------
+   En Sinnoh no hay tienda ni intercambios: la piedra u objeto se consigue con 2 Bonguri de su color + 1 negro,
+   y el intercambio se reemplaza por un Cordón Unión (2 Bonguri negros). Cancelar la evolución devuelve los Bonguri. */
+const SIN_EVO_ITEMS = {THUNDERSTONE: "yellow", MOONSTONE: "pink", FIRESTONE: "red", LEAFSTONE: "green", WATERSTONE: "blue", SHINYSTONE: "white",
+  SUNSTONE: "yellow", DUSKSTONE: "black", ICESTONE: "blue", CRACKEDPOT: "white", UNREMARKABLETEACUP: "white", METALALLOY: "white",
+  PEATBLOCK: "green", OVALSTONE: "pink", RAZORFANG: "black", RAZORCLAW: "black"};
+const SIN_EVO_METHODS = ["Item", "ItemNight", "NightHoldItem", "DayHoldItem", "CableLinkItem", "TradeSpecies", "Trade"];
+function sinItemEvolutions(s) {
+  return (sinSpeciesData(s.species)?.ev || []).filter(([target, method]) => SIN_EVO_METHODS.includes(method) && Dex.species.get(toID(target)).exists)
+    .map(([target, method, param]) => {
+      const trade = /Cable|Trade/.test(method), color = SIN_EVO_ITEMS[param] || "white";
+      const cost = trade ? {black: 2} : color === "black" ? {black: 3} : {[color]: 2, black: 1};
+      const item = param && Dex.items.get(toID(param)).exists ? esItem(toID(param)) : "";
+      return {target: Dex.species.get(toID(target)).name, cost,
+        name: trade ? "Cordón Unión" + (item ? " + " + item : "") : item || esSp(Dex.species.get(toID(param)).name)};
+    });
+}
+function sinEvoItemsHTML(run) {
+  const rows = run.team.flatMap((s, i) => sinItemEvolutions(s).map((e, j) => `<li><b>${esc(esSp(s.species))} → ${esc(esSp(e.target))}</b><small>${esc(e.name)} · ${esc(sinRecipeText(e.cost))}</small>
+    <button class="btn" data-act="sinevoitem" data-member="${i}" data-evo="${j}" ${sinMapAction(run) && sinCanPay(run, e.cost) ? "" : "disabled"}>Usar</button></li>`));
+  return rows.length ? `<h2>Evolución por objeto o intercambio</h2><p>Cancelar la evolución devuelve los Bonguri.</p><ul class="sin-objects">${rows.join("")}</ul>` : "";
+}
+function sinEvoByItem(member, index) {
+  const run = ST.sin.run, s = run?.team[member], e = s && sinItemEvolutions(s)[index];
+  if (!sinMapAction(run) || !e || !sinCanPay(run, e.cost)) return;
+  sinPay(run, e.cost);
+  run.progress = {kind: "item", won: null, rewards: run.team.map((m, i) => ({index: i, species: m.species, exp: 0, levels: [], events: []})),
+    pending: [{index: member, kind: "evolution", target: e.target, refund: e.cost, hour: new Date().getHours()}]};
+  run.notice = `Usaste ${e.name} con ${esSp(s.species)}.`;
+  sinSave(); renderSin();
+}
 function sinCheckStamps(run, event = {}) {
   if (!run?.bag || !run.team || !run.box || !run.fate) return false;
   let changed = false;
@@ -1056,7 +1087,7 @@ function sinGainExp(run, rivals, me, trainer = false) {
   if (!Array.isArray(rivals)) rivals = [rivals];
   const p = run.progress = {won: true, rewards: [], pending: []};
   run.team.forEach((s, index) => {
-    const reward = {index, exp: 0, levels: [], events: []}; p.rewards.push(reward);
+    const reward = {index, species: s.species, exp: 0, levels: [], events: []}; p.rewards.push(reward);
     if (!sinAlive(s)) return;
     s.friendship = Math.min(255, s.friendship + SIN_FRIEND_WIN);
     const sp = Dex.species.get(s.species), gw = sinSpeciesData(s.species)?.gw, oldMax = calcStat(sp, s, "hp");
@@ -1489,7 +1520,7 @@ function sinShowBag() {
       ${SIN_VIEW.bagItem === i ? `<p>Equipar a…</p><div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sinequip" data-item="${i}" data-member="${j}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.item ? " · Devolver " + esc(sinItemName(s.item)) : ""}</button>`).join("")}</div>` : ""}</li>`).join("")}</ul>` : "<p>No tienes objetos en el inventario.</p>"}
     <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li>${esc(esSp(s.species))}: <b>${esc(sinItemName(s.item))}</b>
       <button class="btn" data-act="sinunequip" data-member="${i}">Quitar</button></li>` : "").join("")}</ul>
-    ${sinTMsHTML(run)}${sinNobleHTML(run)}${sinLegendsHTML(run)}
+    ${sinEvoItemsHTML(run)}${sinTMsHTML(run)}${sinNobleHTML(run)}${sinLegendsHTML(run)}
     ${sinFateHTML(run)}`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
 }
@@ -2337,7 +2368,7 @@ function sinProgressHTML(won) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
   if (p) won = p.won;
   if (p?.act != null) requestAnimationFrame(sinFillImages);
-  return `<div class="card"><p class="result">${p?.kind === "stew" ? "Estofado Infundido" : p?.escaped ? "Huiste del combate" : p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
+  return `<div class="card"><p class="result">${p?.kind === "item" ? "Evolución" : p?.kind === "stew" ? "Estofado Infundido" : p?.escaped ? "Huiste del combate" : p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
     <p class="note">${esc(run ? run.notice : "El combate terminó.")}</p>${run ? sinStampNotices(run) : ""}
     ${p?.act != null ? sinCampaignHTML(run) : ""}
     ${p?.fragment ? `<p>¡Obtuviste el ${esc(SIN_COMMANDERS.find(c => c.id === p.fragment).fragment)}!</p><p>+1 espacio en el equipo · +1 movimiento por turno · Equipo: ${esc(sinTeamSlots(run))} espacios.</p>` : ""}
@@ -2346,8 +2377,8 @@ function sinProgressHTML(won) {
     ${p?.pv != null ? `<p>Ganaste ${esc(p.pv)} ${p.pv === 1 ? "Punto" : "Puntos"} de Viaje.</p>` : ""}
     ${p?.fled && !Object.keys(p.bonguri || {}).length ? "<p>Recibiste 0 Bonguri.</p>" : ""}
     ${p?.bonguri && Object.keys(p.bonguri).length ? `<p>Recibiste ${Object.entries(p.bonguri).map(([k, n]) => `${esc(n)} Bonguri ${esc(SIN_BONGURI[k][n === 1 ? 0 : 1])}`).join(", ")}.</p>` : ""}
-    ${p ? p.rewards.map(r => {
-      const name = esc(esSp(run.team[r.index].species));
+    ${p ? p.rewards.filter(r => r.exp || r.levels.length || r.events.length).map(r => {
+      const name = esc(esSp(r.species || run.team[r.index].species));
       return `<div class="sin-progress"><b>${name}: +${esc(r.exp)} EXP</b>
         ${r.levels.map(n => `<p>¡${name} subió al nivel ${esc(n)}!</p>`).join("")}
         ${r.events.map(e => `<p>${e.evolved ? `¡Felicidades! Tu ${esc(esSp(e.from))} evolucionó en ${esc(esSp(e.evolved))}.` : e.skip ? `${name} no aprendió ${esc(esMove(e.move))}.` : e.forgot ?
@@ -2377,7 +2408,7 @@ function sinTeachSignature(index) {
   offer.done = true; sinAdvanceMoves(run); sinSave(); sinRefreshProgress();
 }
 function sinProgressScreen() {
-  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${ST.sin.run.progress?.kind === "tm" ? "Movimiento de carta" : ST.sin.run.progress?.kind === "stew" ? "Subida de nivel" : "Resultado del combate"}</h1>${sinProgressHTML()}</div></div>`;
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${ST.sin.run.progress?.kind === "item" ? "Evolución" : ST.sin.run.progress?.kind === "tm" ? "Movimiento de carta" : ST.sin.run.progress?.kind === "stew" ? "Subida de nivel" : "Resultado del combate"}</h1>${sinProgressHTML()}</div></div>`;
 }
 function sinLearn(slot) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];
@@ -2393,6 +2424,7 @@ function sinEvolve(accept) {
   if (!q || q.kind !== "evolution" || !q.target) return;
   const s = run.team[q.index], before = Dex.species.get(s.species), after = Dex.species.get(toID(q.target));
   p.pending.shift();
+  if (!accept && q.refund) Object.entries(q.refund).forEach(([k, n]) => { run.bag[k] += n; });
   if (accept && after.exists) {
     const oldMax = calcStat(before, s, "hp"), from = s.species;
     s.ability = sinEvolutionAbility(s.ability, before, after); s.species = after.name;
@@ -2882,6 +2914,7 @@ document.addEventListener("click", e => {
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
   if (act === "sinstamps") return sinShowStamps();
+  if (act === "sinevoitem") return sinEvoByItem(+b.dataset.member, +b.dataset.evo);
   if (act === "sinub") return sinSeekUltra("ub");
   if (act === "sinnecro") return sinSeekUltra("necro");
   if (act === "singate") return sinUltraGate();
