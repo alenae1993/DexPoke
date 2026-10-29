@@ -1086,6 +1086,7 @@ function sinAdvanceMoves(run) {
 function sinGainExp(run, rivals, me, trainer = false) {
   if (!Array.isArray(rivals)) rivals = [rivals];
   const p = run.progress = {won: true, rewards: [], pending: []};
+  if (run.mode === "cards") return;
   run.team.forEach((s, index) => {
     const reward = {index, species: s.species, exp: 0, levels: [], events: []}; p.rewards.push(reward);
     if (!sinAlive(s)) return;
@@ -1120,7 +1121,7 @@ const SIN_HOME = SIN.decks.find(d => d.n === "Home Village Cards").cards;
 const SIN_STARTERS = SIN_CARDS.filter(c => (c.tags || []).includes("Starter Card"));
 const SIN_PROLOGUE = SIN_CARDS.find(c => (c.tags || []).includes("Act Card") && String(c.cid).endsWith("00"));
 const sinStarterCard = sp => SIN_STARTERS.find(c => toID(c.d.sp) === toID(sp));
-let SIN_NEW = {village: null, species: null, busy: false};
+let SIN_NEW = {village: null, species: null, busy: false, mode: "pokemon"};
 const SIN_S = 48, SIN_H = Math.sqrt(3) / 2 * SIN_S, SIN_LIFT = 6;
 const SIN_ES = {
   Plains: "Llanura", Forest: "Bosque", Mountain: "Montaña", Ocean: "Océano", Ruins: "Ruinas", Space: "Espacio",
@@ -1294,11 +1295,13 @@ function sinNewScreen() {
   const v = SIN_NEW.village, sp = SIN_NEW.species, step = sp ? 3 : v ? 2 : 1;
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><button class="back" data-act="sinback">‹ Batalla</button>
     <h1>Nueva partida</h1><p>Leyendas de Sinnoh · Paso ${step} de 3</p>
+    <div class="sin-new-actions"><button class="btn ${SIN_NEW.mode === "cards" ? "" : "primary"}" data-act="sinmode" data-mode="pokemon">Batalla Pokémon</button><button class="btn ${SIN_NEW.mode === "cards" ? "primary" : ""}" data-act="sinmode" data-mode="cards">Modo Cartas</button></div>
+    <p>${SIN_NEW.mode === "cards" ? "Modo Cartas: el juego de mesa tal cual. Combates con las cartas y dados del mod, captura con dados, evolución pagando Puntos de Viaje y movimientos aprendidos de los Pokémon derrotados." : "Batalla Pokémon: combates como en los juegos, con EXP, niveles, ataques y evolución reales."}</p>
     ${step === 1 ? `<h2>Elige tu pueblo natal</h2><div class="sin-choices">${SIN_VILLAGES.map(v => {
       const card = SIN_HOME.find(c => c.gm === v.color);
       return `<button class="sin-choice" data-act="sinvillage" data-village="${esc(v.village)}">${sinCardImage(card.img, "Carta de " + v.name)}<b>${esc(v.name)}</b></button>`;
     }).join("")}</div>` : step === 2 ? `<h2>${esc(v.name)} · Elige tu inicial</h2><div class="sin-choices sin-starters">${v.starters.map(s =>
-      `<button class="sin-choice" data-act="sinstarter" data-species="${esc(s)}">${sinMonInfo(s, "<span>Nv. 5</span>")}</button>`).join("")}</div>
+      `<button class="sin-choice" data-act="sinstarter" data-species="${esc(s)}">${(SIN_NEW.mode === "cards" ? sinCardImage(sinStarterCard(s).img, esSp(s)) + `<b>${esc(esSp(s))}</b>` : sinMonInfo(s, "<span>Nv. 5</span>"))}</button>`).join("")}</div>
       <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los pueblos</button></div>` :
       `<h2>Prólogo · La Incursión</h2><p>${esc(v.name)} · ${esc(esSp(sp))} · Nivel 5</p>${sinCardImage(SIN_PROLOGUE.img, "Prólogo: La Incursión", "sin-prologue")}
       <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los iniciales</button><button class="btn primary" data-act="sinbegin">Corazón de Sinnoh</button></div>
@@ -1345,6 +1348,7 @@ async function sinBegin(difficulty = null) {
       campaign: "heart", act: 1, moveBonus: 0, grunts: [v.village], fragments: [], heart: false, originGod: null, won: false, caught: 0,
       notice: "Acto I · El Viaje: recibiste 3 Bonguri Rojos. Los Reclutas del Equipo Galaxia ocupan tu pueblo natal."};
     ST.sin.run.bag.red = 3;
+    if (SIN_NEW.mode === "cards") { ST.sin.run.mode = "cards"; ST.sin.run.team = [cardSet(set, sinStarterCard(species))]; }
     if (difficulty) sinUltraSetup(ST.sin.run, difficulty);
     // La cámara del antiguo visor no se hereda a una partida nueva.
     ST.sin.cam = null; sinSave(); renderSin();
@@ -1376,9 +1380,9 @@ function sinTeamHTML(run) {
     const gw = sinSpeciesData(s.species)?.gw, start = sinExpForLevel(gw, s.level), next = sinExpForLevel(gw, s.level + 1);
     const expPct = s.level >= 100 ? 100 : Math.max(0, Math.min(100, (s.exp - start) / (next - start) * 100));
     const expLabel = s.level >= 100 ? "Nivel máximo" : `${s.exp - start}/${next - start} EXP hacia el nivel ${s.level + 1}`;
-    return `<span class="sin-member">${pimg(s.species)}<span>${esc(esSp(s.species))}${s.alpha ? " · Alfa" : ""} · Nv. ${esc(s.level)}${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}
+    return `<span class="sin-member">${pimg(s.species)}<span>${esc(esSp(s.species))}${s.alpha ? " · Alfa" : ""}${s.card ? " · " + esc(cardMoves(s).length) + " mov." : " · Nv. " + esc(s.level)}${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}
       <span class="sin-hp" role="meter" aria-label="PS de ${esc(esSp(s.species))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></span>
-      <span class="sin-hp sin-exp" role="meter" aria-label="${esc(expLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${expPct}"><i style="width:${expPct}%"></i></span>
+      ${s.card ? "" : `<span class="sin-hp sin-exp" role="meter" aria-label="${esc(expLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${expPct}"><i style="width:${expPct}%"></i></span>`}
       <small>${esc(health)}${SIN_STATUS[s.status] && sinAlive(s) ? " · " + esc(SIN_STATUS[s.status]) : ""}${s.item ? " · " + esc(sinItemName(s.item)) : ""}</small></span></span>`;
   }).join("");
 }
@@ -1463,7 +1467,7 @@ function sinCraft(key, kind = "ball", member = null) {
   const event = run?.shrineEvent;
   const feast = event?.queue && event.started && SIN_SHRINE_EFFECTS[SIN_SHRINE_CARDS[event.queue[event.cursor]].img].kind === "feast";
   if ((!sinMapAction(run) && !(VIEW === "sin" && feast && !run.progress && kind === "stew" && sinFreeStew(run, key))) || !sinCanCraft(run, key, kind)) return;
-  if (kind === "stew" && key === "infused") {
+  if (kind === "stew" && key === "infused" && run?.mode !== "cards") {
     if (member === null) {
       if (feast) { event.infuse = true; sinSave(); return sinShrineScreen(); }
       SIN_VIEW.bagStew = true; return sinShowBag();
@@ -1481,7 +1485,8 @@ function sinCraft(key, kind = "ball", member = null) {
     if (key === "captivating") run.captivating = true;
     if (key === "master") run.masterStew = true;
     if (!free && sinFx(run, "picnic")) run.feast.remaining++;
-    if (key === "infused") { sinInfuse(run, member); sinSave(); return renderSin(); }
+    if (key === "infused" && run.mode === "cards") run.halfEvo = true;
+    else if (key === "infused") { sinInfuse(run, member); sinSave(); return renderSin(); }
   }
   run.notice = kind === "stew" ? `${SIN_STEWS[key].name}: ${SIN_STEWS[key].effect}` : `Fabricaste ${kind === "item" ? esItem(key) : SIN_BALLS[key].name}.`;
   sinSave(); if (feast) return sinShrineScreen(); sinUpdateTurn();
@@ -1520,7 +1525,7 @@ function sinShowBag() {
       ${SIN_VIEW.bagItem === i ? `<p>Equipar a…</p><div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sinequip" data-item="${i}" data-member="${j}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.item ? " · Devolver " + esc(sinItemName(s.item)) : ""}</button>`).join("")}</div>` : ""}</li>`).join("")}</ul>` : "<p>No tienes objetos en el inventario.</p>"}
     <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li>${esc(esSp(s.species))}: <b>${esc(sinItemName(s.item))}</b>
       <button class="btn" data-act="sinunequip" data-member="${i}">Quitar</button></li>` : "").join("")}</ul>
-    ${sinEvoItemsHTML(run)}${sinTMsHTML(run)}${sinNobleHTML(run)}${sinLegendsHTML(run)}
+    ${run.mode === "cards" ? cardEvoHTML(run) : sinEvoItemsHTML(run)}${sinTMsHTML(run)}${run.mode === "cards" ? "" : sinNobleHTML(run)}${sinLegendsHTML(run)}
     ${sinFateHTML(run)}`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
 }
@@ -1530,6 +1535,12 @@ function sinTMsHTML(run) {
 }
 function sinTeachTM(tmIndex, member) {
   const run = ST.sin.run, tm = run?.tms[tmIndex], set = run?.team[member];
+  if (run?.mode === "cards") {
+    const c = cardByImg(tm?.img); if (!sinMapAction(run) || !c || !set?.card) return;
+    const mv = cardStats(c).sig; if (!(mv.type === "Typeless" || set.card.learn.includes(mv.type)) || cardMoves(set).some(m => m.name === mv.name)) return;
+    set.cmoves ||= []; if (set.cmoves.length >= 2) set.cmoves.shift(); set.cmoves.push(mv);
+    run.notice = `${esSp(set.species)} aprendió ${mv.name}.`; sinSave(); return sinUpdateTurn();
+  }
   if (!sinMapAction(run) || !tm || !set || !Dex.moves.get(tm.move).exists || set.moves.includes(tm.move)) return;
   run.progress = {kind: "tm", won: null, rewards: run.team.map((_, index) => ({index, exp: 0, levels: [], events: []})),
     pending: [{index: member, move: tm.move, kind: "signature"}]};
@@ -1937,7 +1948,7 @@ function sinOfferScreen() {
     ${offer.legend?.ub || offer.legend?.necro ? `<p>${offer.legend.necro ? "Necrozma" : "Ultraente"}: no se puede capturar ni huye. Derrotarlo da 6 PV${offer.legend.ub ? ", quita una carta de Brecha de tu equipo y debilita la Armadura Prismática de Necrozma" : offer.legend.necro < 3 ? " y lo hace pasar a su siguiente fase" : " y gana la campaña"}. Si Necrozma te derrota sin Bendiciones de Arceus, la partida termina.</p>` : offer.legend ? "<p>Legendario: no huye al debilitar a uno de los tuyos. Capturarlo da 4 PV; derrotarlo da 6 PV. No da Bonguri. Su ficha permanece si pierdes.</p>" : ""}
     ${offer.legend?.god ? `<p>${offer.legend.aura ? "Aura Celestial: captura ×0,25. Al derrotar su primera forma combatirás inmediatamente contra su Forma Origen, totalmente restaurada, conservando tus PS y estados." : "Tu artefacto celestial anula el Aura: captura normal y un solo combate. El artefacto se conserva."} Vencer o capturar concede otro turno inmediato en Corazón de Sinnoh.</p>` : ""}
     ${offer.cards.length ? `<div class="sin-choices sin-offer">${offer.cards.map((s, i) => `<div class="sin-choice">
-      ${sinMonInfo(s.species, `<span>Nv. ${esc(s.level)}</span>`)}
+      ${run.mode === "cards" ? sinCardImage(s.img, esSp(s.species)) + `<b>${esc(esSp(s.species))}</b>` : sinMonInfo(s.species, `<span>Nv. ${esc(s.level)}</span>`)}
       <div><button class="btn primary" data-act="sinfight" data-offer="${i}">Combatir</button></div></div>`).join("")}</div>` :
       '<p role="status">No hay cartas de Pokémon para este bioma, clima y nivel. La búsqueda de este turno ya fue usada.</p>'}
     ${offer.alpha ? "" : `<div class="sin-new-actions"><button class="btn" data-act="sinskip">No combatir</button>${sinFx(run, "research") && !run.researched && !offer.legend && Number.isInteger(offer.token) ? '<button class="btn" data-act="sinresearch">Buscar de nuevo</button>' : ""}</div>`}
@@ -2200,6 +2211,7 @@ async function sinFight(index, trainerKey = false) {
     const foes = (trainer || swarm ? run.battle.foes : [run.battle.wild]).map((s, i) => ({...s, ...(swarm ? {name: "Enjambre" + (i + 1)} : {})}))
       .filter((s, i) => !swarm || (!run.battle.captures[i] && !run.battle.defeated.includes(i)));
     const spec = trainer && (trainer.name ? trainer : sinTrainerSpec(run, "grunt"));
+    if (run.mode === "cards") { sinLeave(); return cardStart(run); }
     sinLeave(); newBattle(mine, foes, {sin: true, aiDiff: swarm ? "normal" : spec ? spec.aiDiff : "easy", pre: sinPre(mine),
       ...(swarm ? {foeName: "Enjambre", intro: "¡Un enjambre de Pokémon salvajes sale de la Puerta de Distorsión!", bgm: "bgm_boss"} : {}),
       ...(run.battle.legend ? {bgm: run.battle.legend.god ? "bgm_final" : "bgm_boss"} : {}),
@@ -2277,6 +2289,7 @@ function sinResult(won, me) {
       run.progress.pv = (wild.alpha ? 4 : SIN_PV[tier] || 0) + (me.sinCaught ? 0 : 2);
       run.pv += run.progress.pv;
       if (SIN_SIGNATURE_TEACH && !me.sinCaught && move) run.progress.signature = {move};
+      if (run.mode === "cards" && !me.sinCaught) { const c = cardByImg(encounter.card) || cardBySpecies(wild.species); if (c) run.progress.cardTeach = {move: cardStats(c).sig}; }
       if (!me.sinCaught && sinFx(run, "pvDefeat")) { run.pv += 2; run.progress.pv += 2; }
       if (!me.sinCaught) run.discard.push({species: wild.species, tier, signature: move});
       run.progress.unlockTiers = [wild.alpha ? "S" : run.battle.legend ? "L" : tier];
@@ -2289,7 +2302,7 @@ function sinResult(won, me) {
       if (me.sinCaught) {
         wild.tier = tier;
         const m = me.mons[me.act.p2];
-        wild.hpMax = calcStat(Dex.species.get(wild.species), wild, "hp");
+        wild.hpMax = wild.card ? wild.card.hp : calcStat(Dex.species.get(wild.species), wild, "hp");
         wild.hpNow = Math.max(1, Math.min(wild.hpMax, Math.ceil(m.hp / m.max * wild.hpMax)));
         wild.status = SIN_STATUS[m.status] ? m.status : "";
         const boxed = run.team.length >= sinTeamSlots(run);
@@ -2369,7 +2382,7 @@ function sinProgressHTML(won) {
   if (p) won = p.won;
   if (p?.act != null) requestAnimationFrame(sinFillImages);
   return `<div class="card"><p class="result">${p?.kind === "item" ? "Evolución" : p?.kind === "stew" ? "Estofado Infundido" : p?.escaped ? "Huiste del combate" : p?.fled ? "¡El Pokémon salvaje huyó!" : won === null ? "Empate" : p?.caught ? "¡Capturado!" : won ? "¡Victoria!" : "Derrota"}</p>
-    <p class="note">${esc(run ? run.notice : "El combate terminó.")}</p>${run ? sinStampNotices(run) : ""}
+    <p class="note">${esc(run ? run.notice : "El combate terminó.")}</p>${run && typeof cardTeachHTML === "function" ? cardTeachHTML(run) : ""}${run ? sinStampNotices(run) : ""}
     ${p?.act != null ? sinCampaignHTML(run) : ""}
     ${p?.fragment ? `<p>¡Obtuviste el ${esc(SIN_COMMANDERS.find(c => c.id === p.fragment).fragment)}!</p><p>+1 espacio en el equipo · +1 movimiento por turno · Equipo: ${esc(sinTeamSlots(run))} espacios.</p>` : ""}
     ${p?.caught ? `<p>${esc(esSp(p.caught.species))} ${p.caught.boxed ? "fue enviado a la Caja" : "se unió a tu equipo"}.</p>` : ""}
@@ -2857,7 +2870,7 @@ document.addEventListener("click", e => {
   if (act === "sinsignature" && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinTeachSignature(+b.dataset.member);
   if ((act === "sinevolve" || act === "sincancelevolution") && (VIEW === "sin" || (VIEW === "battle" && B && B.sin))) return sinEvolve(act === "sinevolve");
   if (act === "sinmap") {
-    const run = ST.sin.run; if (!run || run.retry || !run.progress || run.progress.pending.length || (run.progress.signature && !run.progress.signature.done)) return;
+    const run = ST.sin.run; if (!run || run.retry || !run.progress || run.progress.pending.length || (run.progress.signature && !run.progress.signature.done) || (run.progress.cardTeach && !run.progress.cardTeach.done)) return;
     delete run.progress; sinSave(); if (B) B.dead = true; B = null; return go("sin");
   }
   if (act === "sinhero" && (VIEW === "sin" || (VIEW === "battle" && B?.sin))) return sinHero();
@@ -2875,6 +2888,7 @@ document.addEventListener("click", e => {
     if (SIN_NEW.species) SIN_NEW.species = null; else SIN_NEW.village = null; return sinNewScreen();
   }
   if (act === "sinbegin") return sinBegin();
+  if (act === "sinmode") { SIN_NEW.mode = b.dataset.mode === "cards" ? "cards" : "pokemon"; return sinNewScreen(); }
   if (act === "sinbeginultra") return sinBegin(b.dataset.diff);
   if (act === "sintrainer") return sinChooseTrainer(+b.dataset.trainer);
   if (act === "sinresearch") { const run = ST.sin.run, t = run?.offer?.token; if (!run || run.researched || !sinFx(run, "research") || !Number.isInteger(t)) return; run.researched = true; run.searched = false; run.offer = null; return sinSearch(t); }
