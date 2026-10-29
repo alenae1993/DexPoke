@@ -1164,6 +1164,7 @@ sinStyle.textContent = `
   .sin-stage{position:relative;min-height:0;background:#131d20;overflow:hidden}
   #sin-map{display:block;width:100%;height:100%;touch-action:none;cursor:grab;outline-offset:-3px}
   #sin-map.sin-drag{cursor:grabbing}
+  #sin-map{transition:transform .35s ease}.sin-stage{perspective-origin:50% 40%}
   .sin-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);width:max-content;padding:6px 12px;border-radius:20px;color:#d3dfda;background:#101a20d9;font-size:12px;text-align:center;pointer-events:none}
   .sin-card{padding:12px 16px;background:var(--surface);border-top:1px solid var(--line);max-height:34vh;overflow:auto;overscroll-behavior:contain}
   .sin-card[hidden]{display:none}
@@ -2703,7 +2704,7 @@ function sinCenter() {
 }
 function sinResize() {
   const v = SIN_VIEW; if (!v || !v.canvas.isConnected) return;
-  const r = v.canvas.getBoundingClientRect(); if (!r.width || !r.height) return;
+  const r = {width: v.canvas.offsetWidth, height: v.canvas.offsetHeight}; if (!r.width || !r.height) return;
   v.w = r.width; v.h = r.height; v.dpr = Math.min(window.devicePixelRatio || 1, 2);
   v.canvas.width = Math.round(v.w * v.dpr); v.canvas.height = Math.round(v.h * v.dpr);
   if (!v.cam) sinCenter(); else { sinClamp(v); sinRequestDraw(); }
@@ -2760,8 +2761,26 @@ function sinShowCell(h) {
     }).join("")}</ul>` : '<p>No hay tokens en esta casilla.</p>'}`;
   $("sin-card").hidden = false; sinRequestDraw();
 }
+// Cámara 3D: el tablero se inclina con CSS (perspectiva + rotateX). Para tocar casillas se invierte esa
+// proyección: se resuelve qué punto del plano del canvas cae bajo el dedo (homografía 2×2).
+const SIN_TILTS = [45, 30, 0];
+const sinTilt = () => ST.sin.tilt ?? 45;
+function sinApplyTilt() {
+  const c = SIN_VIEW?.canvas; if (!c) return;
+  const t = sinTilt();
+  c.style.transform = t ? `perspective(900px) rotateX(${t}deg) scale(${(1 + t / 120).toFixed(3)})` : "";
+  c.style.transformOrigin = "50% 60%";
+  const b = document.querySelector('[data-act="sintilt"]'); if (b) b.textContent = t === 45 ? "Vista 3D" : t ? "3D suave" : "Vista 2D";
+}
 function sinLocal(e) {
-  const r = SIN_VIEW.canvas.getBoundingClientRect(); return {x: e.clientX - r.left, y: e.clientY - r.top};
+  const c = SIN_VIEW.canvas, stage = c.parentElement.getBoundingClientRect();
+  const W = c.offsetWidth, H = c.offsetHeight, ox = W * .5, oy = H * .6;
+  const sx = e.clientX - stage.left - c.offsetLeft - ox, sy = e.clientY - stage.top - c.offsetTop - oy;
+  if (!sinTilt()) return {x: sx + ox, y: sy + oy};
+  const m = new DOMMatrix(getComputedStyle(c).transform);
+  const a = m.m11 - sx * m.m14, b = m.m21 - sx * m.m24, c1 = sx * m.m44 - m.m41;
+  const d = m.m12 - sy * m.m14, f = m.m22 - sy * m.m24, g = sy * m.m44 - m.m42, det = a * f - b * d;
+  return det ? {x: (c1 * f - b * g) / det + ox, y: (a * g - c1 * d) / det + oy} : {x: sx + ox, y: sy + oy};
 }
 function sinGesture(points) {
   const p = [...points.values()];
@@ -2815,12 +2834,12 @@ function renderSin() {
   if (ST.sin.run.act === 4 && !ST.sin.run.won) return sinFinalScreen();
   if (ST.sin.run.won && ST.sin.run.victory && !ST.sin.run.victorySeen) return sinVictoryScreen();
   $("app").innerHTML = `<div class="sin-layout"><header class="sin-top"><button class="back" data-act="sinback">‹ Batalla</button><h1>Leyendas de Sinnoh</h1>
-    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar ficha</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
+    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar ficha</button><button class="btn" data-act="sintilt">Vista 3D</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
     <div class="sin-stage"><canvas id="sin-map" tabindex="0" aria-label="Mapa de Sinnoh. Arrastra para mover, pellizca o usa más y menos para acercar. Toca una casilla para ver su ficha."></canvas><div class="sin-hint">Arrastra para mover · Pellizca o usa + / − para acercar · Toca una casilla</div></div>
     <section class="sin-card" id="sin-card" aria-live="polite" hidden></section><footer class="sin-turn" id="sin-turn" aria-live="polite"></footer></div>`;
   const saved = ST.sin.cam, cam = saved && [saved.x, saved.y, saved.z].every(Number.isFinite) && saved.z > 0 ? {...saved} : null;
   const v = SIN_VIEW = {canvas: $("sin-map"), cam, camMoved: !!cam, reachable: new Map(), w: 0, h: 0, frame: 0, points: new Map(), events: new AbortController()};
-  const opt = {signal: v.events.signal};
+  const opt = {signal: v.events.signal}; sinApplyTilt();
   v.canvas.addEventListener("pointerdown", sinDown, opt); v.canvas.addEventListener("pointermove", sinMove, opt);
   ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => v.canvas.addEventListener(name, sinUp, opt));
   v.canvas.addEventListener("wheel", e => {
@@ -2928,6 +2947,7 @@ document.addEventListener("click", e => {
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
   if (act === "sinstamps") return sinShowStamps();
+  if (act === "sintilt") { const i = SIN_TILTS.indexOf(sinTilt()); ST.sin.tilt = SIN_TILTS[(i + 1) % SIN_TILTS.length]; save(); return sinApplyTilt(); }
   if (act === "sinevoitem") return sinEvoByItem(+b.dataset.member, +b.dataset.evo);
   if (act === "sinub") return sinSeekUltra("ub");
   if (act === "sinnecro") return sinSeekUltra("necro");
