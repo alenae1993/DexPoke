@@ -122,6 +122,8 @@ líneas del `<head>` de `index.html`.
 
 - Botones de la cabecera: activar o silenciar sonidos y cambiar entre pantalla oscura y clara (se recuerda).
 - En la ficha de cada Pokémon (hasta la Gen 8, sin formas) aparece su sprite animado, suena su grito y se puede ver variocolor.
+- La batalla (`batalla.html`) usa el mismo aspecto con `anil-batalla.css`: cuadros de PS, botones de ataque por tipo,
+  Poké Balls del equipo e íconos de estado del juego (`ui/batalla/`).
 - Al abrir una ficha la pantalla se enciende con líneas de barrido; las barras de stats se llenan y la lista entra en cascada
   (se desactiva si el sistema pide reducir el movimiento).
 

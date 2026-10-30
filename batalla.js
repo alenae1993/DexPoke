@@ -188,7 +188,7 @@ function esNat(n) { return ESX.N[toID(n)] || n; }
 function catTxt(mv) { return mv.category === "Physical" ? "Físico" : mv.category === "Special" ? "Especial" : "Estado"; }
 function accTxt(mv) { return mv.accuracy === true ? "—" : mv.accuracy + "%"; }
 function esType(t) { return (TY[toID(t).toUpperCase()] || [t])[0]; }
-function tchip(t) { const x = TY[toID(t).toUpperCase()] || TY.NORMAL; return `<span class="tp" style="--c:${x[1]};--ct:${x[2]}">${x[0]}</span>`; }
+function tchip(t) { const k = toID(t).toUpperCase(), x = TY[k] || TY.NORMAL; return `<span class="tp"${TY[k] && k !== "STELLAR" ? ` data-t="${k}"` : ""} title="${x[0]}" style="--c:${x[1]};--ct:${x[2]}">${x[0]}</span>`; }
 function typeMult(atk, defTypes) {
   if (!defTypes || !defTypes.length) return 1;
   if (!Dex.getImmunity(atk, defTypes)) return 0;
@@ -686,7 +686,7 @@ function showControls(me) {
     const mv = Dex.moves.get(m.id); const t = TY[toID(mv.type).toUpperCase()] || TY.NORMAL;
     let eff = "";
     if (mv.category !== "Status" && foeTypes.length) { const x = typeMult(mv.type, foeTypes); eff = x === 0 ? "No afecta" : x > 1 ? "Muy eficaz" : x < 1 ? "Poco eficaz" : "Eficaz"; }
-    return `<button class="mv" data-move="${i + 1}" style="--c:${t[1]};--ct:${t[2]}" ${m.disabled || m.pp === 0 ? "disabled" : ""} title="${esc(esMoveDesc(m.id))}"><span class="minfo" data-info="${esc(m.id)}" role="button" aria-label="Ver efecto">i</span><span class="mvh"><b>${esc(esMove(m.id))}</b><span class="pp">${m.pp ?? "—"}/${m.maxpp ?? "—"}</span></span><small><span>${t[0]} · <span class="cat">${catTxt(mv)}</span></span>${myTypes.includes(mv.type) && mv.category !== "Status" ? "<span>STAB</span>" : ""}</small><small><span>${mv.category !== "Status" ? "Pot. " + (mv.basePower || "—") + " · " : ""}Prec. ${accTxt(mv)}</span></small>${eff ? `<small><span class="eff">${eff}</span></small>` : ""}${ST.showFx ? `<span class="fx">${esc(esMoveDesc(m.id))}</span>` : ""}</button>`;
+    return `<button class="mv" data-move="${i + 1}" data-t="${toID(mv.type).toUpperCase()}" style="--c:${t[1]};--ct:${t[2]}" ${m.disabled || m.pp === 0 ? "disabled" : ""} title="${esc(esMoveDesc(m.id))}"><span class="minfo" data-info="${esc(m.id)}" role="button" aria-label="Ver efecto">i</span><span class="mvh"><b>${esc(esMove(m.id))}</b><span class="pp">${m.pp ?? "—"}/${m.maxpp ?? "—"}</span></span><small><span>${t[0]} · <span class="cat">${catTxt(mv)}</span></span>${myTypes.includes(mv.type) && mv.category !== "Status" ? "<span>STAB</span>" : ""}</small><small><span>${mv.category !== "Status" ? "Pot. " + (mv.basePower || "—") + " · " : ""}Prec. ${accTxt(mv)}</span></small>${eff ? `<small><span class="eff">${eff}</span></small>` : ""}${ST.showFx ? `<span class="fx">${esc(esMoveDesc(m.id))}</span>` : ""}</button>`;
   }).join("");
   const tera = !me.exp && a.canTerastallize, mega = a.canMegaEvo, dmax = !me.exp && a.canDynamax;
   const tt = tera ? TY[toID(tera).toUpperCase()] || TY.NORMAL : null;

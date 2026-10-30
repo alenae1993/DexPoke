@@ -1,0 +1,146 @@
+/* Estilo Pokémon Añil para la batalla (mismo aspecto que la Pokédex: anil.css) y piezas de combate del juego:
+   cuadros de PS (ui/batalla/databox_*.png), botones de ataque por tipo (ui/batalla/mv/), Poké Balls del equipo e
+   íconos de estado. Recursos de Graphics/UI/Battle de Pokémon Añil. */
+@font-face{font-family:"Power Clear";src:url("fonts/powerclear.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Power Clear";src:url("fonts/powerclear-bold.ttf") format("truetype");font-weight:600 900;font-display:swap}
+@font-face{font-family:"Power Green";src:url("fonts/powergreen.ttf") format("truetype");font-display:swap}
+
+:root,:root[data-theme="dark"],:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --grid-bg:#121a24;--grid-line:#1b2633;--on-bg:#ECF2F1;--on-bg2:#AEBDC0;--on-bg3:#7E8F95;
+  --bg:#121a24;--surface:#EFEFEF;--surface2:#E1E3E6;--ink:#20242C;--ink2:#4C5361;--ink3:#737B88;
+  --line:#C9CDD3;--frame:#4B4A5C;--teal:#3CB89E;--red:#7E2431;--red-d:#561620;--gold:#F2B33D;
+  --accent:#2B8576;--accent-ink:#FFFFFF;--accent-soft:#CDEBE4;--good:#1E8A4C;--bad:#C43D2E;--shadow:none;
+  --display:"Power Clear","Chakra Petch",system-ui,sans-serif;
+  --body:"Power Clear","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"Power Green","IBM Plex Mono",ui-monospace,monospace;
+}
+:root[data-theme="light"]{color-scheme:light;--grid-bg:#DCE3E2;--grid-line:#CBD5D3;--on-bg:#1C232B;--on-bg2:#46515B;--on-bg3:#6A7680;--bg:#DCE3E2}
+html{background:var(--grid-bg)}
+body{font-size-adjust:.56;letter-spacing:.01em;color:var(--ink);background-color:var(--grid-bg);
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);background-size:24px 24px}
+
+/* Lo que va directo sobre la cuadrícula usa texto claro. */
+.wrap>.note,.wrap>p,.controls>.note,.party+.note,.wrap>h2,.result{--ink:var(--on-bg);--ink2:var(--on-bg2);--ink3:var(--on-bg3);color:var(--ink)}
+
+/* Cabecera roja con título dorado. */
+.top{background:var(--red);border-bottom:4px solid var(--red-d);box-shadow:inset 0 -3px 0 #9a3343;margin:-12px -16px 14px;padding:10px 16px}
+.top h1{color:var(--gold);text-transform:uppercase;letter-spacing:.06em;text-shadow:2px 2px 0 var(--red-d);font-weight:700}
+.top .back{color:#FFE2E6;font-family:var(--display)}
+.top>span,.top .lv{color:#F3C9CF!important}
+
+/* Paneles claros con marco gris y franja turquesa. */
+.card,.mode,.rt,.pm,.slot{border:3px solid var(--frame);border-radius:8px;background:var(--surface);box-shadow:inset 6px 0 0 var(--teal),0 3px 0 #0006}
+.card{padding-left:20px}
+.card h3{margin:-14px -14px 12px -20px;padding:7px 14px 6px 20px;background:#1B1B1F;color:#fff;letter-spacing:.08em;border-bottom:3px solid var(--teal);border-radius:4px 4px 0 0}
+details.card>summary{color:var(--ink)}
+.mode{padding-left:16px}
+.mode b{letter-spacing:.03em}
+.mode .ic{border:2px solid var(--frame);background:#1B1B1F;color:#7FE3CC;border-radius:8px}
+.mode:hover,.mode:focus-visible{background:#D9F1EA;outline:none}
+.mode:hover .ic{animation:anilCursor 1s steps(2) infinite}
+.btn{border:2px solid var(--frame);border-radius:6px;background:var(--surface);box-shadow:inset 0 -3px 0 #c9cdd3;font-family:var(--display);letter-spacing:.03em}
+.btn.pri{background:var(--teal);color:#0d2620;border-color:#155d51;box-shadow:inset 0 -3px 0 #2B8576}
+.btn.warn{color:var(--bad)}
+.toggle[aria-pressed="true"]{box-shadow:inset 0 -3px 0 #0003}
+.seg{background:#D3D7DC;border:2px solid var(--frame);border-radius:6px}
+.seg button[aria-pressed="true"]{background:var(--teal);color:#0d2620}
+.field input,.field select,textarea,.evrow input[type=number]{border:2px solid var(--frame);border-radius:6px;background:var(--surface)}
+.teamstrip img,.pick{background:#8E949C;border-radius:6px}
+.pick{border:2px solid var(--frame)}
+.pick:hover{border-color:var(--teal);animation:anilCursor 1s steps(2) infinite}
+@keyframes anilCursor{50%{border-color:#7FE3CC}}
+
+/* Íconos de tipo del juego (como en la Pokédex). */
+.tp[data-t]{--r:0;width:54px;height:18px;padding:0;border-radius:0;background:url("ui/tipos.png") 0 calc(var(--r) * -18px)/54px 342px no-repeat;color:transparent;font-size:0;vertical-align:middle;flex:none}
+.tp[data-t=FIGHTING]{--r:1}.tp[data-t=FLYING]{--r:2}.tp[data-t=POISON]{--r:3}.tp[data-t=GROUND]{--r:4}.tp[data-t=ROCK]{--r:5}
+.tp[data-t=BUG]{--r:6}.tp[data-t=GHOST]{--r:7}.tp[data-t=STEEL]{--r:8}.tp[data-t=FIRE]{--r:10}.tp[data-t=WATER]{--r:11}
+.tp[data-t=GRASS]{--r:12}.tp[data-t=ELECTRIC]{--r:13}.tp[data-t=PSYCHIC]{--r:14}.tp[data-t=ICE]{--r:15}.tp[data-t=DRAGON]{--r:16}
+.tp[data-t=DARK]{--r:17}.tp[data-t=FAIRY]{--r:18}
+.pmt .tp[data-t],.hts .tp[data-t]{padding:0;font-size:0}
+
+/* ---------- Combate ---------- */
+.scene{border:3px solid var(--frame);border-radius:8px;box-shadow:0 3px 0 #0006}
+
+/* Cuadros de PS del juego: el dibujo mide 260×84 (tuyo) y 260×70 (rival); lo de encima va en esas medidas. */
+.hud{container-type:inline-size;padding:0;border:0;border-radius:0;background:transparent no-repeat 0 0/100% auto;box-shadow:none;min-width:0;max-width:none;width:min(62%,330px);color:#fff}
+@media (max-width:520px){.hud{width:68%}}
+.hud.me{background-image:url("ui/batalla/databox_me.png");aspect-ratio:260/84;right:0;bottom:4%}
+.hud.foe{background-image:url("ui/batalla/databox_foe.png");aspect-ratio:260/70;left:0;top:4%}
+.hud .nm{position:absolute;top:0;height:42%;display:flex;align-items:flex-end;padding-bottom:1.5cqw;font:700 6.4cqw/1 var(--display);color:#fff;text-shadow:.6cqw .6cqw 0 #283038,-.3cqw -.3cqw 0 #283038,.3cqw -.3cqw 0 #283038,-.3cqw .3cqw 0 #283038;white-space:nowrap}
+.hud.me .nm{left:15%;right:4%}.hud.foe .nm{left:3%;right:13%}
+.hud .lv{font:700 5.6cqw/1 var(--mono);color:#fff;text-shadow:inherit}
+.hpb{position:absolute;margin:0;top:45.2%;height:11.9%;display:block}
+.hud.me .hpb{left:52.3%;width:36.9%}
+.hud.foe .hpb{left:45.4%;width:36.9%;top:54.3%;height:14.3%}
+.hpb i{display:none}
+.hpb .hpt{display:block;width:100%;height:100%;border:0;border-radius:0;background:transparent;overflow:hidden}
+.hpf{border-radius:0;background:linear-gradient(#009000 0 30%,#18C020 30%)}
+.hpf.mid{background:linear-gradient(#B87000 0 30%,#F8B800 30%)}
+.hpf.low{background:linear-gradient(#A83038 0 30%,#F05020 30%)}
+.hpn{position:absolute;margin:0;font:700 5.4cqw/1 var(--mono);color:#fff;display:flex;justify-content:flex-end;align-items:center;gap:2cqw}
+.hud.me .hpn{left:40%;right:9%;top:61%;height:16%}
+.hud.foe .hpn{left:57.7%;right:16.5%;top:79%;height:21%;justify-content:center;color:#fff;text-shadow:.4cqw .4cqw 0 #283038}
+.hts{position:absolute;margin:0;gap:1cqw}
+.hud.me .hts{left:12%;top:60%}
+.hud.foe .hts{left:3%;top:80%}
+.hts .tp[data-t]{width:19cqw;height:6.3cqw;background-size:19cqw auto;background-position:0 calc(var(--r) * -6.333cqw)}
+.hts .tp:not([data-t]){font-size:3.4cqw;padding:.3cqw 1.4cqw}
+.hud.me .hts .tp[data-t]{width:15cqw;height:5cqw;background-size:15cqw auto;background-position:0 calc(var(--r) * -5cqw)}
+.sts{width:44px;height:16px;padding:0;border-radius:0;font-size:0;color:transparent;background:url("ui/batalla/estados.png") 0 0/100% auto no-repeat;width:12cqw;height:4.36cqw;vertical-align:middle}
+.sts.slp{background-position:0 0}.sts.psn{background-position:0 -4.36cqw}.sts.brn{background-position:0 -8.72cqw}
+.sts.par{background-position:0 -13.09cqw}.sts.frz{background-position:0 -17.45cqw}.sts.tox{background-position:0 -21.82cqw}
+.boosts{position:absolute;top:100%;margin-top:1cqw;gap:1cqw}
+.hud.me .boosts{right:4%}.hud.foe .boosts{left:3%;top:118%}
+.boosts span{background:#1B1B1Fdd;color:#fff;border-radius:3px;font-size:4cqw;padding:.3cqw 1.4cqw}
+
+/* Poké Balls del equipo */
+.balls i{width:15px;height:15px;border:0;border-radius:0;box-shadow:none;background:url("ui/batalla/ball.png") 0 0/100% 100%;image-rendering:pixelated}
+.balls i.f{background-image:url("ui/batalla/ball_ko.png");opacity:1}
+
+/* Cuadro de texto oscuro como el de combate del juego. */
+.textbox{background:#1B1B1Fee;color:#fff;border:3px solid var(--frame);border-radius:8px;box-shadow:inset 0 3px 0 var(--teal),0 3px 0 #0006;text-shadow:2px 2px 0 #000;font-size:17px}
+.textbox::after{border-top-color:#F2B33D}
+
+/* Botones de ataque: el marco del tipo del juego (oscuro; claro al elegir). */
+.mv[data-t]{--img:url("ui/batalla/mv/normal.png");--img-s:url("ui/batalla/mv/normal_s.png");background:none;color:#fff;border:12px solid transparent;border-image:var(--img) 12 22 / 12px 20px stretch;background:linear-gradient(90deg,var(--mvbg) 6px,transparent 6px) 3px 3px/10px 10px padding-box,linear-gradient(var(--mvbg) 6px,var(--dot) 6px) 3px 3px/10px 10px padding-box;--mvbg:#414141;--dot:#515151;border-radius:0;box-shadow:none;padding:2px 4px;min-height:76px;text-shadow:1px 1px 0 #000;transition:transform .1s}
+.mv[data-t]:not(:disabled):hover,.mv[data-t]:not(:disabled):focus-visible{border-image-source:var(--img-s);--mvbg:#A3A3A3;--dot:#B7B7B7;color:#16181d;text-shadow:none;outline:none;transform:translateY(-2px)}
+.mv[data-t] small{opacity:1}
+.mv[data-t] .minfo{top:-4px;right:-6px;width:20px;height:20px;line-height:20px;font-size:12px;background:#fff;border:2px solid var(--frame)}
+.mv[data-t=FIGHTING]{--img:url("ui/batalla/mv/fighting.png");--img-s:url("ui/batalla/mv/fighting_s.png")}
+.mv[data-t=FLYING]{--img:url("ui/batalla/mv/flying.png");--img-s:url("ui/batalla/mv/flying_s.png")}
+.mv[data-t=POISON]{--img:url("ui/batalla/mv/poison.png");--img-s:url("ui/batalla/mv/poison_s.png")}
+.mv[data-t=GROUND]{--img:url("ui/batalla/mv/ground.png");--img-s:url("ui/batalla/mv/ground_s.png")}
+.mv[data-t=ROCK]{--img:url("ui/batalla/mv/rock.png");--img-s:url("ui/batalla/mv/rock_s.png")}
+.mv[data-t=BUG]{--img:url("ui/batalla/mv/bug.png");--img-s:url("ui/batalla/mv/bug_s.png")}
+.mv[data-t=GHOST]{--img:url("ui/batalla/mv/ghost.png");--img-s:url("ui/batalla/mv/ghost_s.png")}
+.mv[data-t=STEEL]{--img:url("ui/batalla/mv/steel.png");--img-s:url("ui/batalla/mv/steel_s.png")}
+.mv[data-t=FIRE]{--img:url("ui/batalla/mv/fire.png");--img-s:url("ui/batalla/mv/fire_s.png")}
+.mv[data-t=WATER]{--img:url("ui/batalla/mv/water.png");--img-s:url("ui/batalla/mv/water_s.png")}
+.mv[data-t=GRASS]{--img:url("ui/batalla/mv/grass.png");--img-s:url("ui/batalla/mv/grass_s.png")}
+.mv[data-t=ELECTRIC]{--img:url("ui/batalla/mv/electric.png");--img-s:url("ui/batalla/mv/electric_s.png")}
+.mv[data-t=PSYCHIC]{--img:url("ui/batalla/mv/psychic.png");--img-s:url("ui/batalla/mv/psychic_s.png")}
+.mv[data-t=ICE]{--img:url("ui/batalla/mv/ice.png");--img-s:url("ui/batalla/mv/ice_s.png")}
+.mv[data-t=DRAGON]{--img:url("ui/batalla/mv/dragon.png");--img-s:url("ui/batalla/mv/dragon_s.png")}
+.mv[data-t=DARK]{--img:url("ui/batalla/mv/dark.png");--img-s:url("ui/batalla/mv/dark_s.png")}
+.mv[data-t=FAIRY]{--img:url("ui/batalla/mv/fairy.png");--img-s:url("ui/batalla/mv/fairy_s.png")}
+
+/* Equipo durante el combate */
+.pm.active{box-shadow:inset 6px 0 0 var(--gold),0 3px 0 #0006;border-color:var(--gold)}
+.pm .hpt{border:2px solid #404850;border-radius:3px;background:#F8F0E0;height:8px}
+.pmv{border-radius:4px;box-shadow:inset 0 -2px 0 #0003}
+.mbox{border:3px solid var(--frame);border-top:6px solid var(--c);border-radius:8px}
+
+@media (prefers-reduced-motion:no-preference){
+  .modes .mode{animation:anilRow .3s both}
+  .modes .mode:nth-child(2){animation-delay:.04s}.modes .mode:nth-child(3){animation-delay:.08s}.modes .mode:nth-child(4){animation-delay:.12s}
+  .modes .mode:nth-child(5){animation-delay:.16s}.modes .mode:nth-child(6){animation-delay:.2s}.modes .mode:nth-child(7){animation-delay:.24s}
+  @keyframes anilRow{from{opacity:0;transform:translateX(-14px)}}
+  .hud:not([hidden]){animation:anilHud .35s cubic-bezier(.2,.9,.3,1) both}
+  .hud.foe:not([hidden]){animation-name:anilHudFoe}
+  @keyframes anilHud{from{transform:translateX(100%)}}
+  @keyframes anilHudFoe{from{transform:translateX(-100%)}}
+  .moves .mv{animation:anilPop .25s both}
+  .moves .mv:nth-child(2){animation-delay:.04s}.moves .mv:nth-child(3){animation-delay:.08s}.moves .mv:nth-child(4){animation-delay:.12s}
+  @keyframes anilPop{from{opacity:0;transform:scale(.9)}}
+}
