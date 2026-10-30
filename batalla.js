@@ -301,11 +301,13 @@ function render() {
   if (VIEW === "reto") return renderReto();
   if (VIEW === "comp") return renderComp();
   if (VIEW === "esc") return renderEsc();
+  if (VIEW === "exp") return renderExp();
 }
 const iconSword = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/></svg>';
 const iconDice = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>';
 const iconTrophy = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8M9.5 17h5"/></svg>';
 const iconEdit = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/></svg>';
+const iconRoute = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>';
 function strip(sets) { return `<div class="teamstrip">${sets.map(s => pimg(s.species, `alt="${esc(esSp(s.species))}" title="${esc(esSp(s.species))}" loading="lazy"`)).join("")}</div>`; }
 function seg(id, val, opts) { return `<div class="seg" data-seg="${id}">${opts.map(([v, l]) => `<button data-v="${v}" aria-pressed="${val === v}">${l}</button>`).join("")}</div>`; }
 
@@ -318,6 +320,7 @@ function renderMenu() {
       <button class="mode" data-act="mine" ${t.sets.length ? "" : "disabled"}><span class="ic">${iconSword}</span><span><b>${esc(t.name)} vs CPU</b><span>${t.sets.length ? `Tu equipo de ${t.sets.length} contra un equipo al azar.` : "Primero arma tu equipo."}</span></span></button>
       <button class="mode" data-act="reto"><span class="ic">${iconBadge}</span><span><b>Modo Desafío · Kanto</b><span>Vence a los 8 Líderes de Gimnasio, al Alto Mando y al Campeón con tu equipo. ${retoCount()}/${RETO.trainers.length} superados.</span></span></button>
       <button class="mode" data-act="esc"><span class="ic">${iconStairs}</span><span><b>Modo Escalada</b><span>Empieza 1 vs 1. Cada victoria te deja quedarte con un Pokémon del rival, hasta 6 vs 6. ${ST.esc && ST.esc.run ? `Escalada en curso: ${ST.esc.run.wins} victorias.` : `Récord: ${(ST.esc && ST.esc.best) || 0} victorias.`}</span></span></button>
+      <button class="mode" data-act="exp"><span class="ic">${iconRoute}</span><span><b>Modo Expedición</b><span>Arma tu equipo con puntos y elige tu camino: captura, combate, compra y enfrenta a los Guardianes. ${ST.exp && ST.exp.run ? `Expedición en curso: paso ${ST.exp.run.wave}.` : `Récord: ${(ST.exp && ST.exp.best) || 0} pasos.`}</span></span></button>
       <button class="mode" data-act="comp"><span class="ic">${iconTrophy}</span><span><b>Competitivo</b><span>Formatos de Smogon (OU, UU, Ubers…) y el Combate Clasificatorio de los juegos. Revisa si tu equipo es legal.</span></span></button>
       <button class="mode" data-act="team"><span class="ic">${iconEdit}</span><span><b>Armar mi equipo</b><span>Elige Pokémon, movimientos, habilidad, objeto, naturaleza, EVs, IVs y teratipo.</span></span></button>
     </div>
@@ -421,19 +424,21 @@ function renderBattleShell() {
 }
 
 function newBattle(t1, t2, opts) {
-  opts = opts || {}; globalThis.ALLOW_DMAX = ST.dmax !== "off" && !opts.fmt;
+  opts = opts || {}; globalThis.ALLOW_DMAX = ST.dmax !== "off" && !opts.fmt && !opts.exp;
   if (B) B.dead = true;
   const s = BattleStreams.getPlayerStreams(new BattleStreams.BattleStream());
   B = {s, t1, t2, mons: {}, act: {p1: null, p2: null}, weather: null, turn: 0, chunks: [], busy: false, req: null, reqReady: false,
        over: false, dead: false, choice: {tera: false, mega: false}, sideCount: {p1: t1.length, p2: t2.length}, fainted: {p1: 0, p2: 0},
-       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine, esc: !!opts.esc};
+       trainer: opts.trainer || null, foeName: opts.trainer ? opts.trainer.n : null, aiDiff: opts.aiDiff || null, fmt: opts.fmt || null, fromMine: !!opts.fromMine, esc: !!opts.esc, exp: !!opts.exp, wild: !!opts.wild};
   const me = B;
+  if (opts.foeName) me.foeName = opts.foeName;
   VIEW = "battle"; render();
-  me.bg = pickBg(me); setBg(me.bg); bgm(pickBgm(me));
+  if (opts.intro) { me.chunks.push("|-intro|" + opts.intro); pump(me); }
+  me.bg = pickBg(me); setBg(me.bg); bgm(opts.bgm || pickBgm(me));
   (async () => { for await (const c of s.p1) { if (me.dead) return; me.chunks.push(c); pump(me); } })();
   aiLoop(me);
   if (me.trainer) { const r = me.trainer.r, pre = me.trainer.medal ? "El Líder de Gimnasio " : r.startsWith("Alto Mando") ? "El Alto Mando " : r.startsWith("Campeón") ? "El Campeón " : ""; me.chunks.push("|-intro|" + `¡${pre}${me.trainer.n} te desafía!`); pump(me); }
-  s.omniscient.write(`>start {"formatid":"${me.fmt ? me.fmt.fid : "gen9customgame"}"}\n>player p1 ${JSON.stringify({name: "Tú", team: Teams.pack(t1)})}\n>player p2 ${JSON.stringify({name: "CPU", team: Teams.pack(t2)})}`);
+  s.omniscient.write(`>start {"formatid":"${me.fmt ? me.fmt.fid : "gen9customgame"}"}\n>player p1 ${JSON.stringify({name: "Tú", team: Teams.pack(t1)})}\n${opts.pre ? ">eval " + opts.pre + "\n" : ""}>player p2 ${JSON.stringify({name: "CPU", team: Teams.pack(t2)})}`);
 }
 
 async function pump(me) {
@@ -453,6 +458,7 @@ function keyOf(ident) { return ident.slice(0, 2) + ":" + ident.replace(/^p\d[a-z
 function mon(me, ident) { return me.mons[keyOf(ident)]; }
 function nameOf(me, ident, start) {
   const m = mon(me, ident); const n = m ? esSp(m.species) : ident.replace(/^p\d[a-z]?:\s*/, "");
+  if (sideOf(ident) === "p2" && me.wild) return start ? `El ${n} salvaje` : `el ${n} salvaje`;
   if (sideOf(ident) === "p2") return me.foeName ? (start ? `El ${n} de ${me.foeName}` : `el ${n} de ${me.foeName}`) : (start ? `El ${n} rival` : `el ${n} rival`);
   return n;
 }
@@ -532,7 +538,7 @@ async function handle(me, ln) {
       me.act[side] = key; drawSide(me, side);
       const el = $("mon-" + side); el.classList.remove("faint"); el.classList.add("out"); void el.offsetWidth; el.classList.remove("out");
       if (cmd === "drag") await say(me, `¡${cap(X(0))} fue arrastrado al combate!`);
-      else await say(me, side === "p1" ? `¡Adelante, ${esSp(m.species)}!` : `¡${me.foeName || "El rival"} sacó a ${esSp(m.species)}!`);
+      else await say(me, side === "p1" ? `¡Adelante, ${esSp(m.species)}!` : me.wild ? `¡Apareció un ${esSp(m.species)} salvaje!` : `¡${me.foeName || "El rival"} sacó a ${esSp(m.species)}!`);
       return;
     }
     case "detailschange": case "-formechange": {
@@ -653,10 +659,11 @@ async function handle(me, ln) {
       if (me.trainer) {
         if (won) { await say(me, `¡Has derrotado a ${me.trainer.n}!`, 1.2); if (me.trainer.medal) await say(me, `¡Has obtenido la ${me.trainer.medal}!`, 1.4); retoWin(me.trainer.id); }
         else await say(me, `${me.trainer.n} te ha derrotado… ¡Ajusta tu equipo e inténtalo otra vez!`, 1.2);
-      } else if (me.esc) { await say(me, won ? "¡Has ganado! Elige un Pokémon del rival." : "Has perdido… la escalada termina aquí.", 1.2); escResult(won); }
+      } else if (me.exp) { expResult(won, me); await say(me, won ? (me.expCaught ? "¡Captura completada!" : me.foeName ? `¡Has derrotado a ${me.foeName}!` : "¡Has vencido al Pokémon salvaje!") : "Tu equipo ha caído… la expedición termina aquí.", 1.2); }
+      else if (me.esc) { await say(me, won ? "¡Has ganado! Elige un Pokémon del rival." : "Has perdido… la escalada termina aquí.", 1.2); escResult(won); }
       else await say(me, won ? "¡Has ganado la batalla!" : "Has perdido la batalla…", 1.2);
       showEnd(me, won); return; }
-    case "tie": { me.over = true; await say(me, "¡La batalla terminó en empate!"); showEnd(me, null); return; }
+    case "tie": { me.over = true; if (me.exp) expResult(null, me); await say(me, me.expFled ? "¡Escapaste sin problemas!" : "¡La batalla terminó en empate!"); showEnd(me, null); return; }
     case "error": { await say(me, "Esa acción no es válida: " + (args[0] || "").replace(/^\[.*?\]\s*/, "")); if (!me.req && me.lastReq) { me.req = me.lastReq; me.shown = false; } return; }
     default: return;
   }
@@ -681,10 +688,11 @@ function showControls(me) {
     if (mv.category !== "Status" && foeTypes.length) { const x = typeMult(mv.type, foeTypes); eff = x === 0 ? "No afecta" : x > 1 ? "Muy eficaz" : x < 1 ? "Poco eficaz" : "Eficaz"; }
     return `<button class="mv" data-move="${i + 1}" style="--c:${t[1]};--ct:${t[2]}" ${m.disabled || m.pp === 0 ? "disabled" : ""} title="${esc(esMoveDesc(m.id))}"><span class="minfo" data-info="${esc(m.id)}" role="button" aria-label="Ver efecto">i</span><span class="mvh"><b>${esc(esMove(m.id))}</b><span class="pp">${m.pp ?? "—"}/${m.maxpp ?? "—"}</span></span><small><span>${t[0]} · <span class="cat">${catTxt(mv)}</span></span>${myTypes.includes(mv.type) && mv.category !== "Status" ? "<span>STAB</span>" : ""}</small><small><span>${mv.category !== "Status" ? "Pot. " + (mv.basePower || "—") + " · " : ""}Prec. ${accTxt(mv)}</span></small>${eff ? `<small><span class="eff">${eff}</span></small>` : ""}${ST.showFx ? `<span class="fx">${esc(esMoveDesc(m.id))}</span>` : ""}</button>`;
   }).join("");
-  const tera = a.canTerastallize, mega = a.canMegaEvo, dmax = a.canDynamax;
+  const tera = !me.exp && a.canTerastallize, mega = a.canMegaEvo, dmax = !me.exp && a.canDynamax;
   const tt = tera ? TY[toID(tera).toUpperCase()] || TY.NORMAL : null;
   ctl.innerHTML = `<div class="moves">${moves}</div>
     <div class="act">
+      ${me.exp ? expBattleHTML(me) : ""}
       ${tera ? `<button class="btn toggle" data-tog="tera" aria-pressed="${me.choice.tera}" style="--c:${tt[1]}">Teracristalizar (${tt[0]})</button>` : ""}
       ${mega ? `<button class="btn toggle" data-tog="mega" aria-pressed="${me.choice.mega}" style="--c:#7A4FCF">Megaevolucionar</button>` : ""}
       ${dmax ? `<button class="btn toggle" data-tog="dmax" aria-pressed="${!!me.choice.dmax}" style="--c:#D6264F">${a.maxMoves && a.maxMoves.gigantamax ? "Gigamax" : "Dinamax"}</button>` : ""}
@@ -727,6 +735,7 @@ function choose(me, choice) { me.lastReq = me.req; me.req = null; me.shown = fal
 function showEnd(me, won) {
   const ctl = $("ctl"); if (!ctl) return;
   if (me.esc) { ctl.innerHTML = escEndHTML(won); return; }
+  if (me.exp) { ctl.innerHTML = expEndHTML(won); return; }
   if (me.trainer) { ctl.innerHTML = `<div class="card"><p class="result">${won ? "¡Victoria!" : "Derrota"}</p>
     <div class="btns" style="justify-content:center">${won ? "" : `<button class="btn pri" data-act="rematch">Reintentar</button>`}<button class="btn ${won ? "pri" : ""}" data-act="reto">Volver al desafío</button><button class="btn" data-act="team">Ajustar mi equipo</button></div></div>`; return; }
   if (me.fmt) { ctl.innerHTML = `<div class="card"><p class="result">${won === null ? "Empate" : won ? "¡Victoria!" : "Derrota"}</p>

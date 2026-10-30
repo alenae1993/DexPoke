@@ -134,3 +134,16 @@ En **Batalla → Modo Escalada** (`escalada.js`) empiezas eligiendo 1 de 3 Poké
 - Si pierdes, la escalada termina y queda tu récord de victorias seguidas.
 - La escalada se guarda sola. Si sales a mitad de un combate, al volver repites ese mismo combate contra el mismo rival.
 - El nivel (50, 100 o Equilibrado) se fija al empezar, con la opción Nivel del menú.
+
+## Modo Expedición
+
+En **Batalla → Modo Expedición** (`expedicion.js`) armas un equipo con **10 puntos**: cada Pokémon cuesta de 1 a 9 puntos según la suma de sus estadísticas base, y todos empiezan en el nivel 5. Luego avanzas paso a paso **eligiendo el camino** entre 2 o 3 opciones:
+
+- **Pokémon salvaje:** lo puedes capturar con Poké Balls durante el combate (o huir). La captura usa la fórmula de los juegos: baja sus PS o dale un estado para que sea más fácil.
+- **Entrenador:** más EXP (×1,5) y dinero.
+- **Tienda:** Poké Balls, medicinas, Caramelos Raros, objetos para equipar y objetos de evolución (piedras, Cordón Unión…).
+- **Centro Pokémon:** cura todo el equipo.
+- **Suceso:** dinero, objetos, una fuente termal o un Pokémon poco común (desde el paso 30 puede ser legendario).
+- Cada 10 pasos hay un **Guardián de zona** con un equipo más fuerte; al ganarle eliges un objeto de regalo. Las zonas cambian de tipos (pradera, costa, cueva, volcán…).
+
+Los PS y estados se mantienen entre combates. Tus Pokémon ganan EXP con la fórmula de los juegos (los que no combaten reciben la mitad), aprenden los movimientos por nivel y evolucionan (por nivel, amistad, movimiento u objeto). Si todo el equipo cae, la expedición termina y queda tu récord de pasos. Cada Pokémon que captures queda **desbloqueado** (su primera etapa) para armar tus próximos equipos. La Teracristalización y el Dinamax no se usan en este modo.
