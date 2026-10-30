@@ -358,7 +358,7 @@ function cardEnd(won) {
 /* ---------- Pantalla de combate ---------- */
 function cardPanel(f, foe) {
   const pct = Math.max(0, f.hp / f.max * 100);
-  return `<div class="cb-side ${foe ? "foe" : "me"}">${sinCardImage(f.set.card.img, f.set.card.name, "cb-card")}
+  return `<div class="cb-side ${foe ? "foe" : "me"}">${sinCardView(f.set.card.img, f.set.card.name, f.set.item, f.hp > 0 ? f.status : "", "cb-card")}
     <div class="cb-info"><b>${esc(esSp(f.set.species))}</b> <span class="cb-types">${f.set.card.types.map(tchip).join("")}</span>
       <span class="sin-hp"><i style="width:${pct}%"></i></span><small>${f.hp}/${f.max} vida · Iniciativa ${cardInit(f)}${f.status ? " · " + sinStatusIcon(f.status) + " " + CARD_STATUS[f.status].name : ""} · Fatiga ${f.fatigue}</small></div></div>`;
 }
@@ -367,7 +367,7 @@ function cardRender() {
   const run = CB.run, b = run.battle, canBall = CB.phase === "choose" && !b.trainer && !b.legend?.ub && !b.legend?.necro;
   const controls = CB.over ? "<p>El combate terminó…</p>" :
     CB.phase === "switch" ? `<p>${CB.optional ? "El rival cambió de Pokémon. Puedes cambiar el tuyo:" : "Elige a tu siguiente Pokémon:"}</p><div class="cb-picks">${CB.mine.filter(f => f.hp > 0).map(f =>
-      `<button class="cb-pick" data-act="cbswitch" data-member="${f.index}">${sinCardImage(f.set.card.img, f.set.card.name)}<span>${esc(esSp(f.set.species))} · ${f.hp}/${f.max}${f.status ? " " + sinStatusIcon(f.status) : ""}</span></button>`).join("")}</div>` :
+      `<button class="cb-pick" data-act="cbswitch" data-member="${f.index}">${sinCardView(f.set.card.img, f.set.card.name, f.set.item, f.status)}<span>${esc(esSp(f.set.species))} · ${f.hp}/${f.max}${f.status ? " " + sinStatusIcon(f.status) : ""}</span></button>`).join("")}</div>` :
     CB.phase === "foe" ? `<p>Turno de ${esc(esSp(CB.foe.set.species))} (rival)…</p>` :
     CB.phase === "result" ? `${cardDiceHTML()}<button class="btn primary" data-act="cbnext" disabled>Continuar</button>` :
     `<div class="cb-moves">${cardMoves(CB.me.set).map((mv, i) => {
@@ -395,7 +395,7 @@ cardStyle.textContent = `
   .cb-scene{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px;aspect-ratio:auto;height:auto}
   .cb-side{display:flex;flex-direction:column;gap:6px;background:#ffffffcc;border-radius:12px;padding:6px;color:var(--ink)}
   .cb-side.me{order:-1}
-  .cb-card{display:block;width:100%;max-width:300px;height:auto;margin:0 auto;border-radius:8px}
+  .cb-card{display:block;width:100%;max-width:300px;margin:0 auto}.cb-card>img{width:100%;height:auto;border-radius:8px}
   .cb-info{flex:1;min-width:0}.cb-info small{display:block;margin-top:3px}.cb-types{display:inline-flex;gap:3px}
   .cb-moves{display:grid;gap:8px}.cb-move{text-align:left;white-space:normal;display:block}.cb-move small{display:block;color:var(--ink2);margin-top:3px}
   .cb-log p{margin:3px 0;font-size:14px}.cb-log p:first-child{font-weight:600}
@@ -414,7 +414,7 @@ cardStyle.textContent = `
   .cb-moves{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
   .cb-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:8px 0}
   .cb-pick{display:grid;gap:4px;justify-items:center;padding:4px;border:2px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;font:inherit;color:var(--ink)}
-  .cb-pick:hover{border-color:var(--accent)}.cb-pick>img{width:100%;height:auto;border-radius:6px}.cb-pick .mvc{width:100%}.cb-pick span{font-size:13px}
+  .cb-pick:hover{border-color:var(--accent)}.cb-pick>img,.cb-pick .cv,.cb-pick .cv>img{width:100%;height:auto;border-radius:6px}.cb-pick .mvc{width:100%}.cb-pick span{font-size:13px}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}`;
 document.head.appendChild(cardStyle);
 
@@ -424,7 +424,7 @@ function cardTeachHTML(run) {
   const t = run.progress?.cardTeach; if (!t || t.done) return "";
   const mv = t.move, can = s => s.card && sinAlive(s) && (mv.type === "Typeless" || s.card.learn.includes(mv.type)) && !cardMoves(s).some(m => m.name === mv.name);
   return `<div class="sin-learn"><p>Puedes enseñar este movimiento (${esc(cardTypeName(mv.type))}) a…</p>${cardMoveCard(mv, "big")}<div class="cb-picks">
-    ${run.team.map((s, i) => can(s) ? `<button class="cb-pick" data-act="cbteach" data-member="${i}">${sinCardImage(s.card.img, s.card.name)}<span>${esc(esSp(s.species))}${(s.cmoves || []).length >= 2 ? " (reemplaza)" : ""}</span></button>` : "").join("")}</div>
+    ${run.team.map((s, i) => can(s) ? `<button class="cb-pick" data-act="cbteach" data-member="${i}">${sinCardView(s.card.img, s.card.name, s.item, s.status)}<span>${esc(esSp(s.species))}${(s.cmoves || []).length >= 2 ? " (reemplaza)" : ""}</span></button>` : "").join("")}</div>
     <div class="btns"><button class="btn" data-act="cbteach" data-member="-1">No enseñar</button></div></div>`;
 }
 function cardTeach(member, slot = null) {

@@ -118,6 +118,38 @@ Dex.items.get("heartofsinnoh").id = "heartofsinnoh";
 Dex.data.Items[toID("Corazón de Sinnoh")] = Dex.data.Items.heartofsinnoh;
 Dex.items.itemCache.set(toID("Corazón de Sinnoh"), Dex.items.get("heartofsinnoh"));
 const sinItemName = id => toID(id) === "heartofsinnoh" ? "Corazón de Sinnoh" : Object.values(SIN_ARTIFACTS).find(item => item.id === toID(id))?.name || esItem(id);
+// Ícono de un objeto: los artefactos del mod usan la imagen de su ficha; los demás, el ícono del juego (Essentials).
+const sinArtifactOf = id => Object.entries(SIN_ARTIFACTS).find(([, a]) => a.id === toID(id));
+function sinItemIcon(id) {
+  const art = sinArtifactOf(id), tok = art && SIN.tokens.find(t => t.n === art[0]);
+  if (tok?.img) return `<img class="sin-itm" data-sin-img="${esc(tok.img)}" alt="${esc(sinItemName(id))}" title="${esc(sinItemName(id))}">`;
+  return typeof itemIco === "function" ? itemIco(toID(id)) : "";
+}
+// Qué hace un objeto en Sinnoh (según el modo de la partida).
+function sinItemDesc(id, run = ST.sin.run) {
+  const k = toID(id), cards = run?.mode === "cards", art = sinArtifactOf(k);
+  if (art) return `${art[1].types ? `Potencia los movimientos de tipo ${art[1].types.map(esType).join(" y ")}: ${cards ? "+1 de fuerza" : "+20 %"}. ` : ""}${art[1].types ? "" : (esItemDesc(k) + " ")}Permite encontrar a su Pokémon legendario.`;
+  if (k === "heartofsinnoh") return cards ? "+1 de fuerza a los movimientos del mismo tipo que su portador." : "Potencia un 20 % los movimientos del mismo tipo que su portador.";
+  if (cards) return "En Modo Cartas los objetos de batalla no tienen efecto en combate.";
+  if (k === "luckyegg") return "Su portador recibe ×1,5 de EXP.";
+  return esItemDesc(k) || "";
+}
+// Carta con lo que lleva encima, como en la mesa: el objeto en su círculo y el estado sobre la ilustración.
+function sinCardView(img, name, item, status, cls = "") {
+  return `<span class="cv ${cls}">${sinCardImage(img, name)}${item ? `<span class="cv-item" title="${esc(sinItemName(item))}">${sinItemIcon(item)}</span>` : ""}${status ? `<span class="cv-st">${sinStatusIcon(status, 40)}</span>` : ""}</span>`;
+}
+// Escondites: al caer en uno se voltea la ficha mostrando lo que había.
+function sinShowFlips() {
+  const run = ST.sin.run; if (!run?.flips?.length || document.querySelector(".sin-flip-bg")) return;
+  const f = run.flips[0], box = document.createElement("div");
+  box.className = "sin-flip-bg";
+  box.innerHTML = `<div class="sin-flip-card"><div class="sin-flip"><div class="sin-flip-in">
+      <span class="sin-flip-face back">${sinCardImage(f.back, "Escondite")}</span><span class="sin-flip-face front">${sinCardImage(f.front, f.name)}</span></div></div>
+    <p class="sin-flip-name">${esc(f.name)}</p><p class="sin-flip-text">${esc(f.text || "")}</p>
+    <button class="btn primary" data-act="sinflipok">Continuar</button></div>`;
+  document.body.appendChild(box); sinFillImages();
+  requestAnimationFrame(() => setTimeout(() => box.classList.add("go"), 120));
+}
 const SIN_HIDDEN = SIN.tokens.map((t, i) => t.kind === "CardCustom" && t.cell ? i : -1).filter(i => i >= 0);
 const sinHiddenSpecial = t => (t.tags || []).includes("Artifact Token");
 function sinShuffleHidden() {
@@ -1207,7 +1239,24 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
-  .sin-board-wrap{overflow-x:auto;flex:1 1 100%;display:flex;justify-content:center}
+  .cv{position:relative;display:inline-block;line-height:0}.cv>img{display:block}
+  .cv-item{position:absolute;left:12.5%;top:50.2%;width:19%;aspect-ratio:1;border-radius:50%;background:#fff;display:grid;place-items:center;overflow:hidden;box-shadow:0 0 0 2px #b44a2f}
+  .cv-item img,.cv-item .itm{width:88%!important;height:88%!important;max-width:none;object-fit:contain;image-rendering:pixelated}
+  .cv-st{position:absolute;left:4%;top:13%;width:17%;aspect-ratio:1;filter:drop-shadow(0 1px 2px #0008)}.cv-st img.sin-st{width:100%!important;height:100%!important}
+  .sin-itmrow{display:flex;gap:8px;align-items:center}.sin-itmrow small{display:block}
+  .sin-itmrow .itm,.sin-itmrow img.sin-itm{flex:none;width:32px;height:32px;object-fit:contain;image-rendering:pixelated}
+  .sin-board .sb-card .cv-item,.sin-board .sb-card .cv-st{box-shadow:none}
+  .sin-board .sb-top{grid-template-rows:100%}.sin-board .sb-top .cv{max-height:100%;height:100%}.sin-board .sb-top .cv>img{height:100%;width:auto}
+  .sin-flip-bg{position:fixed;inset:0;z-index:50;background:#0009;display:grid;place-items:center;padding:16px}
+  .sin-flip-card{background:var(--surface);color:var(--ink);border-radius:16px;padding:16px;max-width:340px;width:100%;text-align:center}
+  .sin-flip{perspective:900px;width:200px;margin:0 auto}
+  .sin-flip-in{position:relative;width:200px;aspect-ratio:1;transform-style:preserve-3d;transition:transform 1s cubic-bezier(.3,1.4,.5,1)}
+  .sin-flip-bg.go .sin-flip-in{transform:rotateY(180deg)}
+  .sin-flip-face{position:absolute;inset:0;backface-visibility:hidden;display:grid;place-items:center}
+  .sin-flip-face img{width:100%;height:100%;object-fit:contain}.sin-flip-face.front{transform:rotateY(180deg)}
+  .sin-flip-name{font:700 20px var(--display);margin:12px 0 4px;opacity:0;transition:opacity .4s .8s}.sin-flip-text{opacity:0;transition:opacity .4s .9s}
+  .sin-flip-bg.go .sin-flip-name,.sin-flip-bg.go .sin-flip-text{opacity:1}
+  .sin-board-wrap{overflow-x:auto;flex:1 1 100%;min-width:0;max-width:100%;display:flex;justify-content:safe center}.sin-turn{min-width:0}
   .sin-board{container-type:inline-size;min-width:700px;width:min(100%,105vh);display:grid;grid-template-columns:18.4fr 62.7fr 18.4fr;background:#8a4128;border-radius:12px;padding:3px;gap:3px}
   .sb-col{display:flex;flex-direction:column;gap:3px;min-width:0}
   .sin-board button{font:inherit;border:0;padding:0;background:none;cursor:pointer;color:inherit;display:block;position:relative}
@@ -1241,7 +1290,7 @@ sinStyle.textContent = `
   .sin-st,.sin-member img.sin-st,.sin-team-row img.sin-st{vertical-align:-4px;display:inline-block;width:18px!important;height:18px!important;margin:0!important}
   .sin-team-st img.sin-st{width:22px!important;height:22px!important}
   .sin-team-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}.sin-team-row{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px}
-  .sin-team-row>img,.sin-team-row>.ico{width:56px;height:56px;flex:none}.sin-team-card{width:110px!important;height:auto!important;border-radius:6px}
+  .sin-team-row>img,.sin-team-row>.ico{width:56px;height:56px;flex:none}.sin-team-card{width:110px!important;height:auto!important;border-radius:6px;flex:none}.sin-team-card>img{width:100%;height:auto;border-radius:6px}
   .sin-team-row p{margin:3px 0}.sin-team-row ul{padding-left:0;list-style:none;margin:4px 0}.sin-team-row li{margin:3px 0}.sin-team-st{font-weight:600}
   .sin-class{display:flex;align-items:center;gap:8px}.sin-class img,.sin-trainers .sin-class img{width:56px;height:56px;aspect-ratio:auto;object-fit:contain;image-rendering:pixelated;flex:none;background:none}
   .sin-intro{position:absolute;inset:0;z-index:7;pointer-events:none;transition:opacity .7s}.sin-intro.out{opacity:0}
@@ -1425,8 +1474,8 @@ function sinShowTeam() {
     const st = sinAlive(s) && s.status ? `<p class="sin-team-st">${sinStatusIcon(s.status, 22)} ${esc(SIN_STATUS_NAMES[s.status] || s.status)}</p>` : "";
     const head = `<b>${esc(esSp(s.species))}</b>${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}${s.alpha ? " · Alfa" : ""}${s.tier ? " · " + esc({W: "Débil", M: "Moderado", S: "Fuerte", L: "Legendario"}[s.tier] || "") : ""}`;
     const hpTxt = sinAlive(s) ? `${hp}/${max} ${s.card ? "vida" : "PS"}` : "Debilitado";
-    if (s.card) return `<li class="sin-team-row">${sinCardImage(s.card.img, s.card.name, "sin-team-card")}<div>${head}<p>${esc(hpTxt)} · Iniciativa ${esc(s.card.init)}</p>${st}
-      ${s.item ? `<p>Objeto: ${esc(sinItemName(s.item))}</p>` : ""}<p>Movimientos enseñados:</p><div class="sin-team-mvs">${(s.cmoves || []).map(m => cardMoveCard(m)).join("") || "<small>Ninguno todavía.</small>"}</div>
+    if (s.card) return `<li class="sin-team-row">${sinCardView(s.card.img, s.card.name, s.item, sinAlive(s) ? s.status : "", "sin-team-card")}<div>${head}<p>${esc(hpTxt)} · Iniciativa ${esc(s.card.init)}</p>${st}
+      ${s.item ? `<p class="sin-itmrow">${sinItemIcon(s.item)}<span><b>${esc(sinItemName(s.item))}</b><small>${esc(sinItemDesc(s.item, run))}</small></span></p>` : ""}<p>Movimientos enseñados:</p><div class="sin-team-mvs">${(s.cmoves || []).map(m => cardMoveCard(m)).join("") || "<small>Ninguno todavía.</small>"}</div>
       ${s.card.evo.length ? `<p>Evoluciona a ${esc(s.card.evo.map(esSp).join(" / "))} por ${esc(s.card.cost)} PV.</p>` : ""}</div></li>`;
     return `<li class="sin-team-row">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}<div>${head} · Nv. ${esc(s.level)}<p>${sp.types.map(tchip).join("")}</p><p>${esc(hpTxt)}</p>${st}
       <p>Habilidad: ${esc(esAb(s.ability))} · Naturaleza: ${esc(esNat ? esNat(s.nature) : s.nature)}${s.item ? " · Objeto: " + esc(sinItemName(s.item)) : ""}</p>
@@ -1457,13 +1506,13 @@ function sinFillPanel() {
 function sinBoardSlot(run, s, i) {
   const x = (sinSlotX(i) - .0725) * 100, max = s.hpMax ?? (s.card ? s.card.hp : calcStat(Dex.species.get(s.species), s, "hp")), hp = s.hpNow ?? max;
   const pct = Math.max(0, Math.min(100, hp / max * 100)), dead = !sinAlive(s);
-  const pic = s.card ? sinCardImage(s.card.img, s.card.name, "sb-card") :
+  const pic = s.card ? sinCardView(s.card.img, s.card.name, s.item, dead ? "" : s.status, "sb-card") :
     `<span class="sb-mon">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}<b>${esc(esSp(s.species))}</b><small>Nv. ${esc(s.level)}</small></span>`;
   return `<button class="sb-slot${dead ? " dead" : ""}" data-act="sinteam" style="left:${x}%" title="${esc(esSp(s.species))}">
     <span class="sb-top">${pic}</span>
-    ${s.card ? `<span class="sb-cardhp"><span class="sin-hp"><i style="width:${pct}%"></i></span><small>${dead ? "Debilitado" : `${hp}/${max}`} ${s.status && !dead ? sinStatusIcon(s.status) : ""}</small></span>
+    ${s.card ? `<span class="sb-cardhp"><span class="sin-hp"><i style="width:${pct}%"></i></span><small>${dead ? "Debilitado" : `${hp}/${max}`}</small></span>
     ${[0, 1].map(k => `<span class="sb-box sb-mv${k}">${s.cmoves?.[k] ? cardMoveCard(s.cmoves[k]) : ""}</span>`).join("")}` : `<span class="sb-box sb-hpbox"><span class="sin-hp"><i style="width:${pct}%"></i></span><small>${dead ? "Debilitado" : `${hp}/${max}`}</small></span>
-    <span class="sb-box sb-infobox">${s.status && !dead ? sinStatusIcon(s.status) : ""}<small>${esc(s.item ? sinItemName(s.item) : (s.gender === "M" ? "♂" : s.gender === "F" ? "♀" : ""))}</small></span>`}</button>`;
+    <span class="sb-box sb-infobox">${s.status && !dead ? sinStatusIcon(s.status) : ""}${s.item ? sinItemIcon(s.item) : ""}<small>${esc(s.item ? sinItemName(s.item) : (s.gender === "M" ? "♂" : s.gender === "F" ? "♀" : ""))}</small></span>`}</button>`;
 }
 function sinBoardHTML(run) {
   const t = sinTrainer(run), slots = sinUltra(run) || run.frag >= 3 ? "slots_ultra" : "slots_heart", heart = run.heart || sinUltra(run) ? "heart_full" : "heart";
@@ -1511,7 +1560,7 @@ function sinUpdateTurn() {
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
     ${run.fateTeleport ? '<p>Palkia: toca una casilla resaltada. <button class="btn" data-act="sinfatecancel">Cancelar teletransporte</button></p>' : ""}
     ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}${sinStampNotices(run)}`;
-  sinFillImages(); if (SIN_VIEW.panel === "ginkgo") sinShowGinkgo(); else if (SIN_VIEW.panel === "fly") sinShowFlight();
+  setTimeout(sinShowFlips, 0); sinFillImages(); if (SIN_VIEW.panel === "ginkgo") sinShowGinkgo(); else if (SIN_VIEW.panel === "fly") sinShowFlight();
   else if (SIN_VIEW.panel === "campaign") sinShowCampaign();
   else if (SIN_VIEW.panel === "shrine") sinShowShrine();
   else if (SIN_VIEW.panel === "stamps") sinShowStamps();
@@ -1629,12 +1678,12 @@ function sinShowBag() {
       <button class="btn" data-act="sinstew" data-stew="${key}" ${sinCanCraft(run, key, "stew") ? "" : "disabled"}>${sinFreeStew(run, key) ? "Usar gratis" : run.stews[key] ? "Usado" : "Elaborar"}</button></div>
       ${key === "infused" && SIN_VIEW.bagStew && sinCanCraft(run, key, "stew") ? `<p>Elige el Pokémon que subirá de nivel:</p><div class="btns">${run.team.map((s, i) => `<button class="btn" data-act="sininfuse" data-member="${i}" ${s.level < 100 ? "" : "disabled"}>${esc(esSp(s.species))} · Nv. ${esc(s.level)}</button>`).join("")}</div>` : ""}</div>`).join("")}</div>
     ${run.captivating ? "<p>Estofado Cautivador preparado para el primer intento de captura del próximo combate salvaje.</p>" : ""}
-    <h2>Objetos de batalla</h2><div class="sin-recipes">${Object.entries(SIN_CRAFT_ITEMS).map(([key, item]) => `<div class="sin-recipe"><span><b>${esc(esItem(key))}</b><small>${esc(item.name)} · ${esc(sinRecipeText(item.recipe))}</small>${key === "luckyegg" ? "<small>Su portador recibe ×1,5 de EXP.</small>" : ""}</span>
+    <h2>Objetos de batalla</h2><div class="sin-recipes">${Object.entries(SIN_CRAFT_ITEMS).map(([key, item]) => `<div class="sin-recipe"><span class="sin-itmrow">${sinItemIcon(key)}<span><b>${esc(esItem(key))}</b><small>${esc(item.name)} · ${esc(sinRecipeText(item.recipe))}</small><small>${esc(sinItemDesc(key, run))}</small></span></span>
       <button class="btn" data-act="sincraftitem" data-item="${key}" ${sinCanCraft(run, key, "item") ? "" : "disabled"}>Fabricar</button></div>`).join("")}</div>
-    <h2>Objetos</h2>${run.items.length ? `<ul class="sin-objects">${run.items.map((id, i) => `<li><b>${esc(sinItemName(id))}</b>
+    <h2>Objetos</h2>${run.items.length ? `<ul class="sin-objects">${run.items.map((id, i) => `<li><span class="sin-itmrow">${sinItemIcon(id)}<span><b>${esc(sinItemName(id))}</b><small>${esc(sinItemDesc(id, run))}</small></span></span>
       <button class="btn" data-act="sinitemselect" data-item="${i}">Equipar</button>
       ${SIN_VIEW.bagItem === i ? `<p>Equipar a…</p><div class="btns">${run.team.map((s, j) => `<button class="btn" data-act="sinequip" data-item="${i}" data-member="${j}">${esc(esSp(s.species))} · Nv. ${esc(s.level)}${s.item ? " · Devolver " + esc(sinItemName(s.item)) : ""}</button>`).join("")}</div>` : ""}</li>`).join("")}</ul>` : "<p>No tienes objetos en el inventario.</p>"}
-    <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li>${esc(esSp(s.species))}: <b>${esc(sinItemName(s.item))}</b>
+    <ul class="sin-objects">${run.team.map((s, i) => s.item ? `<li><span class="sin-itmrow">${sinItemIcon(s.item)}<span>${esc(esSp(s.species))} lleva <b>${esc(sinItemName(s.item))}</b><small>${esc(sinItemDesc(s.item, run))}</small></span></span>
       <button class="btn" data-act="sinunequip" data-member="${i}">Quitar</button></li>` : "").join("")}</ul>
     ${run.mode === "cards" ? cardEvoHTML(run) : sinEvoItemsHTML(run)}${sinTMsHTML(run)}${run.mode === "cards" ? "" : sinNobleHTML(run)}${sinLegendsHTML(run)}
     ${sinFateHTML(run)}`;
@@ -1978,6 +2027,8 @@ function sinRevealHidden(run, key, messages) {
   const hidden = run.hidden[key]; if (!hidden || hidden.revealed || !hidden.present) return false;
   const t = SIN.tokens[hidden.token], stash = /^(\w+) Apricorn Stash$/.exec(t.n);
   hidden.revealed = true;
+  const before = messages.length;
+  queueMicrotask(() => { if (!run.flips?.some(x => x.key === key)) (run.flips ||= []).push({key, front: t.img, back: t.img2, name: sinName(t), text: messages.slice(before).join(" ")}); });
   if (stash) {
     const color = stash[1].toLowerCase(); run.bag[color] += hidden.amount; hidden.present = false;
     if (sinFx(run, "stash")) { run.bag[color] += 2; run.stashMoves = (run.stashMoves || 0) + 1; messages.push(`Experto Silvestre: +2 Bonguri ${SIN_BONGURI[color][1]} y +1 movimiento.`); }
@@ -3199,6 +3250,7 @@ document.addEventListener("click", e => {
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
   if (act === "sinteam") return sinShowTeam();
+  if (act === "sinflipok") { document.querySelector(".sin-flip-bg")?.remove(); ST.sin.run?.flips?.shift(); save(); return sinShowFlips(); }
   if (act === "sinboard") { ST.sin.boardHidden = !ST.sin.boardHidden; save(); sinUpdateTurn(); return sinResize(); }
   if (act === "sinstamps") return sinShowStamps();
   if (act === "sinyaw") { ST.sin.yaw = ((ST.sin.yaw || 0) + 30 * +b.dataset.dir + 360) % 360; save(); return sinRequestDraw(); }

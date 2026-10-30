@@ -461,3 +461,8 @@ Las etiquetas de la carta dan su bioma y clima.
 6. **Hecho (tarea 7):** EXP, curvas de crecimiento, niveles, EVs y aprendizaje de movimientos con preguntas persistentes. Evolución pendiente para la tarea 8.
 7. **Hecho (tareas 11–16):** escondites, objetos equipables, pueblos y elaboración, campaña Corazón de Sinnoh completa hasta Héroe y exploración posterior, ofrendas de santuario, legendarios de evento y lugar, Dioses de Sinnoh y efectos de Destino. **Aparcado:** sellos y Ultra Explosión (ver `.tareas/plan-sinnoh-completo.md`).
 8. Botón en el menú, `SHELL` del service worker, `LEEME.md` y pruebas en pantalla de celular.
+
+## Volteo de escondites, objetos y cartas equipadas
+- Al caer en un escondite se muestra la ficha dándose vuelta (de su reverso a su cara) con lo encontrado; las revelaciones se encolan en `run.flips` y se muestran con `sinShowFlips` (botón «Continuar»).
+- Objetos con ícono (`sinItemIcon`: íconos del juego vía Essentials; los artefactos del mod usan la imagen de su ficha) y descripción (`sinItemDesc`, según el modo de la partida) en la Bolsa y en «Mi equipo».
+- `sinCardView` dibuja la carta con el objeto equipado en el círculo de objeto de la carta y el ícono de estado sobre la ilustración (panel inferior, «Mi equipo», combate y selecciones del Modo Cartas).
