@@ -1,0 +1,2 @@
+// Imágenes del área de entrenador del mod (solo local); generado por herramientas/sinnoh/generar_panel.py.
+const SIN_PANEL={"v":1,"packs":["sinnoh_panel.bin"],"img":{"bag":[0,16,39962,520,812],"heart":[0,39978,28032,520,812],"heart_full":[0,68010,23570,520,812],"stamps":[0,91580,24964,520,260],"slots_heart":[0,116544,20328,1800,819],"slots_ultra":[0,136872,15346,1800,819],"balls":[0,152218,11948,1800,264]}};

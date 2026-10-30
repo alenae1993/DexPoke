@@ -1207,6 +1207,33 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
+  .sin-board-wrap{overflow-x:auto;flex:1 1 100%;display:flex;justify-content:center}
+  .sin-board{container-type:inline-size;min-width:700px;width:min(100%,105vh);display:grid;grid-template-columns:18.4fr 62.7fr 18.4fr;background:#8a4128;border-radius:12px;padding:3px;gap:3px}
+  .sb-col{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .sin-board button{font:inherit;border:0;padding:0;background:none;cursor:pointer;color:inherit;display:block;position:relative}
+  .sin-board img{display:block;width:100%;height:auto}
+  .sb-bag,.sb-slots,.sb-balls,.sb-heart,.sb-stamps{position:relative}
+  .sb-count{position:absolute;transform:translate(-50%,-50%);font:700 2.6cqw/1 var(--display);color:#fff;-webkit-text-stroke:.25cqw #4b2a17;paint-order:stroke}
+  .sin-board .sb-recipes{flex:1;min-height:0;border-radius:8px;background:#2f3f4f;color:#e9eef2;font:700 1.7cqw/1.15 var(--display);text-transform:uppercase;letter-spacing:.04em;box-shadow:inset 0 0 0 .4cqw #3e5265}
+  .sin-board .sb-slot{position:absolute;top:0;width:14.5%;height:100%}
+  .sb-top{position:absolute;left:4%;right:4%;top:4%;height:50%;display:grid;place-items:center;overflow:hidden}
+  .sin-board img.sb-card{width:auto;max-width:100%;max-height:100%;border-radius:4px}
+  .sb-mon{display:grid;justify-items:center;color:#fff;text-align:center;font-size:1.1cqw;line-height:1.1}.sb-mon b{font-size:1.25cqw}
+  .sin-board .sb-mon img,.sin-board .sb-mon .ico{width:7.5cqw;height:7.5cqw}
+  .sb-box{position:absolute;left:6%;right:6%;display:flex;align-items:center;justify-content:center;gap:.4cqw;color:#fff;font-size:1.05cqw;flex-wrap:wrap}
+  .sb-hpbox{top:61%;height:15%}.sb-infobox{top:79%;height:15%}
+  .sb-box .sin-hp{width:100%;margin:0;height:.6cqw}.sb-box small{font-size:1.05cqw}
+  .sin-board .sb-box img.sin-st{width:1.8cqw!important;height:1.8cqw!important}
+  .sb-slot.dead .sb-top{filter:grayscale(1) brightness(.6)}
+  .sin-board .sb-ball{position:absolute;top:18%;width:9.4%;height:64%;border-radius:50%;background:radial-gradient(circle at 50% 50%,#fff 0 13%,#333 13% 18%,transparent 18%),linear-gradient(#e4352e 0 46%,#333 46% 54%,#f2f2f2 54%);box-shadow:0 0 0 .5cqw #4caf50}
+  .sin-board .sb-ball.st{box-shadow:0 0 0 .5cqw #f2b632}.sin-board .sb-ball.ko{box-shadow:0 0 0 .5cqw #c43d2e;filter:grayscale(.7)}
+  .sb-boxcount{position:absolute;right:1%;bottom:4%;color:#fff;font-size:1.1cqw}
+  .sin-board .sb-hit{position:absolute;left:6%;right:6%;color:#fff}
+  .sin-board .sb-frag{top:31%;left:22%;right:22%;height:7%;border-radius:999px;background:#2c1a33d9;font:700 1.3cqw var(--display)}
+  .sin-board .sb-trainer{top:65%;height:21%;display:flex;align-items:center;justify-content:center;gap:.6cqw;background:#6e2c18;border-radius:6px;box-shadow:inset 0 0 0 .3cqw #8a4128}
+  .sin-board .sb-trainer:disabled{background:none;cursor:default}
+  .sin-board .sb-trainer img{width:4.5cqw;height:4.5cqw;object-fit:contain;image-rendering:pixelated}.sb-trainer b{font-size:1.2cqw}
+  .sb-stampcount{position:absolute;right:4%;bottom:6%;background:#a0234e;color:#fff;border-radius:999px;padding:.2cqw .7cqw;font:700 1.2cqw var(--display)}
   .sin-st,.sin-member img.sin-st,.sin-team-row img.sin-st{vertical-align:-4px;display:inline-block;width:18px!important;height:18px!important;margin:0!important}
   .sin-team-st img.sin-st{width:22px!important;height:22px!important}
   .sin-team-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}.sin-team-row{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px}
@@ -1271,7 +1298,7 @@ function sinFillImages() {
   document.querySelectorAll("img[data-sin-img]").forEach(el => {
     const im = sinImage(el.dataset.sinImg); if (im && el.getAttribute("src") !== im.src) el.src = im.src;
   });
-  sinFillSprites(); sinFillAnil();
+  sinFillSprites(); sinFillAnil(); sinFillPanel();
 }
 // Retrato del Pokémon al elegirlo: sprite animado de frente (Essentials) con la ilustración oficial de respaldo.
 // Las imágenes de las cartas Pokémon siguen en sinnoh_datos.js; sinCardImage puede dibujarlas al replicar el juego original.
@@ -1406,6 +1433,53 @@ function sinShowTeam() {
     <ul class="sin-team-list">${run.team.map(row).join("")}</ul><p>En la Caja: ${esc(run.box.length)} Pokémon (se gestionan en los pueblos).</p>`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
 }
+/* ---------- Área de entrenador (panel inferior, tal cual el mod) ----------
+   Imágenes del mod (sinnoh_panel.js): bolsa con contadores, 6 espacios del equipo (con candados de Fragmentos en
+   Corazón de Sinnoh), fila de Poké Balls, Fragmentos del Corazón / Tarjeta de Entrenador y Sellos de Viaje.
+   Encima se colocan los datos de la partida en posiciones medidas sobre esas imágenes. */
+const SIN_BAG_SPOTS = [["red", .173, .723], ["blue", .391, .723], ["yellow", .609, .723], ["black", .823, .723],
+  ["pink", .173, .869], ["green", .391, .869], ["white", .609, .869], ["pv", .823, .869]];
+const sinSlotX = i => .0917 + .1634 * i;
+function sinPanelImg(key, cls = "") {
+  return typeof SIN_PANEL !== "undefined" && SIN_PANEL.img[key] ? `<img class="${cls}" data-panel="${key}" alt="">` : "";
+}
+function sinFillPanel() {
+  if (typeof SIN_PANEL === "undefined") return;
+  document.querySelectorAll("img[data-panel]:not([data-panel-done])").forEach(el => {
+    const e = SIN_PANEL.img[el.dataset.panel]; el.dataset.panelDone = 1;
+    packURL(`spr/panel${SIN_PANEL.v}/${el.dataset.panel}`, SIN_PANEL.packs[e[0]], e[1], e[2], "image/webp").then(u => { if (u && el.isConnected) el.src = u; });
+  });
+}
+function sinBoardSlot(run, s, i) {
+  const x = (sinSlotX(i) - .0725) * 100, max = s.hpMax ?? (s.card ? s.card.hp : calcStat(Dex.species.get(s.species), s, "hp")), hp = s.hpNow ?? max;
+  const pct = Math.max(0, Math.min(100, hp / max * 100)), dead = !sinAlive(s);
+  const pic = s.card ? sinCardImage(s.card.img, s.card.name, "sb-card") :
+    `<span class="sb-mon">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}<b>${esc(esSp(s.species))}</b><small>Nv. ${esc(s.level)}</small></span>`;
+  return `<button class="sb-slot${dead ? " dead" : ""}" data-act="sinteam" style="left:${x}%" title="${esc(esSp(s.species))}">
+    <span class="sb-top">${pic}</span>
+    <span class="sb-box sb-hpbox"><span class="sin-hp"><i style="width:${pct}%"></i></span><small>${dead ? "Debilitado" : `${hp}/${max}`}</small></span>
+    <span class="sb-box sb-infobox">${s.status && !dead ? sinStatusIcon(s.status) : ""}<small>${esc(s.item ? sinItemName(s.item) : s.card ? cardMoves(s).length + " mov." : (s.gender === "M" ? "♂" : s.gender === "F" ? "♀" : ""))}</small></span></button>`;
+}
+function sinBoardHTML(run) {
+  const t = sinTrainer(run), slots = sinUltra(run) || run.frag >= 3 ? "slots_ultra" : "slots_heart", heart = run.heart || sinUltra(run) ? "heart_full" : "heart";
+  return `<div class="sin-board-wrap"><div class="sin-board">
+    <div class="sb-col">
+      <button class="sb-bag" data-act="sinbag" title="Bolsa">${sinPanelImg("bag")}
+        ${SIN_BAG_SPOTS.map(([k, x, y]) => `<span class="sb-count" style="left:${x * 100}%;top:${y * 100}%">${esc(k === "pv" ? run.pv : run.bag[k])}</span>`).join("")}</button>
+      <button class="sb-recipes" data-act="sinbag">Recetas de fabricación</button>
+    </div>
+    <div class="sb-col">
+      <div class="sb-slots">${sinPanelImg(slots)}${run.team.map((s, i) => sinBoardSlot(run, s, i)).join("")}</div>
+      <div class="sb-balls">${sinPanelImg("balls")}${run.team.map((s, i) => `<button class="sb-ball ${sinAlive(s) ? (s.status ? "st" : "ok") : "ko"}" data-act="sinteam" style="left:${(sinSlotX(i) - .047) * 100}%" title="${esc(esSp(s.species))}"></button>`).join("")}
+        ${run.box.length ? `<span class="sb-boxcount">Caja: ${esc(run.box.length)}</span>` : ""}</div>
+    </div>
+    <div class="sb-col">
+      <div class="sb-heart">${sinPanelImg(heart)}
+        <button class="sb-hit sb-frag" data-act="sincampaign" title="Campaña">${sinUltra(run) ? `Brecha ${esc(Math.floor(run.breach))} %` : `Fragmentos ${esc(run.frag)}/3`}</button>
+        <button class="sb-hit sb-trainer" data-act="sintrainerpanel" title="Tarjeta de Entrenador" ${t ? "" : "disabled"}>${t ? `${sinAnilImg(sinClassSprite(t.n), "", t.n)}<b>${esc(t.n)}</b>` : ""}</button></div>
+      <button class="sb-stamps" data-act="sinstamps" title="Sellos de Viaje">${sinPanelImg("stamps")}<span class="sb-stampcount">${esc(run.stamps.length)}/7</span></button>
+    </div></div></div>`;
+}
 function sinTeamHTML(run) {
   return run.team.map(s => {
     const healthy = s.hpNow == null, pct = healthy ? 100 : s.hpMax ? Math.max(0, Math.min(100, s.hpNow / s.hpMax * 100)) : 0;
@@ -1424,12 +1498,9 @@ function sinUpdateTurn() {
   const max = sinMaxMoves(run), left = run.fought || run.revive ? 0 : Math.max(0, max - run.moved);
   SIN_VIEW.reachable = run.fateTeleport ? sinTeleportCells(run) : sinReachable(run.pos, left);
   $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)} · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}${sinUltra(run) ? ` · <b>Brecha ${esc(Math.floor(run.breach))} %</b>` : ""}</div>
-    <div class="sin-team">${sinTeamHTML(run)}</div>
-    <button class="btn" data-act="sinteam">Equipo</button>
-    <button class="btn" data-act="sinbag">Bolsa</button>
-    <button class="btn" data-act="sincampaign">Campaña</button>
-    <button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>
-    ${run.trainer ? '<button class="btn" data-act="sintrainerpanel">Entrenador</button>' : ""}
+    ${ST.sin.boardHidden ? `<div class="sin-team">${sinTeamHTML(run)}</div>` : sinBoardHTML(run)}
+    <button class="btn" data-act="sinboard">${ST.sin.boardHidden ? "Mostrar panel" : "Ocultar panel"}</button>
+    ${ST.sin.boardHidden ? `<button class="btn" data-act="sinteam">Equipo</button><button class="btn" data-act="sinbag">Bolsa</button><button class="btn" data-act="sincampaign">Campaña</button><button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>${run.trainer ? '<button class="btn" data-act="sintrainerpanel">Entrenador</button>' : ""}` : ""}
     ${sinUltra(run) && run.blessings > 0 ? `<button class="btn" data-act="sinbless" ${run.blessSkip ? "disabled" : ""}>Bendición de Arceus (${esc(run.blessings)})${run.blessSkip ? ": activa" : ""}</button>` : ""}
     ${sinFx(run, "flyAnywhere") && !sinVillage(run) ? `<button class="btn" data-act="sinflyopen" ${run.flown || run.fought ? "disabled" : ""}>Volar</button>` : ""}
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
@@ -3122,6 +3193,7 @@ document.addEventListener("click", e => {
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
   if (act === "sinteam") return sinShowTeam();
+  if (act === "sinboard") { ST.sin.boardHidden = !ST.sin.boardHidden; save(); sinUpdateTurn(); return sinResize(); }
   if (act === "sinstamps") return sinShowStamps();
   if (act === "sinyaw") { ST.sin.yaw = ((ST.sin.yaw || 0) + 30 * +b.dataset.dir + 360) % 360; save(); return sinRequestDraw(); }
   if (act === "sintilt") { const i = SIN_TILTS.indexOf(sinTilt()); ST.sin.tilt = SIN_TILTS[(i + 1) % SIN_TILTS.length]; save(); return sinApplyTilt(); }

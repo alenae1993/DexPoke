@@ -1,11 +1,11 @@
 // Mi Dex — funciona sin internet.
 // Con internet, la app siempre pide la versión más reciente (si la red tarda más de 4 s, usa la copia guardada).
 // Sin internet, usa la copia guardada. Así, al subir archivos nuevos, se ven en cuanto se abre la app.
-const APP = "midex-app-v18";
+const APP = "midex-app-v19";
 const IMG = "midex-img-v1";
 const FONTS = "midex-fonts-v1";
 const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js", "reto.js", "comp.js", "tiers.js", "champions.js", "competitivo.js", "escalada.js", "sprites.js", "assets.js", "animidx.js", "anim.js", "fonts/pkmndp.ttf",
-  "sinnoh.js", "sinnoh_datos.js", "anil_datos.js", "sinnoh_cartas.js", "sinnoh_estados.js", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
+  "sinnoh.js", "sinnoh_datos.js", "anil_datos.js", "sinnoh_cartas.js", "sinnoh_estados.js", "sinnoh_panel.js", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 
 self.addEventListener("install", e => {
   // cache: "reload" evita que se guarde una copia vieja que el navegador tuviera en su caché HTTP
