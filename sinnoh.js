@@ -2659,9 +2659,20 @@ function sinHexPts(cam, h, zz) {
 function sinPoly(ctx, pts) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); }
 function sinBillboard(ctx, im, base, size, opts = {}) {
   if (!im) return;
+  const sz = size * .32 * base.k * SIN_VIEW.cam.z;
+  ctx.beginPath(); ctx.ellipse(base.x, base.y, sz, sz * .35, 0, 0, Math.PI * 2); ctx.fillStyle = "#0004"; ctx.fill();
   const w0 = im.naturalWidth || im.width, h0 = im.naturalHeight || im.height, k = size * base.k * SIN_VIEW.cam.z / Math.max(w0, h0);
   const w = w0 * k, ht = h0 * k;
   ctx.drawImage(im, base.x - w / 2, base.y - ht - (opts.lift || 0) * base.k * SIN_VIEW.cam.z, w, ht);
+}
+// Ficha plana apoyada sobre la cara superior de la casilla (como en la mesa): se proyectan tres esquinas del
+// cuadrado que ocupa en el tablero y se dibuja con una transformación afín.
+function sinFlat(ctx, im, cam, x, y, zz, size) {
+  if (!im) return;
+  const w0 = im.naturalWidth || im.width, h0 = im.naturalHeight || im.height, k = size / Math.max(w0, h0), w = w0 * k / 2, h = h0 * k / 2;
+  const p0 = sinProj(cam, x - w, y - h, zz), p1 = sinProj(cam, x + w, y - h, zz), p2 = sinProj(cam, x - w, y + h, zz), dpr = SIN_VIEW.dpr;
+  ctx.setTransform((p1.x - p0.x) / w0 * dpr, (p1.y - p0.y) / w0 * dpr, (p2.x - p0.x) / h0 * dpr, (p2.y - p0.y) / h0 * dpr, p0.x * dpr, p0.y * dpr);
+  ctx.drawImage(im, 0, 0); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 function sinDraw3D() {
   const v = SIN_VIEW, run = ST.sin.run, cam = sinCam3d(), ctx = v.canvas.getContext("2d"), dpr = v.dpr;
@@ -2707,9 +2718,11 @@ function sinDraw3D() {
     tokens.forEach((t, i) => {
       const key = t.kind === "CardCustom" && !t.hidden?.revealed ? t.img2 : t.img, im = sinImage(key);
       const n = tokens.length, size = n === 1 ? 54 : Math.min(40, 64 / Math.sqrt(n)), a = i * Math.PI * 2 / n, off = n === 1 ? 0 : 17;
-      const base = sinProj(cam, h.x + Math.cos(a) * off, y + Math.sin(a) * off, top);
-      if (im) sinBillboard(ctx, im, base, size);
-      else { ctx.beginPath(); ctx.arc(base.x, base.y - 8 * base.k * cam.z, 10 * base.k * cam.z, 0, Math.PI * 2); ctx.fillStyle = "#eaf4e229"; ctx.fill(); }
+      const tx = h.x + Math.cos(a) * off, ty = y + Math.sin(a) * off;
+      // Las fichas del mod son planas (salvo las figuras): van acostadas sobre la casilla.
+      if (im && t.kind === "Figurine_Custom") sinBillboard(ctx, im, sinProj(cam, tx, ty, top), size);
+      else if (im) sinFlat(ctx, im, cam, tx, ty, top + .5, size);
+      else { const base = sinProj(cam, tx, ty, top); ctx.beginPath(); ctx.ellipse(base.x, base.y, 10 * base.k * cam.z, 10 * base.k * cam.z * cam.ct, 0, 0, Math.PI * 2); ctx.fillStyle = "#eaf4e229"; ctx.fill(); }
     });
     const shrine = tokens.find(t => (t.n === "Origin Shrine" && run?.originGod) || run?.shrineLegends[t.n]);
     if (shrine) {
