@@ -2600,9 +2600,129 @@ function sinRequestDraw() {
   if (!v || v.frame) return;
   v.frame = requestAnimationFrame(() => { v.frame = 0; if (v === SIN_VIEW && v.canvas.isConnected) sinDraw(); });
 }
+/* ---------- Tablero 3D ----------
+   Proyección propia en el canvas (sin librerías): cada casilla es un prisma hexagonal con altura según su elevación,
+   la cámara gira alrededor del tablero (yaw) y se inclina (pitch), con perspectiva. Las fichas son "billboards":
+   quedan de pie mirando a la cámara. Se dibuja de atrás hacia adelante para que lo cercano tape lo lejano. */
+const SIN_ZL = 15; // altura de cada nivel de elevación
+const sinYaw = () => (ST.sin.yaw || 0) * Math.PI / 180;
+function sinCam3d() {
+  const v = SIN_VIEW, t = sinTilt() * Math.PI / 180, yaw = sinYaw();
+  return {v, cx: v.cam.x, cy: v.cam.y, z: v.cam.z, cos: Math.cos(yaw), sin: Math.sin(yaw), ct: Math.cos(t), st: Math.sin(t), F: 1.7 * Math.max(v.w, v.h)};
+}
+// Proyecta un punto del tablero (x, y en el plano; zz = altura) a la pantalla. k = escala por perspectiva.
+function sinProj(cam, x, y, zz) {
+  const dx = x - cam.cx, dy = y - cam.cy;
+  const rx = dx * cam.cos - dy * cam.sin, ry = dx * cam.sin + dy * cam.cos;
+  const near = (ry * cam.st + zz * cam.ct) * cam.z, k = cam.F / Math.max(cam.F * .25, cam.F - near);
+  return {x: cam.v.w / 2 + rx * cam.z * k, y: cam.v.h / 2 + (ry * cam.ct - zz * cam.st) * cam.z * k, k, d: ry * cam.st + zz * cam.ct};
+}
+const sinFlatY = h => -h.r * SIN_H;
+function sinHexPts(cam, h, zz) {
+  const y = sinFlatY(h);
+  return Array.from({length: 6}, (_, i) => sinProj(cam, h.x + SIN_S * Math.cos(i * Math.PI / 3), y + SIN_S * Math.sin(i * Math.PI / 3), zz));
+}
+function sinPoly(ctx, pts) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); }
+function sinBillboard(ctx, im, base, size, opts = {}) {
+  if (!im) return;
+  const w0 = im.naturalWidth || im.width, h0 = im.naturalHeight || im.height, k = size * base.k * SIN_VIEW.cam.z / Math.max(w0, h0);
+  const w = w0 * k, ht = h0 * k;
+  ctx.drawImage(im, base.x - w / 2, base.y - ht - (opts.lift || 0) * base.k * SIN_VIEW.cam.z, w, ht);
+}
+function sinDraw3D() {
+  const v = SIN_VIEW, run = ST.sin.run, cam = sinCam3d(), ctx = v.canvas.getContext("2d"), dpr = v.dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, v.w, v.h);
+  const accent = getComputedStyle(v.canvas).getPropertyValue("--accent").trim() || "#66d9b3";
+  const cells = SIN_CELLS.map(h => ({h, c: sinProj(cam, h.x, sinFlatY(h), h.l * SIN_ZL)}))
+    .filter(({c}) => c.x > -160 && c.x < v.w + 160 && c.y > -200 && c.y < v.h + 260)
+    .sort((a, b) => a.c.d - b.c.d);
+  v.drawn3d = cells;
+  const me = run && SIN_BY_CELL.get(run.pos.join(","));
+  cells.forEach(({h, c}) => {
+    const top = h.l * SIN_ZL, pts = sinHexPts(cam, h, top), low = sinHexPts(cam, h, -SIN_ZL * .6);
+    // Paredes: solo las que miran a la cámara.
+    for (let i = 0; i < 6; i++) {
+      const j = (i + 1) % 6, na = (i + .5) * Math.PI / 3, ny = Math.cos(na) * cam.sin + Math.sin(na) * cam.cos;
+      if (ny <= 0) continue;
+      sinPoly(ctx, [pts[i], pts[j], low[j], low[i]]);
+      ctx.fillStyle = h.col2 || h.col; ctx.fill(); ctx.fillStyle = `rgba(0,0,0,${.35 + .25 * (1 - ny)})`; ctx.fill();
+      ctx.strokeStyle = "#101b2060"; ctx.lineWidth = .7; ctx.stroke();
+    }
+    // Cara superior con su color y la textura del mod (multiplicada).
+    ctx.save(); sinPoly(ctx, pts); ctx.clip();
+    ctx.fillStyle = h.w ? (h.col2 || "#567876") : h.col; ctx.fill();
+    if (h.w) { ctx.globalAlpha = .5; ctx.fillStyle = h.col; ctx.fill(); ctx.globalAlpha = 1; }
+    const tex = sinImage("tex" + h.t);
+    if (tex && c.k * cam.z > .25) {
+      const y = sinFlatY(h), p0 = sinProj(cam, h.x - SIN_S, y - SIN_H, top), p1 = sinProj(cam, h.x + SIN_S, y - SIN_H, top), p2 = sinProj(cam, h.x - SIN_S, y + SIN_H, top);
+      const iw = tex.naturalWidth, ih = tex.naturalHeight;
+      ctx.setTransform((p1.x - p0.x) / iw * dpr, (p1.y - p0.y) / iw * dpr, (p2.x - p0.x) / ih * dpr, (p2.y - p0.y) / ih * dpr, p0.x * dpr, p0.y * dpr);
+      ctx.globalCompositeOperation = "multiply"; ctx.drawImage(tex, 0, 0); ctx.globalCompositeOperation = "source-over";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    if (sinDestroyed(run, h)) { ctx.fillStyle = "#1b0d2bb0"; ctx.fill(); }
+    ctx.restore();
+    sinPoly(ctx, pts); ctx.strokeStyle = "#16262299"; ctx.lineWidth = .8; ctx.stroke();
+    const tokens = sinCellTokens(h), mark = (fill, stroke, width) => { sinPoly(ctx, pts); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(); };
+    if (v.reachable.has(h.c + "," + h.r)) mark("rgba(255,255,255,.3)", accent, 2.5);
+    if (h === v.selected) mark("#fff4", "#ffde75", 3);
+    if (tokens.some(sinSwarmGate)) mark("#bc7cff44", "#ce9cff", 3);
+    if (tokens.some(t => sinCampaignTarget(run, t))) mark("#ffe35d55", "#ffe35d", 3);
+    // Fichas del mod, de pie sobre la casilla.
+    const y = sinFlatY(h);
+    tokens.forEach((t, i) => {
+      const key = t.kind === "CardCustom" && !t.hidden?.revealed ? t.img2 : t.img, im = sinImage(key);
+      const n = tokens.length, size = n === 1 ? 54 : Math.min(40, 64 / Math.sqrt(n)), a = i * Math.PI * 2 / n, off = n === 1 ? 0 : 17;
+      const base = sinProj(cam, h.x + Math.cos(a) * off, y + Math.sin(a) * off, top);
+      if (im) sinBillboard(ctx, im, base, size);
+      else { ctx.beginPath(); ctx.arc(base.x, base.y - 8 * base.k * cam.z, 10 * base.k * cam.z, 0, Math.PI * 2); ctx.fillStyle = "#eaf4e229"; ctx.fill(); }
+    });
+    const shrine = tokens.find(t => (t.n === "Origin Shrine" && run?.originGod) || run?.shrineLegends[t.n]);
+    if (shrine) {
+      const species = shrine.n === "Origin Shrine" && run.originGod ? SIN_GODS[run.originGod].species : run.shrineLegends[shrine.n];
+      sinBillboard(ctx, sinImage(sinLegendCard(species)?.img), sinProj(cam, h.x + 22, y - 10, top), 46);
+    }
+    if (h.tokens.some(t => run?.grunts.includes(t.n))) sinBillboard(ctx, sinImage(SIN_GRUNT_IMAGE), sinProj(cam, h.x + 26, y - 14, top), 34);
+    const ub = sinUltra(run) && run.ubs.find(u => u.pos.join(",") === h.c + "," + h.r);
+    if (ub) sinDrawCoin(ctx, sinProj(cam, h.x, y, top), cam, ub.species, "#2b1145", "#ff5ad2");
+    if (h === me) sinDrawCoin(ctx, sinProj(cam, h.x, y, top), cam, run.team[0].species, SIN_PLAYER_COLORS[run.color] || "#447fd2", "#fff");
+  });
+}
+// Ficha redonda de pie (jugador o Ultraente) con el ícono del Pokémon.
+function sinDrawCoin(ctx, base, cam, species, fill, ring) {
+  const r = SIN_H * .72 * base.k * cam.z, cx = base.x, cy = base.y - r * 1.05, picture = sinPlayerImage(species);
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(base.x, base.y, r * .8, r * .25, 0, 0, Math.PI * 2); ctx.fillStyle = "#0005"; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = ring; ctx.lineWidth = Math.max(2, r * .12); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * .78, 0, Math.PI * 2); ctx.fillStyle = "#f4f8fc"; ctx.fill(); ctx.clip();
+  if (picture) {
+    const {im, strip} = picture, w = im.naturalWidth / (strip ? 2 : 1), ht = im.naturalHeight, s = r * 1.56 / Math.max(w, ht);
+    ctx.imageSmoothingEnabled = !strip; ctx.drawImage(im, 0, 0, w, ht, cx - w * s / 2, cy - ht * s / 2, w * s, ht * s);
+  }
+  ctx.restore();
+}
+// Toque en 3D: la casilla más cercana a la cámara cuya cara superior contiene el punto.
+function sinPick3D(px, py) {
+  const cam = sinCam3d(), cells = SIN_VIEW.drawn3d || [];
+  for (let i = cells.length - 1; i >= 0; i--) {
+    const h = cells[i].h, pts = sinHexPts(cam, h, h.l * SIN_ZL);
+    let inside = false;
+    for (let a = 0, b = 5; a < 6; b = a++) {
+      if ((pts[a].y > py) !== (pts[b].y > py) && px < (pts[b].x - pts[a].x) * (py - pts[a].y) / (pts[b].y - pts[a].y) + pts[a].x) inside = !inside;
+    }
+    if (inside) return h;
+  }
+  return null;
+}
+// Arrastrar en 3D: el desplazamiento de pantalla se convierte al plano del tablero según el giro y la inclinación.
+function sinPan3D(dx, dy) {
+  const cam = sinCam3d(), sx = dx / cam.z, sy = dy / (cam.z * Math.max(.35, cam.ct));
+  SIN_VIEW.cam.x -= sx * cam.cos + sy * cam.sin; SIN_VIEW.cam.y -= -sx * cam.sin + sy * cam.cos;
+}
 function sinDraw() {
   const v = SIN_VIEW; if (!v || !v.cam) return;
   const run = ST.sin.run;
+  if (sinTilt()) return sinDraw3D();
   if (SIN_DIRTY) sinTerrain();
   const ctx = v.canvas.getContext("2d"), dpr = v.dpr, {x, y, z} = v.cam;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, v.w, v.h);
@@ -2715,6 +2835,11 @@ function sinZoom(factor, px, py) {
   v.cam.z = z; sinClamp(v); sinRequestDraw();
 }
 function sinPick(px, py) {
+  if (sinTilt()) {
+    const h = sinPick3D(px, py); if (!h) return;
+    if (ST.sin.run?.fateTeleport) return sinTeleportTo(h.c + "," + h.r);
+    return sinShowCell(h);
+  }
   const v = SIN_VIEW, x = v.cam.x + (px - v.w / 2) / v.cam.z, y = v.cam.y + (py - v.h / 2) / v.cam.z;
   // Se busca en orden inverso al dibujo para tocar la cara que queda encima.
   const h = [...SIN_CELLS].reverse().find(h => {
@@ -2763,14 +2888,16 @@ function sinShowCell(h) {
 }
 // Cámara 3D: el tablero se inclina con CSS (perspectiva + rotateX). Para tocar casillas se invierte esa
 // proyección: se resuelve qué punto del plano del canvas cae bajo el dedo (homografía 2×2).
-const SIN_TILTS = [45, 30, 0];
-const sinTilt = () => ST.sin.tilt ?? 45;
+const SIN_TILTS = [55, 35, 0];
+const sinTilt = () => SIN_TILTS.includes(ST.sin.tilt) ? ST.sin.tilt : 55;
+// El tablero 3D lo dibuja sinDraw3D; aquí solo se actualiza el botón.
 function sinApplyTilt() {
   const c = SIN_VIEW?.canvas; if (!c) return;
-  const t = sinTilt();
-  c.style.transform = t ? `perspective(900px) rotateX(${t}deg) scale(${(1 + t / 120).toFixed(3)})` : "";
-  c.style.transformOrigin = "50% 60%";
-  const b = document.querySelector('[data-act="sintilt"]'); if (b) b.textContent = t === 45 ? "Vista 3D" : t ? "3D suave" : "Vista 2D";
+  c.style.transform = "";
+  const t = sinTilt(), b = document.querySelector('[data-act="sintilt"]');
+  if (b) b.textContent = t === 55 ? "Vista 3D" : t ? "3D alta" : "Vista 2D";
+  document.querySelectorAll('[data-act="sinyaw"]').forEach(x => { x.hidden = !t; });
+  sinRequestDraw();
 }
 function sinLocal(e) {
   const c = SIN_VIEW.canvas, stage = c.parentElement.getBoundingClientRect();
@@ -2801,7 +2928,8 @@ function sinMove(e) {
   if (v.moved) {
     v.camMoved = true;
     if (v.points.size > 1 && before.d > 0 && after.d > 0) sinZoom(after.d / before.d, before.x, before.y);
-    v.cam.x -= (after.x - before.x) / v.cam.z; v.cam.y -= (after.y - before.y) / v.cam.z;
+    if (sinTilt()) sinPan3D(after.x - before.x, after.y - before.y);
+    else { v.cam.x -= (after.x - before.x) / v.cam.z; v.cam.y -= (after.y - before.y) / v.cam.z; }
     sinClamp(v); sinRequestDraw();
   }
   v.gesture = after;
@@ -2834,7 +2962,7 @@ function renderSin() {
   if (ST.sin.run.act === 4 && !ST.sin.run.won) return sinFinalScreen();
   if (ST.sin.run.won && ST.sin.run.victory && !ST.sin.run.victorySeen) return sinVictoryScreen();
   $("app").innerHTML = `<div class="sin-layout"><header class="sin-top"><button class="back" data-act="sinback">‹ Batalla</button><h1>Leyendas de Sinnoh</h1>
-    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar ficha</button><button class="btn" data-act="sintilt">Vista 3D</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
+    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar ficha</button><button class="btn" data-act="sintilt">Vista 3D</button><button class="btn" data-act="sinyaw" data-dir="-1" aria-label="Girar a la izquierda">⟲</button><button class="btn" data-act="sinyaw" data-dir="1" aria-label="Girar a la derecha">⟳</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
     <div class="sin-stage"><canvas id="sin-map" tabindex="0" aria-label="Mapa de Sinnoh. Arrastra para mover, pellizca o usa más y menos para acercar. Toca una casilla para ver su ficha."></canvas><div class="sin-hint">Arrastra para mover · Pellizca o usa + / − para acercar · Toca una casilla</div></div>
     <section class="sin-card" id="sin-card" aria-live="polite" hidden></section><footer class="sin-turn" id="sin-turn" aria-live="polite"></footer></div>`;
   const saved = ST.sin.cam, cam = saved && [saved.x, saved.y, saved.z].every(Number.isFinite) && saved.z > 0 ? {...saved} : null;
@@ -2947,6 +3075,7 @@ document.addEventListener("click", e => {
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
   if (act === "sinstamps") return sinShowStamps();
+  if (act === "sinyaw") { ST.sin.yaw = ((ST.sin.yaw || 0) + 30 * +b.dataset.dir + 360) % 360; save(); return sinRequestDraw(); }
   if (act === "sintilt") { const i = SIN_TILTS.indexOf(sinTilt()); ST.sin.tilt = SIN_TILTS[(i + 1) % SIN_TILTS.length]; save(); return sinApplyTilt(); }
   if (act === "sinevoitem") return sinEvoByItem(+b.dataset.member, +b.dataset.evo);
   if (act === "sinub") return sinSeekUltra("ub");
