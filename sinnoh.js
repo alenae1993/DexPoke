@@ -1207,6 +1207,11 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
+  .sin-st,.sin-member img.sin-st,.sin-team-row img.sin-st{vertical-align:-4px;display:inline-block;width:18px!important;height:18px!important;margin:0!important}
+  .sin-team-st img.sin-st{width:22px!important;height:22px!important}
+  .sin-team-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}.sin-team-row{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px}
+  .sin-team-row>img,.sin-team-row>.ico{width:56px;height:56px;flex:none}.sin-team-card{width:110px!important;height:auto!important;border-radius:6px}
+  .sin-team-row p{margin:3px 0}.sin-team-row ul{padding-left:0;list-style:none;margin:4px 0}.sin-team-row li{margin:3px 0}.sin-team-st{font-weight:600}
   .sin-class{display:flex;align-items:center;gap:8px}.sin-class img,.sin-trainers .sin-class img{width:56px;height:56px;aspect-ratio:auto;object-fit:contain;image-rendering:pixelated;flex:none;background:none}
   .sin-intro{position:absolute;inset:0;z-index:7;pointer-events:none;transition:opacity .7s}.sin-intro.out{opacity:0}
   .sin-intro img{position:absolute;image-rendering:pixelated;animation:sinIn .5s ease-out}
@@ -1374,6 +1379,33 @@ function sinReachable(pos, remaining, parents = null) {
 }
 const sinTasty = run => run.stews?.tasty || run.feast?.used.includes("tasty");
 const sinMaxMoves = run => 3 + run.frag + (run.moveBonus || 0) + (sinTasty(run) ? 3 : 0) + (run.originGod && (run.follower === run.originGod || run.followerAll) ? 1 : 0) + (run.biomeBonus || 0) + (run.stashMoves || 0);
+// Ícono de estado del mod (dado de estados). En el modo Pokémon, Dormido usa el ícono de Somnoliento.
+const SIN_STATUS_NAMES = {par: "Paralizado", brn: "Quemado", frz: "Congelado", psn: "Envenenado", tox: "Gravemente envenenado", slp: "Dormido", conf: "Confuso", drw: "Somnoliento"};
+function sinStatusIcon(st, size = 18) {
+  const key = {tox: "psn", slp: "drw"}[st] || st, src = typeof SIN_STATUS_ICONS !== "undefined" && SIN_STATUS_ICONS[key];
+  return src ? `<img class="sin-st" src="${src}" width="${size}" height="${size}" alt="${esc(SIN_STATUS_NAMES[st] || st)}" title="${esc(SIN_STATUS_NAMES[st] || st)}">` : "";
+}
+// Panel "Equipo": cada Pokémon con su vida, estado, objeto y movimientos; en Modo Cartas, su carta.
+function sinShowTeam() {
+  const run = ST.sin.run; if (!run || !SIN_VIEW) return;
+  SIN_VIEW.panel = "team"; SIN_VIEW.bag = false; SIN_VIEW.box = false; SIN_VIEW.selected = null;
+  const row = s => {
+    const max = s.hpMax ?? (s.card ? s.card.hp : calcStat(Dex.species.get(s.species), s, "hp")), hp = s.hpNow ?? max, sp = Dex.species.get(s.species);
+    const st = sinAlive(s) && s.status ? `<p class="sin-team-st">${sinStatusIcon(s.status, 22)} ${esc(SIN_STATUS_NAMES[s.status] || s.status)}</p>` : "";
+    const head = `<b>${esc(esSp(s.species))}</b>${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}${s.alpha ? " · Alfa" : ""}${s.tier ? " · " + esc({W: "Débil", M: "Moderado", S: "Fuerte", L: "Legendario"}[s.tier] || "") : ""}`;
+    const hpTxt = sinAlive(s) ? `${hp}/${max} ${s.card ? "vida" : "PS"}` : "Debilitado";
+    if (s.card) return `<li class="sin-team-row">${sinCardImage(s.card.img, s.card.name, "sin-team-card")}<div>${head}<p>${esc(hpTxt)} · Iniciativa ${esc(s.card.init)}</p>${st}
+      ${s.item ? `<p>Objeto: ${esc(sinItemName(s.item))}</p>` : ""}<ul>${cardMoves(s).map((m, i) => `<li>${tchip(m.type === "Typeless" ? "Normal" : m.type)} <b>${esc(m.name)}</b> · fuerza ${esc(m.str || "variable")}${i === 0 ? " (característico)" : ""}<br><small>${esc(m.effect)}</small></li>`).join("")}</ul>
+      ${s.card.evo.length ? `<p>Evoluciona a ${esc(s.card.evo.map(esSp).join(" / "))} por ${esc(s.card.cost)} PV.</p>` : ""}</div></li>`;
+    return `<li class="sin-team-row">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}<div>${head} · Nv. ${esc(s.level)}<p>${sp.types.map(tchip).join("")}</p><p>${esc(hpTxt)}</p>${st}
+      <p>Habilidad: ${esc(esAb(s.ability))} · Naturaleza: ${esc(esNat ? esNat(s.nature) : s.nature)}${s.item ? " · Objeto: " + esc(sinItemName(s.item)) : ""}</p>
+      <ul>${s.moves.map(id => { const mv = Dex.moves.get(id); return `<li>${tchip(mv.type)} <b>${esc(esMove(id))}</b>${mv.category !== "Status" ? " · Pot. " + esc(mv.basePower || "—") : " · Estado"}</li>`; }).join("")}</ul>
+      <p><small>Amistad ${esc(s.friendship ?? "—")} · EVs ${esc(Object.values(s.evs || {}).reduce((a, b) => a + b, 0))}/510</small></p></div></li>`;
+  };
+  $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Mi equipo · ${esc(run.team.length)}/${esc(sinTeamSlots(run))}</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
+    <ul class="sin-team-list">${run.team.map(row).join("")}</ul><p>En la Caja: ${esc(run.box.length)} Pokémon (se gestionan en los pueblos).</p>`;
+  $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
+}
 function sinTeamHTML(run) {
   return run.team.map(s => {
     const healthy = s.hpNow == null, pct = healthy ? 100 : s.hpMax ? Math.max(0, Math.min(100, s.hpNow / s.hpMax * 100)) : 0;
@@ -1384,7 +1416,7 @@ function sinTeamHTML(run) {
     return `<span class="sin-member">${pimg(s.species)}<span>${esc(esSp(s.species))}${s.alpha ? " · Alfa" : ""}${s.card ? " · " + esc(cardMoves(s).length) + " mov." : " · Nv. " + esc(s.level)}${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}
       <span class="sin-hp" role="meter" aria-label="PS de ${esc(esSp(s.species))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></span>
       ${s.card ? "" : `<span class="sin-hp sin-exp" role="meter" aria-label="${esc(expLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${expPct}"><i style="width:${expPct}%"></i></span>`}
-      <small>${esc(health)}${SIN_STATUS[s.status] && sinAlive(s) ? " · " + esc(SIN_STATUS[s.status]) : ""}${s.item ? " · " + esc(sinItemName(s.item)) : ""}</small></span></span>`;
+      <small>${esc(health)}${SIN_STATUS[s.status] && sinAlive(s) ? " · " + sinStatusIcon(s.status) + " " + esc(SIN_STATUS[s.status]) : ""}${s.item ? " · " + esc(sinItemName(s.item)) : ""}</small></span></span>`;
   }).join("");
 }
 function sinUpdateTurn() {
@@ -1393,6 +1425,7 @@ function sinUpdateTurn() {
   SIN_VIEW.reachable = run.fateTeleport ? sinTeleportCells(run) : sinReachable(run.pos, left);
   $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)} · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}${sinUltra(run) ? ` · <b>Brecha ${esc(Math.floor(run.breach))} %</b>` : ""}</div>
     <div class="sin-team">${sinTeamHTML(run)}</div>
+    <button class="btn" data-act="sinteam">Equipo</button>
     <button class="btn" data-act="sinbag">Bolsa</button>
     <button class="btn" data-act="sincampaign">Campaña</button>
     <button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>
@@ -1407,6 +1440,7 @@ function sinUpdateTurn() {
   else if (SIN_VIEW.panel === "shrine") sinShowShrine();
   else if (SIN_VIEW.panel === "stamps") sinShowStamps();
   else if (SIN_VIEW.panel === "trainer") sinTrainerPanel();
+  else if (SIN_VIEW.panel === "team") sinShowTeam();
   else if (SIN_VIEW.box) sinShowBox(); else if (SIN_VIEW.bag) sinShowBag(); else if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
 }
 function sinCampaignHTML(run) {
@@ -3074,6 +3108,7 @@ document.addEventListener("click", e => {
   if (act === "sinfatecancel" && ST.sin.run.fateTeleport) { delete ST.sin.run.fateTeleport; ST.sin.run.notice = "Teletransporte cancelado; conservas tus cartas."; sinSave(); return sinUpdateTurn(); }
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
+  if (act === "sinteam") return sinShowTeam();
   if (act === "sinstamps") return sinShowStamps();
   if (act === "sinyaw") { ST.sin.yaw = ((ST.sin.yaw || 0) + 30 * +b.dataset.dir + 360) % 360; save(); return sinRequestDraw(); }
   if (act === "sintilt") { const i = SIN_TILTS.indexOf(sinTilt()); ST.sin.tilt = SIN_TILTS[(i + 1) % SIN_TILTS.length]; save(); return sinApplyTilt(); }

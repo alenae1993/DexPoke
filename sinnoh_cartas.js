@@ -357,7 +357,7 @@ function cardPanel(f, foe) {
   const pct = Math.max(0, f.hp / f.max * 100);
   return `<div class="cb-side ${foe ? "foe" : "me"}">${sinCardImage(f.set.card.img, f.set.card.name, "cb-card")}
     <div class="cb-info"><b>${esc(esSp(f.set.species))}</b> <span class="cb-types">${f.set.card.types.map(tchip).join("")}</span>
-      <span class="sin-hp"><i style="width:${pct}%"></i></span><small>${f.hp}/${f.max} vida · Iniciativa ${cardInit(f)}${f.status ? " · " + CARD_STATUS[f.status].name : ""} · Fatiga ${f.fatigue}</small></div></div>`;
+      <span class="sin-hp"><i style="width:${pct}%"></i></span><small>${f.hp}/${f.max} vida · Iniciativa ${cardInit(f)}${f.status ? " · " + sinStatusIcon(f.status) + " " + CARD_STATUS[f.status].name : ""} · Fatiga ${f.fatigue}</small></div></div>`;
 }
 function cardRender() {
   if (!CB || VIEW !== "sincards") return;

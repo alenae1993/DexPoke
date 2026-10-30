@@ -500,7 +500,7 @@ function drawSide(me, side) {
   hud.innerHTML = `<div class="nm"><span>${esc(esSp(m.species))}${m.gender === "M" ? " ♂" : m.gender === "F" ? " ♀" : ""}${m.shiny ? ' <span title="Variocolor" style="color:#E0A800">★</span>' : ""}</span><span class="lv">Nv. ${m.level}</span></div>
     <div class="hts">${(m.tera ? [m.tera] : Dex.species.get(m.species).types).map(tchip).join("")}${m.tera ? '<span class="tp" style="--c:var(--surface2);--ct:var(--ink2)">Tera</span>' : ""}${m.dmax ? `<span class="tp" style="--c:#D6264F;--ct:#fff">${m.gmax ? "Gigamax" : "Dinamax"}</span>` : ""}</div>
     <div class="hpb"><i>PS</i><span class="hpt"><span class="hpf ${pct <= 20 ? "low" : pct <= 50 ? "mid" : ""}" style="width:${pct}%;display:block"></span></span></div>
-    <div class="hpn"><span>${m.status && m.status !== "fnt" ? `<span class="sts ${m.status}">${{brn: "QUE", par: "PAR", psn: "ENV", tox: "ENV", slp: "DOR", frz: "CON"}[m.status] || m.status.toUpperCase()}</span>` : ""}</span><span>${side === "p1" ? `${Math.max(0, m.hp)}/${m.max}` : `${Math.round(pct)}%`}</span></div>
+    <div class="hpn"><span>${m.status && m.status !== "fnt" ? `${me.sin && typeof sinStatusIcon === "function" ? sinStatusIcon(m.status, 16) : ""}<span class="sts ${m.status}">${{brn: "QUE", par: "PAR", psn: "ENV", tox: "ENV", slp: "DOR", frz: "CON"}[m.status] || m.status.toUpperCase()}</span>` : ""}</span><span>${side === "p1" ? `${Math.max(0, m.hp)}/${m.max}` : `${Math.round(pct)}%`}</span></div>
     ${bst ? `<div class="boosts">${bst}</div>` : ""}`;
   const total = me.sideCount[side], fainted = Object.values(me.mons).filter(x => x.side === side && x.hp <= 0).length;
   $("balls-" + side).innerHTML = Array.from({length: total}, (_, i) => `<i class="${i < fainted ? "f" : ""}"></i>`).join("");
