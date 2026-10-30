@@ -72,11 +72,26 @@ function anilSheet() {
   if (v.k !== "p") return;
   const p = P[v.i], hero = sin.querySelector(".hero"), disc = hero?.querySelector(".disc");
   if (!disc || hero.dataset.anil) return; hero.dataset.anil = 1;
+  sin.querySelector(".card .stats")?.after(Object.assign(document.createElement("div"), {className: "anil-hex", innerHTML: anilHex(p.st)}));
   if (anilKey(p)) {
     hero.children[1]?.insertAdjacentHTML("beforeend", `<div class="anil-hbtn"><button data-anil-cry>♪ Grito</button><button data-anil-shiny aria-pressed="${anilShiny}">✦ Variocolor</button></div>`);
     anilSprite(disc, p);
     if (fresh) setTimeout(() => anilCry(p), 280);
   }
+}
+// Hexágono: PS arriba y luego, en el sentido del reloj, Ataque, Defensa, Velocidad, Def. Esp. y At. Esp. (como en el juego).
+function anilHex(st) {
+  const cx = 150, cy = 128, R = 82, order = [[0, "PS"], [1, "Ataque"], [2, "Defensa"], [5, "Velocidad"], [4, "Def. Esp."], [3, "At. Esp."]];
+  const pt = (k, r) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const ring = f => order.map((_, k) => pt(k, R * f).map(n => n.toFixed(1)).join(",")).join(" ");
+  const poly = order.map(([i], k) => pt(k, R * Math.max(.06, Math.min(1, (st[i] || 0) / 180))).map(n => n.toFixed(1)).join(",")).join(" ");
+  const labels = order.map(([i, n], k) => { const [x, y] = pt(k, R + 26), anchor = Math.abs(x - cx) < 5 ? "middle" : x > cx ? "start" : "end", dx = anchor === "start" ? -14 : anchor === "end" ? 14 : 0;
+    return `<text x="${(x + dx).toFixed(1)}" y="${(y - 2).toFixed(1)}" text-anchor="${anchor}" font-size="13">${n}</text><text class="val" x="${(x + dx).toFixed(1)}" y="${(y + 13).toFixed(1)}" text-anchor="${anchor}" font-size="15">${st[i] ?? "—"}</text>`; }).join("");
+  return `<svg viewBox="0 0 300 260" role="img" aria-label="Hexágono de estadísticas base">
+    <polygon points="${ring(1)}" fill="#0077B0" stroke="#fff" stroke-width="2"/>
+    ${[.33, .66].map(f => `<polygon points="${ring(f)}" fill="none" stroke="#ffffff55"/>`).join("")}
+    ${order.map((_, k) => { const [x, y] = pt(k, R); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#ffffff55"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#fff"/>`; }).join("")}
+    <polygon class="poly" points="${poly}" fill="#F8B800bb" stroke="#FFE070" stroke-width="2.5" stroke-linejoin="round"/>${labels}</svg>`;
 }
 function anilEnter(id) {
   const el = document.getElementById(id); if (!el) return;

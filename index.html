@@ -647,7 +647,7 @@ function moveRow(c,lv){const x=M[c]||[c];
   return `<button class="mv" data-m="${c}">${lv!=null?`<span class="lv">${lvLab(lv)}</span>`:""}<span><span class="nm">${esc(x[0])}</span>${x[10]?`<span class="en">${esc(x[10])}</span>`:""}<span class="sub">${x[1]?tchip(x[1]):""}<span class="catg">${CAT[x[2]]||""}</span></span>${fxShort(x)}</span><span class="nums">${nn(x[3])} / ${nn(x[4])} / ${nn(x[5])}<small>POT / PREC / PP</small></span></button>`}
 
 function statBars(st,b){
-  return `<div class="stats">${st.map((v,i)=>`<span class="l">${SL[i]}</span><span class="v">${nn(v)}</span><span class="track"><span class="fill ${v<60?"lo":v>=110?"hi":""}" style="width:${Math.min(100,(v||0)/200*100)}%;display:block"></span></span>`).join("")}</div><div class="total"><span>Total de estadísticas base</span><b>${nn(b)}</b></div>`}
+  return `<div class="stats">${st.map((v,i)=>`<span class="l">${SL[i]}</span><span class="v">${nn(v)}</span><span class="track"><span class="fill ${v<60?"lo":v>=110?"hi":""}" data-s="${v<60?"lo":v<90?"mid":"hi"}" style="width:${Math.min(100,(v||0)/200*100)}%;display:block"></span></span>`).join("")}</div><div class="total"><span>Total de estadísticas base</span><b>${nn(b)}</b></div>`}
 
 function compareView(a,b){
   const row=(i)=>{const x=a.st[i]||0,y=b.st[i]||0;
