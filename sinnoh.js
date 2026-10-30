@@ -1222,6 +1222,10 @@ sinStyle.textContent = `
   .sin-board .sb-mon img,.sin-board .sb-mon .ico{width:7.5cqw;height:7.5cqw}
   .sb-box{position:absolute;left:6%;right:6%;display:flex;align-items:center;justify-content:center;gap:.4cqw;color:#fff;font-size:1.05cqw;flex-wrap:wrap}
   .sb-hpbox{top:61%;height:15%}.sb-infobox{top:79%;height:15%}
+  .sb-cardhp{position:absolute;left:6%;right:6%;top:55%;display:flex;flex-direction:column;align-items:center;color:#fff;font-size:1cqw}.sb-cardhp .sin-hp{width:100%;margin:.2cqw 0;height:.5cqw}
+  .sin-board .sb-mv0,.sin-board .sb-mv1{left:4%;right:4%;padding:0}.sin-board .sb-mv0{top:60.5%;height:16.5%}.sin-board .sb-mv1{top:78.3%;height:16.5%}
+  .sin-board .sb-mv0 .mvc,.sin-board .sb-mv1 .mvc{width:100%;height:100%;aspect-ratio:auto}
+  .sin-team-mvs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .sb-box .sin-hp{width:100%;margin:0;height:.6cqw}.sb-box small{font-size:1.05cqw}
   .sin-board .sb-box img.sin-st{width:1.8cqw!important;height:1.8cqw!important}
   .sb-slot.dead .sb-top{filter:grayscale(1) brightness(.6)}
@@ -1422,7 +1426,7 @@ function sinShowTeam() {
     const head = `<b>${esc(esSp(s.species))}</b>${s.gender === "M" ? " ♂" : s.gender === "F" ? " ♀" : ""}${s.alpha ? " · Alfa" : ""}${s.tier ? " · " + esc({W: "Débil", M: "Moderado", S: "Fuerte", L: "Legendario"}[s.tier] || "") : ""}`;
     const hpTxt = sinAlive(s) ? `${hp}/${max} ${s.card ? "vida" : "PS"}` : "Debilitado";
     if (s.card) return `<li class="sin-team-row">${sinCardImage(s.card.img, s.card.name, "sin-team-card")}<div>${head}<p>${esc(hpTxt)} · Iniciativa ${esc(s.card.init)}</p>${st}
-      ${s.item ? `<p>Objeto: ${esc(sinItemName(s.item))}</p>` : ""}<ul>${cardMoves(s).map((m, i) => `<li>${tchip(m.type === "Typeless" ? "Normal" : m.type)} <b>${esc(m.name)}</b> · fuerza ${esc(m.str || "variable")}${i === 0 ? " (característico)" : ""}<br><small>${esc(m.effect)}</small></li>`).join("")}</ul>
+      ${s.item ? `<p>Objeto: ${esc(sinItemName(s.item))}</p>` : ""}<p>Movimientos enseñados:</p><div class="sin-team-mvs">${(s.cmoves || []).map(m => cardMoveCard(m)).join("") || "<small>Ninguno todavía.</small>"}</div>
       ${s.card.evo.length ? `<p>Evoluciona a ${esc(s.card.evo.map(esSp).join(" / "))} por ${esc(s.card.cost)} PV.</p>` : ""}</div></li>`;
     return `<li class="sin-team-row">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}<div>${head} · Nv. ${esc(s.level)}<p>${sp.types.map(tchip).join("")}</p><p>${esc(hpTxt)}</p>${st}
       <p>Habilidad: ${esc(esAb(s.ability))} · Naturaleza: ${esc(esNat ? esNat(s.nature) : s.nature)}${s.item ? " · Objeto: " + esc(sinItemName(s.item)) : ""}</p>
@@ -1457,8 +1461,9 @@ function sinBoardSlot(run, s, i) {
     `<span class="sb-mon">${pimg(s.species, `alt="${esc(esSp(s.species))}"`)}<b>${esc(esSp(s.species))}</b><small>Nv. ${esc(s.level)}</small></span>`;
   return `<button class="sb-slot${dead ? " dead" : ""}" data-act="sinteam" style="left:${x}%" title="${esc(esSp(s.species))}">
     <span class="sb-top">${pic}</span>
-    <span class="sb-box sb-hpbox"><span class="sin-hp"><i style="width:${pct}%"></i></span><small>${dead ? "Debilitado" : `${hp}/${max}`}</small></span>
-    <span class="sb-box sb-infobox">${s.status && !dead ? sinStatusIcon(s.status) : ""}<small>${esc(s.item ? sinItemName(s.item) : s.card ? cardMoves(s).length + " mov." : (s.gender === "M" ? "♂" : s.gender === "F" ? "♀" : ""))}</small></span></button>`;
+    ${s.card ? `<span class="sb-cardhp"><span class="sin-hp"><i style="width:${pct}%"></i></span><small>${dead ? "Debilitado" : `${hp}/${max}`} ${s.status && !dead ? sinStatusIcon(s.status) : ""}</small></span>
+    ${[0, 1].map(k => `<span class="sb-box sb-mv${k}">${s.cmoves?.[k] ? cardMoveCard(s.cmoves[k]) : ""}</span>`).join("")}` : `<span class="sb-box sb-hpbox"><span class="sin-hp"><i style="width:${pct}%"></i></span><small>${dead ? "Debilitado" : `${hp}/${max}`}</small></span>
+    <span class="sb-box sb-infobox">${s.status && !dead ? sinStatusIcon(s.status) : ""}<small>${esc(s.item ? sinItemName(s.item) : (s.gender === "M" ? "♂" : s.gender === "F" ? "♀" : ""))}</small></span>`}</button>`;
 }
 function sinBoardHTML(run) {
   const t = sinTrainer(run), slots = sinUltra(run) || run.frag >= 3 ? "slots_ultra" : "slots_heart", heart = run.heart || sinUltra(run) ? "heart_full" : "heart";
@@ -2528,6 +2533,7 @@ function sinTeachSignature(index) {
 }
 function sinProgressScreen() {
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>${ST.sin.run.progress?.kind === "item" ? "Evolución" : ST.sin.run.progress?.kind === "tm" ? "Movimiento de carta" : ST.sin.run.progress?.kind === "stew" ? "Subida de nivel" : "Resultado del combate"}</h1>${sinProgressHTML()}</div></div>`;
+  sinFillImages();
 }
 function sinLearn(slot) {
   const run = ST.sin.run, p = run && run.progress, q = p && p.pending[0];

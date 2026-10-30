@@ -24,7 +24,7 @@ function cardStats(card, extra = {}) {
   const d = card.d;
   return {cid: card.cid, img: card.img, name: card.n, species: d.sp, hp: d.health + (extra.alpha ? 4 : 0), init: d.initiative,
     types: d.types, learn: d.moves, cost: d.evolve_cost || 0, evo: d.evo || [], tier: card.tier,
-    sig: {name: d.move_name, type: d.move_type, str: +d.move_attack_strength || 0, effect: d.move_effect || ""}};
+    sig: {name: d.move_name, type: d.move_type, str: +d.move_attack_strength || 0, effect: d.move_effect || "", img: card.img}};
 }
 const cardByImg = img => SIN_CARDS.find(c => c.img === img && c.d);
 const cardBySpecies = sp => SIN_CARDS.find(c => c.d?.sp && toID(c.d.sp) === toID(sp) && c.tier !== "Grunt") || SIN_CARDS.find(c => c.d?.sp && toID(c.d.sp) === toID(sp));
@@ -34,6 +34,9 @@ function cardSet(set, card, extra = {}) {
   return {...set, card: c, cmoves: set.cmoves || [], hpMax: c.hp, ...(set.card ? {} : {hpNow: undefined, status: ""}), level: set.level || 1};
 }
 const cardTypeName = t => t === "Typeless" ? "Sin tipo" : (TY[toID(t).toUpperCase()] || [t])[0];
+// Carta de movimiento: recorte del recuadro del movimiento (30 % inferior) de la carta de la que viene.
+const cardMoveImg = m => m.img || SIN_CARDS.find(c => c.d?.move_name === m.name)?.img;
+const cardMoveCard = (m, cls = "") => `<span class="mvc ${cls}" title="${esc(m.name)}: ${esc(m.effect)}"><img data-sin-img="${esc(cardMoveImg(m) || "")}" alt="${esc(m.name)}"></span>`;
 const cardMoves = s => [s.card.sig, ...(s.cmoves || [])];
 const cardHp = s => s.hpNow == null ? s.card.hp : s.hpNow;
 
@@ -363,13 +366,13 @@ function cardRender() {
   if (!CB || VIEW !== "sincards") return;
   const run = CB.run, b = run.battle, canBall = CB.phase === "choose" && !b.trainer && !b.legend?.ub && !b.legend?.necro;
   const controls = CB.over ? "<p>El combate terminó…</p>" :
-    CB.phase === "switch" ? `<p>${CB.optional ? "El rival cambió de Pokémon. Puedes cambiar el tuyo:" : "Elige a tu siguiente Pokémon:"}</p><div class="btns">${CB.mine.filter(f => f.hp > 0).map(f =>
-      `<button class="btn" data-act="cbswitch" data-member="${f.index}">${esc(esSp(f.set.species))} · ${f.hp}/${f.max}</button>`).join("")}</div>` :
+    CB.phase === "switch" ? `<p>${CB.optional ? "El rival cambió de Pokémon. Puedes cambiar el tuyo:" : "Elige a tu siguiente Pokémon:"}</p><div class="cb-picks">${CB.mine.filter(f => f.hp > 0).map(f =>
+      `<button class="cb-pick" data-act="cbswitch" data-member="${f.index}">${sinCardImage(f.set.card.img, f.set.card.name)}<span>${esc(esSp(f.set.species))} · ${f.hp}/${f.max}${f.status ? " " + sinStatusIcon(f.status) : ""}</span></button>`).join("")}</div>` :
     CB.phase === "foe" ? `<p>Turno de ${esc(esSp(CB.foe.set.species))} (rival)…</p>` :
     CB.phase === "result" ? `${cardDiceHTML()}<button class="btn primary" data-act="cbnext" disabled>Continuar</button>` :
     `<div class="cb-moves">${cardMoves(CB.me.set).map((mv, i) => {
       const fx = cardEffect(mv.effect), str = cardStrength(CB.me, CB.foe, mv, fx), eff = cardTypeBonus(mv.type, CB.foe.set.card.types);
-      return `<button class="btn cb-move" data-act="cbmove" data-move="${i}">${tchip(mv.type === "Typeless" ? "Normal" : mv.type)} <b>${esc(mv.name)}</b> · ${str} dado${str === 1 ? "" : "s"}${eff ? ` · ${eff > 0 ? "+" : ""}${eff}` : ""}<small>${esc(mv.effect)}${fx.known || !mv.effect ? "" : " (sin efecto en esta versión)"}</small></button>`;
+      return `<button class="cb-move" data-act="cbmove" data-move="${i}">${cardMoveCard(mv)}<span class="cb-move-info">${str} dado${str === 1 ? "" : "s"}${eff ? ` · ${eff > 0 ? "+" : ""}${eff}` : ""}${fx.known || !mv.effect ? "" : " · sin efecto en esta versión"}</span></button>`;
     }).join("")}</div>
     ${canBall ? `<div class="btns">${Object.entries(SIN_BALLS).filter(([k]) => run.balls[k] > 0).map(([k, ball]) => `<button class="btn" data-act="cbball" data-ball="${k}">${esc(ball.name)} ×${run.balls[k]} (${k === "glory" ? "segura" : CARD_BALL_DICE[k] + " dados"})</button>`).join("")}</div>` : ""}`;
   $("app").innerHTML = `<div class="top"><span></span><h1>${CB.foeName ? esc(CB.foeName) : "Combate salvaje"} · Ronda ${CB.turn}</h1><span></span></div>
@@ -403,6 +406,15 @@ cardStyle.textContent = `
   .cb-die.rolling{animation:cbShake .18s linear infinite;background:#dfe5ea;color:#22303a}
   .cb-die.rolling[data-show=crit]{background:#ffe48a}.cb-die.rolling[data-show=status]{background:#cdb5f8}
   @keyframes cbShake{25%{transform:rotate(-14deg) translateY(-3px)}75%{transform:rotate(14deg) translateY(2px)}}
+  .mvc{display:block;position:relative;overflow:hidden;aspect-ratio:300/152;border-radius:6px;background:#f6ecd9}
+  .mvc img{position:absolute;left:0;top:-242%;width:100%;height:auto;max-width:none}
+  .mvc.big{max-width:300px;margin:8px auto}
+  .cb-move{display:block;width:100%;padding:0;border:2px solid transparent;border-radius:9px;background:none;cursor:pointer;text-align:center;font:inherit;color:var(--ink)}
+  .cb-move:hover{border-color:var(--accent)}.cb-move-info{display:block;font-size:13px;margin:3px 0}
+  .cb-moves{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .cb-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:8px 0}
+  .cb-pick{display:grid;gap:4px;justify-items:center;padding:4px;border:2px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;font:inherit;color:var(--ink)}
+  .cb-pick:hover{border-color:var(--accent)}.cb-pick>img{width:100%;height:auto;border-radius:6px}.cb-pick .mvc{width:100%}.cb-pick span{font-size:13px}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}`;
 document.head.appendChild(cardStyle);
 
@@ -411,9 +423,9 @@ document.head.appendChild(cardStyle);
 function cardTeachHTML(run) {
   const t = run.progress?.cardTeach; if (!t || t.done) return "";
   const mv = t.move, can = s => s.card && sinAlive(s) && (mv.type === "Typeless" || s.card.learn.includes(mv.type)) && !cardMoves(s).some(m => m.name === mv.name);
-  return `<div class="sin-learn"><p>Puedes enseñar <b>${esc(mv.name)}</b> (${esc(cardTypeName(mv.type))}, fuerza ${mv.str || "variable"}) a…</p><div class="btns">
-    ${run.team.map((s, i) => can(s) ? `<button class="btn" data-act="cbteach" data-member="${i}">${esc(esSp(s.species))}${(s.cmoves || []).length >= 2 ? " (reemplaza)" : ""}</button>` : "").join("")}
-    <button class="btn" data-act="cbteach" data-member="-1">No enseñar</button></div></div>`;
+  return `<div class="sin-learn"><p>Puedes enseñar este movimiento (${esc(cardTypeName(mv.type))}) a…</p>${cardMoveCard(mv, "big")}<div class="cb-picks">
+    ${run.team.map((s, i) => can(s) ? `<button class="cb-pick" data-act="cbteach" data-member="${i}">${sinCardImage(s.card.img, s.card.name)}<span>${esc(esSp(s.species))}${(s.cmoves || []).length >= 2 ? " (reemplaza)" : ""}</span></button>` : "").join("")}</div>
+    <div class="btns"><button class="btn" data-act="cbteach" data-member="-1">No enseñar</button></div></div>`;
 }
 function cardTeach(member, slot = null) {
   const run = ST.sin.run, t = run?.progress?.cardTeach; if (!t || t.done) return;
@@ -428,8 +440,11 @@ function cardTeach(member, slot = null) {
 function cardTeachReplace(member) {
   const s = ST.sin.run.team[member];
   const box = document.querySelector(".sin-learn");
-  if (box) box.innerHTML = `<p>${esc(esSp(s.species))} ya conoce 3 movimientos. ¿Cuál olvidar? (el característico no se puede cambiar)</p><div class="btns">${s.cmoves.map((m, i) =>
-    `<button class="btn" data-act="cbteachslot" data-member="${member}" data-slot="${i}">${esc(m.name)}</button>`).join("")}</div>`;
+  const t = ST.sin.run.progress.cardTeach;
+  if (box) box.innerHTML = `<p>${esc(esSp(s.species))} ya conoce 3 movimientos. Para aprender este, elige cuál olvidar (el característico no se puede cambiar):</p>${cardMoveCard(t.move, "big")}
+    <div class="cb-picks">${s.cmoves.map((m, i) => `<button class="cb-pick" data-act="cbteachslot" data-member="${member}" data-slot="${i}">${cardMoveCard(m)}<span>Olvidar ${esc(m.name)}</span></button>`).join("")}</div>
+    <div class="btns"><button class="btn" data-act="cbteach" data-member="-1">No enseñar</button></div>`;
+  sinFillImages();
 }
 // Evolución por Puntos de Viaje (p. 5): restaura al Pokémon y conserva objetos y movimientos enseñados.
 function cardEvoHTML(run) {
