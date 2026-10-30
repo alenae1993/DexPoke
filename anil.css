@@ -1,0 +1,170 @@
+/* Estilo Pokémon Añil para Mi Dex: pantalla de Pokédex del juego (cuadrícula oscura, marcos con franja turquesa,
+   cabecera roja), letra pixelada, íconos de tipo del juego (ui/tipos.png) y efectos. Se carga después del estilo base
+   y solo cambia el aspecto. Recursos tomados de Graphics/UI/Pokedex y Fonts de Pokémon Añil. */
+@font-face{font-family:"Power Clear";src:url("fonts/powerclear.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Power Clear";src:url("fonts/powerclear-bold.ttf") format("truetype");font-weight:600 900;font-display:swap}
+@font-face{font-family:"Power Green";src:url("fonts/powergreen.ttf") format("truetype");font-display:swap}
+
+/* Paneles claros sobre la cuadrícula oscura, como en la Pokédex del juego. */
+:root,:root[data-theme="dark"],:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --grid-bg:#121a24;--grid-line:#1b2633;--dx-bg:#1B1B1Fcc;--on-bg:#ECF2F1;--on-bg2:#AEBDC0;--on-bg3:#7E8F95;
+  --bg:#121a24;--surface:#EFEFEF;--surface2:#E1E3E6;--ink:#20242C;--ink2:#4C5361;--ink3:#737B88;
+  --line:#C9CDD3;--frame:#4B4A5C;--teal:#3CB89E;--teal-d:#2B8576;--red:#7E2431;--red-d:#561620;--gold:#F2B33D;
+  --accent:#2B8576;--accent-ink:#FFFFFF;--accent-soft:#CDEBE4;--bar:#3CB89E;--bar-bg:#D3D7DC;
+  --good:#1E8A4C;--bad:#C43D2E;--shadow:none;
+  --display:"Power Clear","Chakra Petch",system-ui,sans-serif;
+  --body:"Power Clear","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"Power Green","IBM Plex Mono",ui-monospace,monospace;
+}
+:root[data-theme="light"]{
+  color-scheme:light;--grid-bg:#DCE3E2;--grid-line:#CBD5D3;--dx-bg:#FFFFFFcc;--on-bg:#1C232B;--on-bg2:#46515B;--on-bg3:#6A7680;--bg:#DCE3E2;
+}
+/* La letra pixelada tiene la x muy baja: se agranda para que se lea igual que antes. */
+body{font-size-adjust:.56;letter-spacing:.01em;background-color:var(--grid-bg);
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);background-size:24px 24px}
+html{background:var(--grid-bg)}
+.top,.sheet{background:transparent}
+.sheet{background-color:var(--grid-bg);background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);background-size:24px 24px}
+
+/* Lo que va directo sobre la cuadrícula usa texto claro. */
+.top,.count,.hero,.dx,.bar,.mhero,.sheet .body>.note,.sheet .body>.sub{--ink:var(--on-bg);--ink2:var(--on-bg2);--ink3:var(--on-bg3);color:var(--ink)}
+.top .search,.top select,.top .chip{--ink:#20242C;--ink2:#4C5361;--ink3:#737B88;color:var(--ink)}
+
+/* Cabecera roja con el título dorado, como la carcasa de la Pokédex. */
+.top{padding:0 0 10px;gap:10px}
+.brand{background:var(--red);border-bottom:4px solid var(--red-d);padding:12px 16px 10px;align-items:center;position:relative;
+  box-shadow:inset 0 -3px 0 #9a3343}
+.brand::after{content:"";position:absolute;right:16px;bottom:5px;width:120px;height:3px;background:repeating-linear-gradient(90deg,#d0606e 0 4px,transparent 4px 7px)}
+.brand h1{font-weight:700;font-size:26px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;text-shadow:2px 2px 0 var(--red-d);border-bottom:3px solid var(--gold);line-height:1.05;padding-bottom:1px}
+.brand small{color:#F3C9CF}
+.top>*:not(.brand){margin-inline:16px}
+.top .chips{margin-inline:0;padding-inline:16px}
+.top>div[style*="margin-top:-6px"]{margin-top:-4px!important;color:var(--on-bg3)!important}
+.brand .anil-tools{display:flex;gap:6px;margin-left:auto;margin-right:8px}
+.brand .anil-tools button{width:34px;height:34px;border-radius:8px;border:2px solid var(--red-d);background:#9a3343;color:#fff;display:grid;place-items:center;padding:0}
+.brand .anil-tools button[aria-pressed="false"]{opacity:.55}
+.battle-link{background:var(--teal);color:#0d2620;border:2px solid #155d51;border-radius:8px;box-shadow:inset 0 -3px 0 #2B8576;font-family:var(--display);font-weight:700;letter-spacing:.04em}
+
+/* Marcos: borde gris oscuro y franja turquesa a la izquierda. */
+.search,.row select,.cmp-pick select,.sim-top input,.sim-top select,.simg input{border:2px solid var(--frame);border-radius:6px;background:var(--surface);box-shadow:inset 0 3px 0 #fff,inset 0 -2px 0 #d5d8dc}
+.search{height:44px;box-shadow:inset 6px 0 0 var(--teal),inset 0 3px 0 #fff}
+.search svg{margin-left:4px}
+.list,.card,.big div,.cmp-head>div{border:3px solid var(--frame);border-radius:8px;background:var(--surface);box-shadow:inset 6px 0 0 var(--teal),0 3px 0 #0006;padding-left:6px}
+.card{padding:14px 14px 14px 20px;overflow:hidden}
+.sheet .body>*{flex-shrink:0}
+.card h3{margin:-14px -14px 12px -20px;padding:7px 14px 6px 20px;background:#1B1B1F;color:#fff;font-size:15px;letter-spacing:.08em;border-bottom:3px solid var(--teal)}
+.list{padding-left:6px}
+.item{border-bottom:2px solid var(--line)}
+.item:nth-child(even){background:#E6E8EB}
+.nm{font-weight:700;letter-spacing:.02em}
+.metric b{font-size:17px}
+
+/* Cursor de selección de la lista (marco turquesa que late). */
+.item,.mv,.evo button{position:relative}
+.item:hover,.mv:hover,.item:focus-visible,.mv:focus-visible{background:#D9F1EA;outline:none}
+.item:hover::after,.mv:hover::after,.item:focus-visible::after,.evo button:hover::after{content:"";position:absolute;inset:2px;border:3px solid var(--teal);border-radius:6px;pointer-events:none;animation:anilCursor 1s steps(2) infinite}
+.abbtn:hover{border-color:var(--teal)}
+@keyframes anilCursor{50%{border-color:#7FE3CC}}
+
+/* Disco con la ilustración: marco como el cuadro del juego. */
+.disc{border:2px solid var(--frame);box-shadow:inset 0 0 0 2px #fff8}
+.hero .disc{border-width:3px}
+
+/* Íconos de tipo del juego (96×32 por tipo, 19 filas) mostrados a 66×22. */
+.tp{--r:0;width:66px;height:22px;padding:0;border-radius:0;background:url("ui/tipos.png") 0 calc(var(--r) * -22px)/66px 418px no-repeat;color:transparent;font-size:0;vertical-align:middle;image-rendering:auto;flex:none}
+.chip[data-v]:not([data-v=""]){width:70px;height:26px;margin-top:3px;padding:0;border:2px solid transparent;border-radius:4px;background:url("ui/tipos.png") 0 calc(var(--r) * -22px)/66px 418px no-repeat padding-box;background-origin:padding-box;background-position-x:center;color:transparent;font-size:0}
+.chip[data-v]:not([data-v=""])[aria-pressed="true"]{border-color:var(--teal);animation:anilCursor 1s steps(2) infinite}
+.chips{align-items:center}
+.chip{border:2px solid var(--frame);border-radius:8px;font-weight:700}
+.chip[data-v=""][aria-pressed="true"],.seg button[aria-selected="true"]{background:var(--teal);color:#0d2620}
+[data-t=NORMAL],.chip[data-v=NORMAL]{--r:0}[data-t=FIGHTING],.chip[data-v=FIGHTING]{--r:1}[data-t=FLYING],.chip[data-v=FLYING]{--r:2}
+[data-t=POISON],.chip[data-v=POISON]{--r:3}[data-t=GROUND],.chip[data-v=GROUND]{--r:4}[data-t=ROCK],.chip[data-v=ROCK]{--r:5}
+[data-t=BUG],.chip[data-v=BUG]{--r:6}[data-t=GHOST],.chip[data-v=GHOST]{--r:7}[data-t=STEEL],.chip[data-v=STEEL]{--r:8}
+[data-t=FIRE],.chip[data-v=FIRE]{--r:10}[data-t=WATER],.chip[data-v=WATER]{--r:11}[data-t=GRASS],.chip[data-v=GRASS]{--r:12}
+[data-t=ELECTRIC],.chip[data-v=ELECTRIC]{--r:13}[data-t=PSYCHIC],.chip[data-v=PSYCHIC]{--r:14}[data-t=ICE],.chip[data-v=ICE]{--r:15}
+[data-t=DRAGON],.chip[data-v=DRAGON]{--r:16}[data-t=DARK],.chip[data-v=DARK]{--r:17}[data-t=FAIRY],.chip[data-v=FAIRY]{--r:18}
+.sub{gap:3px}
+.kv div .tp{display:inline-block;font-size:0;color:transparent;letter-spacing:0}
+
+/* Barras de estadísticas como las del juego. */
+.track{height:10px;border-radius:2px;border:2px solid var(--frame);background:var(--bar-bg)}
+.fill{border-radius:0;box-shadow:inset 0 -3px 0 #0002,inset 0 2px 0 #fff6}
+.fill.lo{background:#E8873A}.fill.hi{background:#4CC274}
+
+/* Estadísticas como la pantalla de datos del juego: etiqueta en gris pizarra, valor en celda clara y barra tipo PS. */
+.card .stats{gap:2px 0;padding:2px;background:#404850;border-radius:6px;grid-template-columns:auto auto 1fr}
+.card .stats .l,.card .stats .v,.card .stats .track{align-self:stretch;display:flex;align-items:center;min-height:30px}
+.card .stats .l{background:#788898;color:#fff;font-size:14px;padding:0 12px;text-shadow:1px 1px 0 #3C4450;border-radius:4px 0 0 4px}
+.card .stats .l:nth-of-type(6n+2),.card .stats .l:nth-of-type(6n+4),.card .stats .l:nth-of-type(6n+6){background:#8898A8}
+.card .stats .v{background:#E0E8E8;padding:0 6px 0 12px;font-size:18px;justify-content:flex-end;color:#20242C}
+.card .stats .track{position:relative;height:auto;border:0;border-radius:0 4px 4px 0;background:#E0E8E8;padding:11px 14px 11px 6px;overflow:visible}
+.card .stats .track::before{content:"";position:absolute;inset:8px 10px 8px 2px;border:2px solid #404850;border-radius:4px;background:#F8F0E0}
+.card .stats .fill{position:relative;height:8px!important;border-radius:1px;box-shadow:none}
+.fill[data-s=lo]{background:linear-gradient(#A83038 0 3px,#F05020 3px)}
+.fill[data-s=mid]{background:linear-gradient(#B87000 0 3px,#F8B800 3px)}
+.fill[data-s=hi]{background:linear-gradient(#009000 0 3px,#18C020 3px)}
+.card .stats~.total{margin-top:8px;padding:6px 12px;border:2px solid #404850;border-radius:6px;background:#788898;color:#fff;text-shadow:1px 1px 0 #3C4450;align-items:center}
+.card .stats~.total b{color:#F8B800;font-size:20px;text-shadow:1px 1px 0 #6A4A00}
+/* Hexágono de estadísticas (pantalla "todas las estadísticas" del juego). */
+.anil-hex{margin:10px 0 2px;border:3px solid #404850;border-radius:8px;background-color:#0096D4;background-image:linear-gradient(#ffffff1a 1px,transparent 1px),linear-gradient(90deg,#ffffff1a 1px,transparent 1px),radial-gradient(circle at 50% 50%,#3fd2ff66,transparent 70%);background-size:16px 16px,16px 16px,100% 100%;display:grid;place-items:center;padding:6px}
+.anil-hex svg{width:100%;max-width:300px;height:auto;overflow:visible}
+.anil-hex text{font-family:var(--display);fill:#fff;paint-order:stroke;stroke:#00557a;stroke-width:3px}
+.anil-hex .val{fill:#F8F0A0}
+@media (prefers-reduced-motion:no-preference){.anil-enter .anil-hex .poly{transform-origin:150px 128px;animation:anilHex .6s cubic-bezier(.3,1.5,.5,1) both .3s}@keyframes anilHex{from{transform:scale(0)}}}
+@media (min-width:560px){.card:has(.anil-hex){display:grid;grid-template-columns:1fr 250px;column-gap:14px}.card:has(.anil-hex)>*{grid-column:1}.card:has(.anil-hex)>h3{grid-column:1/-1}.card:has(.anil-hex)>.anil-hex{grid-column:2;grid-row:2/span 3;margin:0;align-self:start}}
+/* Cuadro de datos: cada dato con su etiqueta en pizarra. */
+.kv>div{background:#E0E8E8;border:2px solid #404850;border-radius:5px;overflow:hidden}
+.kv>div>span{background:#788898;color:#fff!important;padding:3px 8px;text-shadow:1px 1px 0 #3C4450}
+.kv>div>b,.kv>div>.sub{display:block;padding:5px 8px}
+
+/* Pestañas inferiores: barra negra con borde turquesa. */
+nav.tabs{background:#1B1B1F;border-top:3px solid var(--teal)}
+nav.tabs button{color:#8B95A0;font-family:var(--display);font-size:13px;letter-spacing:.04em}
+nav.tabs button[aria-selected="true"]{color:#7FE3CC;background:linear-gradient(#2B857633,transparent)}
+nav.tabs button[aria-selected="true"]::before{content:"";width:0;height:0;border:6px solid transparent;border-top-color:var(--teal);margin:-9px 0 -3px}
+
+/* Ficha */
+.bar{background:#1B1B1F;border-bottom:3px solid var(--teal);padding:4px 8px 4px 4px;margin-bottom:12px}
+.back{color:#7FE3CC;font-family:var(--display)}
+.bar .t{color:var(--gold);font-size:15px}
+.hero h2,.mhero h2{font-weight:700;letter-spacing:.03em;text-shadow:2px 2px 0 #0008}
+.flag{border-color:var(--gold);color:var(--gold)}
+.dx{font-size:15px;line-height:1.5;background:var(--dx-bg);border-left:4px solid var(--teal);padding:8px 12px;border-radius:4px}
+.link{color:var(--accent)}
+.sheet .body>.note .link,.dx .link{color:#7FE3CC}
+
+/* Pantalla del sprite animado (como el recuadro gris de la ficha del juego). */
+.hero{grid-template-columns:120px 1fr}
+.hero .disc{width:120px;height:120px;border-radius:8px;background-color:#8E949C;background-image:linear-gradient(#ffffff22 1px,transparent 1px),linear-gradient(90deg,#ffffff22 1px,transparent 1px);background-size:15px 15px;box-shadow:inset 0 4px 0 var(--teal),inset 0 -4px 0 var(--teal)}
+.hero .disc.anil-sp img{opacity:0}
+.anil-spr{grid-area:1/1;align-self:end;margin-bottom:8px;background-repeat:no-repeat;background-size:auto 100%;image-rendering:pixelated;width:var(--w);height:var(--s);animation:anilSpr var(--d) steps(var(--n)) infinite;filter:drop-shadow(0 3px 0 #0003)}
+@keyframes anilSpr{from{background-position-x:0}to{background-position-x:calc(var(--n) * var(--w) * -1)}}
+.anil-hbtn{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.anil-hbtn button{border:2px solid var(--frame);background:#1B1B1F;color:#E8EEF0;border-radius:6px;padding:3px 9px;font-size:13px;font-family:var(--display)}
+.anil-hbtn button[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
+#zoom{background:#121a24;border:3px solid var(--frame)}
+
+/* ---------- Efectos ---------- */
+@media (prefers-reduced-motion:no-preference){
+  #main.anil-enter .list .item:nth-child(-n+14){animation:anilRow .32s both}
+  #main.anil-enter .list .item:nth-child(2){animation-delay:.03s}.list .item:nth-child(3){animation-delay:.06s}.list .item:nth-child(4){animation-delay:.09s}
+  #main.anil-enter .list .item:nth-child(5){animation-delay:.12s}.list .item:nth-child(6){animation-delay:.15s}.list .item:nth-child(7){animation-delay:.18s}
+  #main.anil-enter .list .item:nth-child(8){animation-delay:.21s}.list .item:nth-child(9){animation-delay:.24s}.list .item:nth-child(10){animation-delay:.27s}
+  #main.anil-enter .list .item:nth-child(11){animation-delay:.3s}.list .item:nth-child(12){animation-delay:.33s}.list .item:nth-child(13){animation-delay:.36s}.list .item:nth-child(14){animation-delay:.39s}
+  @keyframes anilRow{from{opacity:0;transform:translateX(-14px)}}
+  /* Al abrir una ficha: la pantalla se enciende de arriba abajo con líneas de barrido. */
+  .sheet{animation:anilOpen .34s steps(8) both}
+  @keyframes anilOpen{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0)}}
+  .anil-enter .body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:20;background:repeating-linear-gradient(#0000 0 2px,#0004 2px 4px);animation:anilScan .5s .1s both}
+  @keyframes anilScan{from{opacity:1}to{opacity:0;visibility:hidden}}
+  .anil-enter .hero .disc{animation:anilPop .45s cubic-bezier(.3,1.6,.5,1) both .12s}
+  @keyframes anilPop{from{transform:scale(.6);opacity:0}}
+  #sheetIn.anil-enter .card{animation:anilCard .3s both .15s}
+  @keyframes anilCard{from{opacity:0;transform:translateY(10px)}}
+  .anil-enter .fill{transform-origin:left;animation:anilBar .6s cubic-bezier(.2,.8,.3,1) both .25s}
+  @keyframes anilBar{from{transform:scaleX(0)}}
+  .tp{transition:transform .12s}.item:hover .tp{transform:translateY(-2px)}
+  .anil-shine{animation:anilShine .9s}
+  @keyframes anilShine{0%,100%{filter:none}30%{filter:brightness(2.2) drop-shadow(0 0 8px #fff)}}
+}

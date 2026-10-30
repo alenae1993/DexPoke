@@ -1,10 +1,13 @@
 // Mi Dex — funciona sin internet.
 // Con internet, la app siempre pide la versión más reciente (si la red tarda más de 4 s, usa la copia guardada).
 // Sin internet, usa la copia guardada. Así, al subir archivos nuevos, se ven en cuanto se abre la app.
-const APP = "midex-app-v19";
+const APP = "midex-app-v20";
 const IMG = "midex-img-v1";
 const FONTS = "midex-fonts-v1";
-const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js", "reto.js", "comp.js", "tiers.js", "champions.js", "competitivo.js", "escalada.js", "sprites.js", "assets.js", "animidx.js", "anim.js", "fonts/pkmndp.ttf",
+const SHELL = ["./", "index.html", "data.js", "manifest.webmanifest", "batalla.html", "batalla.js", "ps.js", "esx.js", "reto.js", "comp.js", "tiers.js", "champions.js", "competitivo.js", "escalada.js", "expedicion.js", "sprites.js", "assets.js", "animidx.js", "anim.js", "fonts/pkmndp.ttf",
+  "anil.css", "anil.js", "fonts/powerclear.ttf", "fonts/powerclear-bold.ttf", "fonts/powergreen.ttf", "ui/tipos.png",
+  "audio/ui_cursor.wav", "audio/ui_back.wav", "audio/ui_dex.wav", "audio/ui_page.wav",
+  "anil-batalla.css", "ui/batalla/ball.png", "ui/batalla/ball_ko.png", "ui/batalla/ball_st.png", "ui/batalla/databox_foe.png", "ui/batalla/databox_me.png", "ui/batalla/estados.png", "ui/batalla/mv/bug.png", "ui/batalla/mv/bug_s.png", "ui/batalla/mv/dark.png", "ui/batalla/mv/dark_s.png", "ui/batalla/mv/dragon.png", "ui/batalla/mv/dragon_s.png", "ui/batalla/mv/electric.png", "ui/batalla/mv/electric_s.png", "ui/batalla/mv/fairy.png", "ui/batalla/mv/fairy_s.png", "ui/batalla/mv/fighting.png", "ui/batalla/mv/fighting_s.png", "ui/batalla/mv/fire.png", "ui/batalla/mv/fire_s.png", "ui/batalla/mv/flying.png", "ui/batalla/mv/flying_s.png", "ui/batalla/mv/ghost.png", "ui/batalla/mv/ghost_s.png", "ui/batalla/mv/grass.png", "ui/batalla/mv/grass_s.png", "ui/batalla/mv/ground.png", "ui/batalla/mv/ground_s.png", "ui/batalla/mv/ice.png", "ui/batalla/mv/ice_s.png", "ui/batalla/mv/normal.png", "ui/batalla/mv/normal_s.png", "ui/batalla/mv/poison.png", "ui/batalla/mv/poison_s.png", "ui/batalla/mv/psychic.png", "ui/batalla/mv/psychic_s.png", "ui/batalla/mv/rock.png", "ui/batalla/mv/rock_s.png", "ui/batalla/mv/steel.png", "ui/batalla/mv/steel_s.png", "ui/batalla/mv/water.png", "ui/batalla/mv/water_s.png",
   "sinnoh.js", "sinnoh_datos.js", "anil_datos.js", "sinnoh_cartas.js", "sinnoh_estados.js", "sinnoh_panel.js", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 
 self.addEventListener("install", e => {

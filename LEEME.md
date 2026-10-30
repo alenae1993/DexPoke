@@ -117,6 +117,20 @@ Todo sale de la carpeta `JUEGO` (Pokémon Essentials):
 
 Los archivos `.bin` son paquetes: la app descarga de cada uno solo el recurso que necesita y lo guarda para usarlo sin internet. Si falta algo (por ejemplo, Pokémon de Paldea), se usa la ilustración oficial. En Batalla → Opciones se puede cambiar el sonido (música y efectos / solo efectos / silencio), el fondo, apagar las animaciones de ataques y volver a las ilustraciones. Los ataques sin animación propia en tu juego usan una del mismo tipo y categoría.
 
+## Estilo Pokémon Añil (Pokédex)
+
+La Pokédex usa el aspecto de la Pokédex de Pokémon Añil: cuadrícula oscura, marcos con franja turquesa, cabecera roja,
+letra pixelada (Power Clear y Power Green, en `fonts/`), íconos de tipo del juego (`ui/tipos.png`) y sonidos de menú
+(`audio/ui_*.wav`). Todo está en `anil.css` y `anil.js`; para volver al diseño anterior basta con quitar esas dos
+líneas del `<head>` de `index.html`.
+
+- Botones de la cabecera: activar o silenciar sonidos y cambiar entre pantalla oscura y clara (se recuerda).
+- En la ficha de cada Pokémon (hasta la Gen 8, sin formas) aparece su sprite animado, suena su grito y se puede ver variocolor.
+- La batalla (`batalla.html`) usa el mismo aspecto con `anil-batalla.css`: cuadros de PS, botones de ataque por tipo,
+  Poké Balls del equipo e íconos de estado del juego (`ui/batalla/`).
+- Al abrir una ficha la pantalla se enciende con líneas de barrido; las barras de stats se llenan y la lista entra en cascada
+  (se desactiva si el sistema pide reducir el movimiento).
+
 ## Pokémon Champions (estrategias de Smogon)
 
 `champions.js` trae los datos de la [Strategy Pokédex de Smogon para Pokémon Champions](https://www.smogon.com/dex/champions/pokemon/):
@@ -138,3 +152,16 @@ En **Batalla → Modo Escalada** (`escalada.js`) empiezas eligiendo 1 de 3 Poké
 - Si pierdes, la escalada termina y queda tu récord de victorias seguidas.
 - La escalada se guarda sola. Si sales a mitad de un combate, al volver repites ese mismo combate contra el mismo rival.
 - El nivel (50, 100 o Equilibrado) se fija al empezar, con la opción Nivel del menú.
+
+## Modo Expedición
+
+En **Batalla → Modo Expedición** (`expedicion.js`) armas un equipo con **10 puntos**: cada Pokémon cuesta de 1 a 9 puntos según la suma de sus estadísticas base, y todos empiezan en el nivel 5. Luego avanzas paso a paso **eligiendo el camino** entre 2 o 3 opciones:
+
+- **Pokémon salvaje:** lo puedes capturar con Poké Balls durante el combate (o huir). La captura usa la fórmula de los juegos: baja sus PS o dale un estado para que sea más fácil.
+- **Entrenador:** más EXP (×1,5) y dinero.
+- **Tienda:** Poké Balls, medicinas, Caramelos Raros, objetos para equipar y objetos de evolución (piedras, Cordón Unión…).
+- **Centro Pokémon:** cura todo el equipo.
+- **Suceso:** dinero, objetos, una fuente termal o un Pokémon poco común (desde el paso 30 puede ser legendario).
+- Cada 10 pasos hay un **Guardián de zona** con un equipo más fuerte; al ganarle eliges un objeto de regalo y tu equipo se recupera por completo. Las zonas cambian de tipos (pradera, costa, cueva, volcán…).
+
+Los PS y estados se mantienen entre combates. Tus Pokémon ganan EXP con la fórmula de los juegos (los que no combaten reciben el 80 %), aprenden los movimientos por nivel y evolucionan (por nivel, amistad, movimiento u objeto). Si todo el equipo cae, la expedición termina y queda tu récord de pasos. Cada Pokémon que captures queda **desbloqueado** (su primera etapa) para armar tus próximos equipos. La Teracristalización y el Dinamax no se usan en este modo.

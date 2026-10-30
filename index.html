@@ -216,6 +216,8 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
 .link{border:0;background:transparent;color:var(--accent);font-weight:600;padding:0}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}}
 </style>
+<link rel="stylesheet" href="anil.css">
+<script src="anil.js"></script>
 </head>
 <body>
 
@@ -256,7 +258,7 @@ const norm=s=>(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const pad=n=>String(n).padStart(4,"0").replace(/^0(?=\d{3})/,"");
 const nn=v=>v==null||v===""?"—":v;
-const tchip=t=>{const x=TY[t]||[t,"#888","#fff"];return `<span class="tp" style="--c:${x[1]};--ct:${x[2]}">${x[0]}</span>`};
+const tchip=t=>{const x=TY[t]||[t,"#888","#fff"];return `<span class="tp" data-t="${t}" role="img" aria-label="${x[0]}" title="${x[0]}" style="--c:${x[1]};--ct:${x[2]}">${x[0]}</span>`};
 const disc=p=>{const a=TY[p.t[0]]||TY.NORMAL,b=TY[p.t[1]||p.t[0]]||a;return `<span class="disc im" style="--c1:${a[1]};--c2:${b[1]}"><img src="${ART}${p.im||p.id}.png" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.remove('im');this.remove()"><b>${pad(p.id)}</b></span>`};
 const ART="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/";
 const mname=c=>(M[c]&&M[c][0])||c;
@@ -284,7 +286,7 @@ function save(){try{const {tab,type,gen,sort,fk,tier,mtype,mcat,af,cA,cB}=S;loca
 
 const $=id=>document.getElementById(id);
 const searchSvg='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
-const typeChips=(cur,name)=>`<div class="chips" data-chips="${name}"><button class="chip" data-v="" aria-pressed="${cur===""}">Todos</button>${TK.map(t=>`<button class="chip" data-v="${t}" style="--c:${TY[t][1]};--ct:${TY[t][2]}" aria-pressed="${cur===t}">${TY[t][0]}</button>`).join("")}</div>`;
+const typeChips=(cur,name)=>`<div class="chips" data-chips="${name}"><button class="chip" data-v="" aria-pressed="${cur===""}">Todos</button>${TK.map(t=>`<button class="chip" data-v="${t}" style="--c:${TY[t][1]};--ct:${TY[t][2]}" aria-pressed="${cur===t}" aria-label="${TY[t][0]}" title="${TY[t][0]}">${TY[t][0]}</button>`).join("")}</div>`;
 
 /* ---------- competitivo (categorías de Smogon) ---------- */
 const TCOL={AG:["#1B1B1B","#fff"],Uber:["#6B3FC4","#fff"],OU:["#D6264F","#fff"],UUBL:["#E0674A","#fff"],UU:["#E8872C","#111"],RUBL:["#E3A92E","#111"],RU:["#E8C53A","#111"],NUBL:["#9CC23A","#111"],NU:["#4FAE4A","#fff"],PUBL:["#3BA88F","#fff"],PU:["#2E9AA6","#fff"],ZUBL:["#3F86C9","#fff"],ZU:["#4F6FD1","#fff"],NFE:["#8A8F8C","#fff"],LC:["#E46FB0","#111"],DUber:["#6B3FC4","#fff"],DOU:["#D6264F","#fff"],DUU:["#E8872C","#111"]};
@@ -645,7 +647,7 @@ function moveRow(c,lv){const x=M[c]||[c];
   return `<button class="mv" data-m="${c}">${lv!=null?`<span class="lv">${lvLab(lv)}</span>`:""}<span><span class="nm">${esc(x[0])}</span>${x[10]?`<span class="en">${esc(x[10])}</span>`:""}<span class="sub">${x[1]?tchip(x[1]):""}<span class="catg">${CAT[x[2]]||""}</span></span>${fxShort(x)}</span><span class="nums">${nn(x[3])} / ${nn(x[4])} / ${nn(x[5])}<small>POT / PREC / PP</small></span></button>`}
 
 function statBars(st,b){
-  return `<div class="stats">${st.map((v,i)=>`<span class="l">${SL[i]}</span><span class="v">${nn(v)}</span><span class="track"><span class="fill ${v<60?"lo":v>=110?"hi":""}" style="width:${Math.min(100,(v||0)/200*100)}%;display:block"></span></span>`).join("")}</div><div class="total"><span>Total de estadísticas base</span><b>${nn(b)}</b></div>`}
+  return `<div class="stats">${st.map((v,i)=>`<span class="l">${SL[i]}</span><span class="v">${nn(v)}</span><span class="track"><span class="fill ${v<60?"lo":v>=110?"hi":""}" data-s="${v<60?"lo":v<90?"mid":"hi"}" style="width:${Math.min(100,(v||0)/200*100)}%;display:block"></span></span>`).join("")}</div><div class="total"><span>Total de estadísticas base</span><b>${nn(b)}</b></div>`}
 
 function compareView(a,b){
   const row=(i)=>{const x=a.st[i]||0,y=b.st[i]||0;
