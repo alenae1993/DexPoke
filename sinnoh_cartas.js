@@ -143,7 +143,36 @@ function cardContinue() {
   const side = CB.order[CB.step];
   if (side === "p1") { CB.phase = "choose"; return cardRender(); }
   CB.phase = "foe"; cardRender();
-  setTimeout(() => { if (CB && !CB.over) { cardAttack(CB.foe, CB.me, cardAiMove(CB.foe, CB.me)); CB.step++; cardAfterAction(); } }, 700);
+  setTimeout(() => { if (CB && !CB.over) cardAct(() => cardAttack(CB.foe, CB.me, cardAiMove(CB.foe, CB.me)), () => { CB.step++; cardAfterAction(); }); }, 900);
+}
+// Ejecuta una acción con tiradas, muestra los dados y espera a que el jugador pulse "Continuar".
+function cardAct(action, after) {
+  CB.rolls = []; const next = action() || after;
+  if (!CB.rolls.length) return next();
+  CB.phase = "result"; CB.after = next; cardRender(); cardAnimateDice();
+}
+const CARD_FACE = {hit: ["1", "Golpe"], crit: ["2", "Crítico"], status: ["◎", "Estado"]};
+function cardDiceHTML() {
+  return CB.rolls.map(r => `<div class="cb-roll"><p><b>${esc(r.who)}</b> · ${esc(r.what)}</p>
+    <div class="cb-dice">${r.dice.map(d => `<span class="cb-die" data-face="${d}" title="${CARD_FACE[d][1]}">${CARD_FACE[d][0]}</span>`).join("") || "<small>Sin dados (fuerza 0).</small>"}</div>
+    <p class="cb-res" hidden>${esc(r.text)}</p></div>`).join("");
+}
+function cardAnimateDice() {
+  const dice = [...document.querySelectorAll(".cb-die")], btn = document.querySelector('[data-act="cbnext"]');
+  const faces = Object.keys(CARD_FACE); let t = 0;
+  dice.forEach(d => d.classList.add("rolling"));
+  const timer = setInterval(() => {
+    t++;
+    dice.forEach((d, i) => {
+      if (t < 8 + i * 2) { const f = faces[Math.floor(Math.random() * 3)]; d.dataset.show = f; d.textContent = CARD_FACE[f][0]; }
+      else if (d.classList.contains("rolling")) { d.classList.remove("rolling"); delete d.dataset.show; d.textContent = CARD_FACE[d.dataset.face][0]; }
+    });
+    if (t >= 8 + dice.length * 2) {
+      clearInterval(timer); document.querySelectorAll(".cb-res").forEach(r => { r.hidden = false; });
+      if (btn) btn.disabled = false;
+    }
+  }, 90);
+  if (typeof sinAnilSound === "function") sinAnilSound("shake", .4);
 }
 function cardAiMove(att, def) {
   const exp = mv => { const fx = cardEffect(mv.effect); const str = cardStrength(att, def, mv, fx);
@@ -209,6 +238,7 @@ function cardAttack(att, def, mv) {
   const st = count("status"), hits = count("hit"), crits = count("crit");
   const statusDmg = Math.max(0, (fx.statusBonus || 0) + (att.marks.atkStatus || 0) + (def.marks.defStatus || 0));
   delete att.marks.atkStatus; delete def.marks.defStatus;
+  const eff = cardTypeBonus(mv.type, def.set.card.types);
   let dmg = hits * (1 + (fx.hitBonus || 0)) + crits * (2 + (fx.critBonus || 0)) + st * statusDmg;
   if (dice.length) dmg += cardTypeBonus(mv.type, def.set.card.types);
   if (fx.extraVsType && def.set.card.types.includes(fx.extraVsType[1])) dmg += fx.extraVsType[0];
@@ -217,9 +247,11 @@ function cardAttack(att, def, mv) {
   if (att.status === "brn") dmg -= 2;
   dmg = Math.max(0, dmg);
   cardLog(`Dados: ${hits} golpe${hits === 1 ? "" : "s"}, ${crits} crítico${crits === 1 ? "" : "s"}, ${st} estado${st === 1 ? "" : "s"}.`);
-  const eff = cardTypeBonus(mv.type, def.set.card.types);
+  const roll = {who: name + (att.side === "p2" ? " (rival)" : ""), what: `${mv.name} · ${str} dado${str === 1 ? "" : "s"}`, dice: [...dice], text: ""};
+  CB.rolls?.push(roll);
   if (eff > 0) cardLog("¡Es súper eficaz!"); else if (eff < 0 && eff > -4 * def.set.card.types.length) cardLog("No es muy eficaz…"); else if (eff <= -4 && dmg === 0) cardLog("No afecta…");
   const before = def.hp; cardDamage(def, dmg); def.lastHit = before - def.hp;
+  roll.text = `${hits} golpe${hits === 1 ? "" : "s"}, ${crits} crítico${crits === 1 ? "" : "s"}, ${st} estado${st === 1 ? "" : "s"} → ${dmg} de daño a ${esSp(def.set.species)}${eff > 0 ? " (súper eficaz)" : eff < 0 ? " (poco eficaz)" : ""}${att.status === "brn" ? " (Quemado: −2)" : ""}${fx.doubleIfStatus && def.status ? " (doble por su estado)" : ""}. Le quedan ${def.hp}/${def.max}.`;
   if (fx.drain && before > def.hp && att.hp > 0) { att.hp = Math.min(att.max, att.hp + Math.floor((before - def.hp) / 2)); cardLog(`${name} recupera vida.`); }
   if (fx.execute && def.hp > 0 && def.hp <= fx.execute) { def.hp = 0; cardLog(`¡${esSp(def.set.species)} se debilita!`); }
   cardDamage(att, (fx.recoilCrit || 0) * crits, "de retroceso");
@@ -277,6 +309,10 @@ function cardSwitch(index) {
 function cardThrow(key) {
   const run = CB.run, b = run.battle;
   if (CB.phase !== "choose" || b.trainer || b.legend?.ub || b.legend?.necro || !(run.balls[key] > 0)) return;
+  cardAct(() => cardThrowRoll(key), null);
+}
+function cardThrowRoll(key) {
+  const run = CB.run, b = run.battle;
   run.balls[key]--;
   const tier = b.wild?.alpha || b.legend ? "L" : b.swarm ? b.swarmCards[CB.foe.index].tier : b.tier;
   const need = CARD_CATCH[tier] || 4, dice = cardRoll(CARD_BALL_DICE[key] || 3);
@@ -286,14 +322,17 @@ function cardThrow(key) {
   const ok = key === "glory" || total >= need;
   if (typeof sinBallFx === "function") sinBallFx({dead: false}, key, "throw");
   cardLog(`Lanzaste una ${SIN_BALLS[key].name}: ${total} de ${need} necesarios.`);
+  CB.rolls.push({who: "Tú", what: `${SIN_BALLS[key].name} · ${key === "glory" ? "captura segura" : dice.length + " dados"}`, dice: key === "glory" ? [] : dice,
+    text: ok ? `${total} de ${need} necesarios. ¡Ya está! ¡Atrapaste a ${esSp(CB.foe.set.species)}!` : `${total} de ${need} necesarios. ¡Oh, no! ¡El Pokémon se ha escapado!`});
+  if (key === "glory") CB.rolls[CB.rolls.length - 1].dice = ["crit", "crit", "crit"];
   if (ok) {
     cardLog(`¡Ya está! ¡Atrapaste a ${esSp(CB.foe.set.species)}!`);
-    if (b.swarm) { CB.foe.caught = true; b.captures[CB.foe.index] = cardKeep(CB.foe); CB.foe.hp = 0; CB.step = CB.order.indexOf("p1") + 1; return cardAfterAction(); }
-    CB.caught = true; return cardEnd(true);
+    if (b.swarm) return () => { CB.foe.caught = true; b.captures[CB.foe.index] = cardKeep(CB.foe); CB.foe.hp = 0; CB.step = CB.order.indexOf("p1") + 1; cardAfterAction(); };
+    return () => { CB.caught = true; cardEnd(true); };
   }
   CB.ballFails++; cardLog("¡Oh, no! ¡El Pokémon se ha escapado!");
   if (typeof sinCaptureFailure === "function") sinCaptureFailure(run, CB.turn);
-  CB.step++; cardAfterAction();
+  return () => { CB.step++; cardAfterAction(); };
 }
 const cardKeep = f => ({...f.set, hpNow: f.hp >= f.max ? undefined : f.hp, hpMax: f.max, status: f.status});
 // Termina el combate y entrega el resultado a sinResult con el formato de un combate del motor.
@@ -326,7 +365,8 @@ function cardRender() {
   const controls = CB.over ? "<p>El combate terminó…</p>" :
     CB.phase === "switch" ? `<p>${CB.optional ? "El rival cambió de Pokémon. Puedes cambiar el tuyo:" : "Elige a tu siguiente Pokémon:"}</p><div class="btns">${CB.mine.filter(f => f.hp > 0).map(f =>
       `<button class="btn" data-act="cbswitch" data-member="${f.index}">${esc(esSp(f.set.species))} · ${f.hp}/${f.max}</button>`).join("")}</div>` :
-    CB.phase === "foe" ? "<p>Turno del rival…</p>" :
+    CB.phase === "foe" ? `<p>Turno de ${esc(esSp(CB.foe.set.species))} (rival)…</p>` :
+    CB.phase === "result" ? `${cardDiceHTML()}<button class="btn primary" data-act="cbnext" disabled>Continuar</button>` :
     `<div class="cb-moves">${cardMoves(CB.me.set).map((mv, i) => {
       const fx = cardEffect(mv.effect), str = cardStrength(CB.me, CB.foe, mv, fx), eff = cardTypeBonus(mv.type, CB.foe.set.card.types);
       return `<button class="btn cb-move" data-act="cbmove" data-move="${i}">${tchip(mv.type === "Typeless" ? "Normal" : mv.type)} <b>${esc(mv.name)}</b> · ${str} dado${str === 1 ? "" : "s"}${eff ? ` · ${eff > 0 ? "+" : ""}${eff}` : ""}<small>${esc(mv.effect)}${fx.known || !mv.effect ? "" : " (sin efecto en esta versión)"}</small></button>`;
@@ -342,7 +382,8 @@ document.addEventListener("click", e => {
   if (VIEW !== "sincards" || !CB) return;
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const act = b.dataset.act;
-  if (act === "cbmove" && CB.phase === "choose") { const mv = cardMoves(CB.me.set)[+b.dataset.move]; if (!mv) return; cardAttack(CB.me, CB.foe, mv); CB.step++; return cardAfterAction(); }
+  if (act === "cbmove" && CB.phase === "choose") { const mv = cardMoves(CB.me.set)[+b.dataset.move]; if (!mv) return; return cardAct(() => cardAttack(CB.me, CB.foe, mv), () => { CB.step++; cardAfterAction(); }); }
+  if (act === "cbnext" && CB.phase === "result") { const next = CB.after; CB.after = null; CB.phase = "busy"; return next(); }
   if (act === "cbball") return cardThrow(b.dataset.ball);
   if (act === "cbswitch" && CB.phase === "switch") return cardSwitch(+b.dataset.member);
 });
@@ -355,6 +396,13 @@ cardStyle.textContent = `
   .cb-info{flex:1;min-width:0}.cb-info small{display:block;margin-top:3px}.cb-types{display:inline-flex;gap:3px}
   .cb-moves{display:grid;gap:8px}.cb-move{text-align:left;white-space:normal;display:block}.cb-move small{display:block;color:var(--ink2);margin-top:3px}
   .cb-log p{margin:3px 0;font-size:14px}.cb-log p:first-child{font-weight:600}
+  .cb-roll{margin-bottom:10px}.cb-roll p{margin:4px 0}.cb-res{font-weight:600}
+  .cb-dice{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  .cb-die{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:9px;font:700 20px var(--display);box-shadow:0 2px 0 #0003;border:2px solid #0002}
+  .cb-die[data-face=hit]{background:#f4f6f8;color:#22303a}.cb-die[data-face=crit]{background:#ffd23f;color:#5b3b00}.cb-die[data-face=status]{background:#a77bf3;color:#fff}
+  .cb-die.rolling{animation:cbShake .18s linear infinite;background:#dfe5ea;color:#22303a}
+  .cb-die.rolling[data-show=crit]{background:#ffe48a}.cb-die.rolling[data-show=status]{background:#cdb5f8}
+  @keyframes cbShake{25%{transform:rotate(-14deg) translateY(-3px)}75%{transform:rotate(14deg) translateY(2px)}}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}`;
 document.head.appendChild(cardStyle);
 
