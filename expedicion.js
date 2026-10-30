@@ -7,7 +7,7 @@
    Lo que capturas queda desbloqueado (su primera etapa) para armar el equipo de las siguientes expediciones. */
 if (!ST.exp) ST.exp = {run: null, best: 0, runs: 0, unlocked: []};
 const EXPD = () => ST.exp;
-const EXP_BUDGET = 10, EXP_START_LEVEL = 5, EXP_SHARE = .5;
+const EXP_BUDGET = 10, EXP_START_LEVEL = 5, EXP_SHARE = .8;
 const EXP_STARTERS = ["Bulbasaur", "Charmander", "Squirtle", "Chikorita", "Cyndaquil", "Totodile", "Treecko", "Torchic", "Mudkip",
   "Turtwig", "Chimchar", "Piplup", "Snivy", "Tepig", "Oshawott", "Chespin", "Fennekin", "Froakie", "Rowlet", "Litten", "Popplio",
   "Grookey", "Scorbunny", "Sobble", "Sprigatito", "Fuecoco", "Quaxly", "Pichu", "Eevee", "Pidgey", "Rattata", "Caterpie",
@@ -34,12 +34,12 @@ const EXP_KINDS = {
   mystery: {n: "Suceso", d: "Algo inesperado te espera en el camino."},
   boss: {n: "Guardián de la zona", d: "Un combate difícil. Al ganar eliges un objeto de regalo."}
 };
-const EXP_WEIGHTS = [["wild", 45], ["trainer", 25], ["shop", 12], ["mystery", 10], ["center", 8]];
+const EXP_WEIGHTS = [["wild", 42], ["trainer", 22], ["shop", 13], ["mystery", 10], ["center", 13]];
 const EXP_BALLS = {pokeball: 1, greatball: 1.5, ultraball: 2};
 const EXP_MEDS = {potion: 20, superpotion: 60, hyperpotion: 120, maxpotion: 9999};
 // [objeto, precio, paso desde el que se vende]
-const EXP_SHOP = [["pokeball", 200, 1], ["greatball", 600, 8], ["ultraball", 1200, 22], ["potion", 300, 1], ["superpotion", 700, 10],
-  ["hyperpotion", 1200, 25], ["maxpotion", 2500, 40], ["fullheal", 500, 1], ["revive", 1500, 1], ["rarecandy", 3000, 1]];
+const EXP_SHOP = [["pokeball", 200, 1], ["greatball", 600, 8], ["ultraball", 1200, 22], ["potion", 200, 1], ["superpotion", 500, 10],
+  ["hyperpotion", 1200, 25], ["maxpotion", 2500, 40], ["fullheal", 400, 1], ["revive", 1000, 1], ["rarecandy", 3000, 1]];
 const EXP_HELD = ["leftovers", "choiceband", "choicespecs", "choicescarf", "lifeorb", "sitrusberry", "luckyegg", "focussash",
   "expertbelt", "assaultvest", "rockyhelmet", "quickclaw", "scopelens", "shellbell"];
 const EXP_EVO_METHODS = ["Item", "ItemNight", "DayHoldItem", "NightHoldItem", "CableLinkItem"];
@@ -61,14 +61,14 @@ D.P.forEach(p => {
 });
 const expRand = a => a[Math.floor(Math.random() * a.length)];
 const expZone = w => EXP_ZONES[Math.floor((w - 1) / 10) % EXP_ZONES.length];
-const expLevel = w => Math.min(100, Math.round(EXP_START_LEVEL + (w - 1) * 1.1));
+const expLevel = w => Math.min(100, Math.round(EXP_START_LEVEL + (w - 1)));
 function expCost(sp) { const b = Dex.species.get(sp).bst; return b <= 250 ? 1 : b <= 330 ? 2 : b <= 420 ? 3 : b <= 480 ? 4 : b <= 540 ? 5 : b <= 600 ? 7 : 9; }
 function expRoot(sp) { let s = Dex.species.get(sp); while (s.prevo) s = Dex.species.get(s.prevo); return s.name; }
 const expUnlocked = () => [...new Set([...EXP_STARTERS, ...EXPD().unlocked])].filter(sp => Dex.species.get(sp).exists)
   .sort((a, b) => expCost(a) - expCost(b) || Dex.species.get(a).num - Dex.species.get(b).num);
 // Especie según el paso: el tope de estadísticas base sube con el avance; el piso evita solo Pokémon débiles más adelante.
 function expSpecies(w, types, bonus = 0, from = EXP_POOL) {
-  const cap = 300 + w * 7 + bonus, lo = Math.min(cap - 200, 480);
+  const cap = 290 + w * 6 + bonus, lo = Math.min(cap - 200, 480);
   const typed = x => !types || x.types.some(t => types.includes(t));
   let list = from.filter(x => x.bst <= cap && x.bst >= lo && typed(x));
   if (list.length < 5) list = from.filter(x => x.bst <= cap && typed(x));
@@ -176,15 +176,15 @@ function expMystery(run) {
 function expChoose(i) {
   const run = EXPD().run, node = run?.path?.[i]; if (!node || run.battle || run.node || run.progress) return;
   const w = run.wave, zone = expZone(w), lv = expLevel(w);
-  const vary = () => Math.max(2, Math.min(100, lv + Math.floor(Math.random() * 3) - 1));
+  const vary = () => Math.max(2, Math.min(100, lv - Math.floor(Math.random() * 3)));
   if (node.k === "wild") run.battle = {kind: "wild", foes: [expMakeSet(expSpecies(w, node.t), vary())]};
   else if (node.k === "trainer") {
-    const n = Math.min(4, 1 + Math.floor(w / 12) + (Math.random() < .4 ? 1 : 0));
-    run.battle = {kind: "trainer", name: expRand(EXP_TRAINERS), foes: expTeamOf(n, () => expMakeSet(expSpecies(w, null), Math.min(100, lv + 1)))};
+    const n = Math.min(4, 1 + Math.floor(w / 15) + (Math.random() < .3 ? 1 : 0));
+    run.battle = {kind: "trainer", name: expRand(EXP_TRAINERS), foes: expTeamOf(n, () => expMakeSet(expSpecies(w, null), lv))};
   } else if (node.k === "boss") {
-    const n = Math.min(6, 2 + Math.floor(w / 10));
+    const n = Math.min(6, 2 + Math.floor(w / 12));
     run.battle = {kind: "boss", name: zone.boss, foes: expTeamOf(n, () => {
-      const s = expMakeSet(expSpecies(w, zone.t, 60), Math.min(100, lv + 3), {ivs: 31}); if (w >= 20) s.item = expRand(EXP_HELD); return s;
+      const s = expMakeSet(expSpecies(w, zone.t, 40), Math.min(100, lv + 2), w >= 20 ? {ivs: 31} : {}); if (w >= 30) s.item = expRand(EXP_HELD); return s;
     })};
   } else if (node.k === "shop") run.node = {k: "shop", stock: expStock(w)};
   else if (node.k === "center") { run.team.forEach(s => { delete s.hpNow; s.status = ""; }); run.node = {k: "center", text: "Tu equipo recuperó todos sus PS y estados."}; }
@@ -218,7 +218,7 @@ function expFight() {
   const w = run.wave, mine = b.indices.map(i => expBattleSet(run.team[i], "Exp" + (i + 1)));
   newBattle(mine, b.foes.map(s => expBattleSet(s, "")), {exp: true, wild: b.kind === "wild", foeName: b.name || null,
     intro: b.name ? `¡${b.name} te desafía!` : null, bgm: b.kind === "boss" ? "bgm_boss" : b.kind === "trainer" ? "bgm_trainer" : "bgm_wild",
-    aiDiff: b.kind === "wild" ? "easy" : b.kind === "boss" ? (w >= 20 ? "hard" : "normal") : w >= 40 ? "hard" : w >= 15 ? "normal" : "easy",
+    aiDiff: b.kind === "wild" ? "easy" : b.kind === "boss" ? (w >= 30 ? "hard" : "normal") : w >= 50 ? "hard" : w >= 20 ? "normal" : "easy",
     pre: expPre(b.indices.map(i => run.team[i]))});
   save();
 }
@@ -309,7 +309,7 @@ function expResult(won, me) {
   if (won === false || !run.team.some(expAlive)) return expGameOver(run, b.name ? `Derrotado por ${b.name}` : "Tu equipo cayó ante un Pokémon salvaje");
   if (won === null) { run.battle = null; run.notice = me.expFled ? "Escapaste sin problemas." : "El combate terminó en empate."; expAdvance(run); return; }
   const lvSum = b.foes.reduce((a, s) => a + s.level, 0);
-  const money = b.kind === "boss" ? lvSum * 60 : b.kind === "trainer" ? lvSum * 30 : lvSum * 10;
+  const money = b.kind === "boss" ? lvSum * 80 : b.kind === "trainer" ? lvSum * 40 : lvSum * 20;
   run.money += money;
   const p = run.progress = expGainExp(run, b.foes, me, b.kind === "wild" ? 1 : 1.5);
   p.money = money; p.after = "advance";
@@ -321,7 +321,8 @@ function expResult(won, me) {
     const root = expRoot(set.species);
     if (!EXP_STARTERS.includes(root) && !EXPD().unlocked.includes(root)) { EXPD().unlocked.push(root); p.unlocked = root; }
   }
-  if (b.kind === "boss") p.bossItems = shuffle(EXP_HELD.filter(id => id !== "sitrusberry")).slice(0, 3);
+  // Tras vencer al Guardián, el equipo se recupera (incluidos los debilitados) para empezar la zona nueva.
+  if (b.kind === "boss") { p.bossItems = shuffle(EXP_HELD.filter(id => id !== "sitrusberry")).slice(0, 3); run.team.forEach(s => { delete s.hpNow; s.status = ""; }); p.healed = true; }
   run.battle = null;
   expAdvanceMoves(run); save();
 }
@@ -543,7 +544,7 @@ function expProgress(top, r) {
       `<div class="exp-item">${itemIco(id)}<span><b>${esc(esItem(id))}</b><small>${esc(esItemDesc(id))}</small></span><button class="btn" data-expgift="${esc(id)}">Elegir</button></div>`).join("")}</div></div>`;
   }
   $("app").innerHTML = `${top}<div class="stack"><div class="card"><h3>${p.after === "advance" ? "¡Combate ganado!" : "Mochila"}</h3>
-    ${p.money ? `<p class="note">Recibiste ₽${esc(p.money)}.</p>` : ""}
+    ${p.money ? `<p class="note">Recibiste ₽${esc(p.money)}.</p>` : ""}${p.healed ? `<p class="note">Tu equipo recuperó todos sus PS y estados.</p>` : ""}
     ${p.caught ? `<p class="note">${esc(esSp(p.caught))} se unió ${p.toBox ? "a la caja (tu equipo está completo)" : "a tu equipo"}.${p.unlocked ? ` ¡${esc(esSp(p.unlocked))} queda desbloqueado para tus próximas expediciones!` : ""}</p>` : ""}
     ${lines ? `<ul class="exp-rewards">${lines}</ul>` : ""}
     ${q || p.bossItems ? "" : `<div class="btns"><button class="btn pri" data-act="expdone">Continuar</button></div>`}</div>${ask}</div>`;
@@ -585,7 +586,7 @@ document.addEventListener("click", e => {
   }
   if (act === "expbegin") {
     const picks = EXP_NEW.picks; if (r || !picks.length || expPicksCost(picks) > EXP_BUDGET) return;
-    const run = {wave: 1, team: picks.map(sp => expMakeSet(sp, EXP_START_LEVEL)), box: [], money: 1000, bag: {pokeball: 5, potion: 3},
+    const run = {wave: 1, team: picks.map(sp => expMakeSet(sp, EXP_START_LEVEL)), box: [], money: 1500, bag: {pokeball: 5, potion: 5},
       path: null, node: null, battle: null, progress: null, caught: [], notice: ""};
     run.path = expPath(run); E.run = run; E.runs = (E.runs || 0) + 1; EXP_NEW = {open: false, picks: []}; EXP_VIEW = null; save(); return renderExp();
   }
