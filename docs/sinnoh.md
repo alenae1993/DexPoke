@@ -466,3 +466,4 @@ Las etiquetas de la carta dan su bioma y clima.
 - Al caer en un escondite se muestra la ficha dándose vuelta (de su reverso a su cara) con lo encontrado; las revelaciones se encolan en `run.flips` y se muestran con `sinShowFlips` (botón «Continuar»).
 - Objetos con ícono (`sinItemIcon`: íconos del juego vía Essentials; los artefactos del mod usan la imagen de su ficha) y descripción (`sinItemDesc`, según el modo de la partida) en la Bolsa y en «Mi equipo».
 - `sinCardView` dibuja la carta con el objeto equipado en el círculo de objeto de la carta y el ícono de estado sobre la ilustración (panel inferior, «Mi equipo», combate y selecciones del Modo Cartas).
+- Modo Cartas: antes de cada combate (con más de un Pokémon en pie) `sinLeadScreen` muestra las cartas del equipo para elegir quién sale primero; se guarda en `run.battle.lead` y reordena `run.battle.indices`. En Modo Batalla Pokémon esto lo hace la vista previa del combate.

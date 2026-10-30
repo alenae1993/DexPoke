@@ -2367,6 +2367,8 @@ async function sinFight(index, trainerKey = false) {
       run.battle.start = {team: JSON.parse(JSON.stringify(run.team)), pos: [...run.pos], moved: run.moved, searched: run.searched}; sinSave();
     }
     if (!run.battle.trainer && !run.battle.swarm && !run.battle.tier) { run.battle.tier = sinEncounterToken(run)?.tier; sinSave(); }
+    // Antes de combatir se elige qué Pokémon sale primero (como en la mesa).
+    if (run.mode === "cards" && run.battle.lead == null && run.battle.indices.length > 1) { sinSave(); return sinLeadScreen(); }
     const mine = run.battle.indices.map(i => ({...run.team[i], name: "Sinnoh" + (i + 1)}));
     const trainer = run.battle.trainer;
     const swarm = run.battle.swarm;
@@ -2387,7 +2389,21 @@ async function sinFight(index, trainerKey = false) {
     SIN_BUSY = false; document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = false; });
   }
 }
+// Modo Cartas: elegir el Pokémon que abre el combate (en Modo Batalla Pokémon lo hace la vista previa del combate).
+function sinLeadScreen() {
+  sinLeave();
+  const run = ST.sin.run, battle = run.battle, foes = battle.trainer || battle.swarm ? battle.foes : [battle.wild];
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>¿Quién sale primero?</h1>
+    <p>${battle.trainer ? `${esc(battle.trainer.name || "Reclutas del Equipo Galaxia")}: ` : ""}${foes.map(s => `${esc(esSp(s.species))} · Nv. ${esc(s.level)}`).join(" / ")}</p>
+    <div class="cb-picks">${battle.indices.map(i => {
+      const s = run.team[i], max = s.hpMax ?? (s.card ? s.card.hp : calcStat(Dex.species.get(s.species), s, "hp")), hp = s.hpNow ?? max;
+      return `<button class="cb-pick" data-act="sinlead" data-member="${i}">${s.card ? sinCardView(s.card.img, s.card.name, s.item, s.status) : pimg(s.species, `alt="${esc(esSp(s.species))}"`)}
+        <span>${esc(esSp(s.species))}${s.card ? "" : ` · Nv. ${esc(s.level)}`} · ${esc(hp)}/${esc(max)}${s.status ? " " + sinStatusIcon(s.status) : ""}</span></button>`;
+    }).join("")}</div><p id="sin-offer-error" role="alert"></p></div></div>`;
+  sinFillImages();
+}
 function sinPendingScreen() {
+  if (ST.sin.run.mode === "cards" && ST.sin.run.battle.lead == null && ST.sin.run.battle.indices.length > 1) return sinLeadScreen();
   const battle = ST.sin.run.battle, foes = battle.trainer || battle.swarm ? battle.foes : [battle.wild];
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Combate pendiente</h1>
     ${battle.trainer ? `<p>${esc(battle.trainer.name || "Reclutas del Equipo Galaxia")}</p>` : ""}
@@ -3224,6 +3240,10 @@ document.addEventListener("click", e => {
   if (act === "sincommander") return sinFight(null, b.dataset.commander);
   if (act === "sinhelio") return sinFight(null, "boss");
   if (act === "sinresume") return sinFight();
+  if (act === "sinlead") {
+    const battle = ST.sin.run?.battle, i = +b.dataset.member; if (!battle || !battle.indices.includes(i)) return;
+    battle.indices = [i, ...battle.indices.filter(x => x !== i)]; battle.lead = i; sinSave(); return sinFight();
+  }
   if (act === "sinfollower") return sinChooseFollower(b.dataset.god);
   if (act === "sinshrinechoose") return sinChooseShrine(+b.dataset.card);
   if (act === "sinshrinenext") return sinNextShrine();
