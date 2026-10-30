@@ -113,6 +113,18 @@ Todo sale de la carpeta `JUEGO` (Pokémon Essentials):
 
 Los archivos `.bin` son paquetes: la app descarga de cada uno solo el recurso que necesita y lo guarda para usarlo sin internet. Si falta algo (por ejemplo, Pokémon de Paldea), se usa la ilustración oficial. En Batalla → Opciones se puede cambiar el sonido (música y efectos / solo efectos / silencio), el fondo, apagar las animaciones de ataques y volver a las ilustraciones. Los ataques sin animación propia en tu juego usan una del mismo tipo y categoría.
 
+## Estilo Pokémon Añil (Pokédex)
+
+La Pokédex usa el aspecto de la Pokédex de Pokémon Añil: cuadrícula oscura, marcos con franja turquesa, cabecera roja,
+letra pixelada (Power Clear y Power Green, en `fonts/`), íconos de tipo del juego (`ui/tipos.png`) y sonidos de menú
+(`audio/ui_*.wav`). Todo está en `anil.css` y `anil.js`; para volver al diseño anterior basta con quitar esas dos
+líneas del `<head>` de `index.html`.
+
+- Botones de la cabecera: activar o silenciar sonidos y cambiar entre pantalla oscura y clara (se recuerda).
+- En la ficha de cada Pokémon (hasta la Gen 8, sin formas) aparece su sprite animado, suena su grito y se puede ver variocolor.
+- Al abrir una ficha la pantalla se enciende con líneas de barrido; las barras de stats se llenan y la lista entra en cascada
+  (se desactiva si el sistema pide reducir el movimiento).
+
 ## Pokémon Champions (estrategias de Smogon)
 
 `champions.js` trae los datos de la [Strategy Pokédex de Smogon para Pokémon Champions](https://www.smogon.com/dex/champions/pokemon/):
