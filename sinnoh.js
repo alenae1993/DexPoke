@@ -1,6 +1,19 @@
 "use strict";
 /* ---------- Leyendas de Sinnoh: mapa, turnos y encuentros salvajes ---------- */
 if (!ST.sin) { ST.sin = {cam: null}; save(); }
+/* ---------- Multijugador en el mismo dispositivo (2–4 entrenadores por turnos) ----------
+   ST.sin.multi = {players: [run, ...], cur, handoff}. Cada entrenador es una partida completa (equipo, bolsa, posición,
+   campaña…); las claves de SIN_WORLD son del mapa compartido y pasan de un entrenador al siguiente al cambiar de turno.
+   Al guardar, el entrenador actual se escribe solo en ST.sin.run (players[cur] queda null) para no duplicarlo. */
+const SIN_WORLD = ["hidden", "shrineLegends", "legendsDone", "shrineDeck", "shrineDiscard", "fateDeck", "fateDiscard", "ginkgo", "discard", "originGod",
+  "breach", "breachGiven", "breachDeck", "destroyed", "ubs", "ubsDefeated", "necroPhase", "necroForm", "blessings", "lost"];
+function sinMultiAttach(m) {
+  Object.defineProperty(m, "toJSON", {value() { return {...this, players: this.players.map((p, i) => i === this.cur ? null : p)}; }, enumerable: false, configurable: true});
+  return m;
+}
+if (ST.sin.multi) { if (ST.sin.run) { sinMultiAttach(ST.sin.multi); ST.sin.multi.players[ST.sin.multi.cur] = ST.sin.run; } else delete ST.sin.multi; }
+const sinOthers = () => ST.sin.multi ? ST.sin.multi.players.filter(p => p && p !== ST.sin.run) : [];
+const sinPlayerNo = run => ST.sin.multi ? ST.sin.multi.players.indexOf(run) + 1 : 0;
 const SIN_VILLAGES = [
   {village: "Sinnome Village", name: "Pueblo Sinnome", color: "Pink", starters: ["Togepi", "Budew"]},
   {village: "Sunyshore Village", name: "Pueblo Marina", color: "Yellow", starters: ["Shinx", "Pichu"]},
@@ -957,7 +970,8 @@ function sinCheckStamps(run, event = {}) {
     if (!ok || run.stamps.some(s => s.id === i + 1)) return;
     run.stamps.push({id: i + 1, turn: run.turn, date: new Date().toISOString()}); changed = true;
     run.stampNotices.push(`¡Sello ${i + 1} conseguido! ${SIN_STAMPS[i]}`);
-    if (sinFx(run, "stampPV")) { run.pv += sinFx(run, "stampPV"); run.stampNotices.push(`Gran Primicia: +${sinFx(run, "stampPV")} PV.`); }
+    if (sinFx(run, "stampPV") && !ST.sin.multi) { run.pv += sinFx(run, "stampPV"); run.stampNotices.push(`Gran Primicia: +${sinFx(run, "stampPV")} PV.`); }
+    if (run === ST.sin.run) sinOthers().filter(o => sinFx(o, "stampPV")).forEach(o => { o.pv += 3; sinAbilityNotice(o, `Gran Primicia: el Entrenador ${sinPlayerNo(run)} consiguió un sello y publicaste la noticia: +3 PV.`); });
     if (sinFx(run, "stampBall")) { run.balls.poke = (run.balls.poke || 0) + 1; run.stampNotices.push("Coleccionista Pokémon: +1 Poké Ball."); }
   });
   while (run.stampRewards.length < run.stamps.length) {
@@ -1170,7 +1184,7 @@ const SIN_HOME = SIN.decks.find(d => d.n === "Home Village Cards").cards;
 const SIN_STARTERS = SIN_CARDS.filter(c => (c.tags || []).includes("Starter Card"));
 const SIN_PROLOGUE = SIN_CARDS.find(c => (c.tags || []).includes("Act Card") && String(c.cid).endsWith("00"));
 const sinStarterCard = sp => SIN_STARTERS.find(c => toID(c.d.sp) === toID(sp));
-let SIN_NEW = {village: null, species: null, busy: false, mode: "pokemon"};
+let SIN_NEW = {village: null, species: null, busy: false, mode: "pokemon", players: 1, made: []};
 const SIN_S = 48, SIN_H = Math.sqrt(3) / 2 * SIN_S, SIN_LIFT = 6;
 const SIN_ES = {
   Plains: "Llanura", Forest: "Bosque", Mountain: "Montaña", Ocean: "Océano", Ruins: "Ruinas", Space: "Espacio",
@@ -1256,7 +1270,11 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
-  .sin-abil{display:flex;gap:8px;flex-wrap:wrap}.sin-wide-only{display:contents}.sin-menu-btn,.sin-narrow{display:none!important}
+  .sin-abil{display:flex;gap:8px;flex-wrap:wrap}.sin-choice:disabled{opacity:.35;filter:grayscale(1);cursor:not-allowed}
+  .sin-score{list-style:none;padding:0;margin:8px 0;display:grid;gap:6px}.sin-score li{display:grid;grid-template-columns:10px 40px 1fr;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;background:var(--surface2)}
+  .sin-score li.on{outline:2px solid var(--accent)}.sin-score img{width:40px;height:40px;object-fit:contain}.sin-score small{display:block;color:var(--ink2)}.sin-score-dot{width:10px;height:40px;border-radius:5px}
+  .sin-handoff{text-align:center}.sin-handoff .sin-score{text-align:left}
+  .sin-handoff-mon{width:120px;height:120px;margin:12px auto;border-radius:50%;border:6px solid var(--pc);background:#f4f8fc;display:grid;place-items:center}.sin-handoff-mon img{width:90px;height:90px;object-fit:contain}.sin-wide-only{display:contents}.sin-menu-btn,.sin-narrow{display:none!important}
   @media(max-width:760px){.sin-wide-only,.sin-wide,.sin-tools [data-act=sinabandon],.sin-top h1{display:none!important}.sin-menu-btn{display:inline-flex!important}.sin-narrow{display:inline!important}
     .sin-turn{flex-wrap:wrap;gap:6px 8px!important}.sin-turn-info{flex:1 1 0!important;min-width:0;white-space:nowrap;font-size:13px;overflow:hidden;text-overflow:ellipsis}.sin-turn>.btn{flex:none;padding:8px 9px;font-size:13px}
     .sin-turn>p,.sin-turn>.sin-notice,.sin-turn>div:not(.sin-turn-info){flex-basis:100%;order:5}
@@ -1412,21 +1430,24 @@ function sinCardImage(key, name, cls = "") {
   return `<img class="${esc(cls)}" data-sin-img="${esc(key)}" alt="${esc(name)}">`;
 }
 function sinNewScreen() {
-  const v = SIN_NEW.village, sp = SIN_NEW.species, step = sp ? 3 : v ? 2 : 1;
+  const v = SIN_NEW.village, sp = SIN_NEW.species, step = sp ? 3 : v ? 2 : 1, made = SIN_NEW.made || [], taken = made.map(r => r.village);
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><button class="back" data-act="sinback">‹ Batalla</button>
-    <h1>Nueva partida</h1><p>Leyendas de Sinnoh · Paso ${step} de 3</p>
-    <div class="sin-new-actions"><button class="btn ${SIN_NEW.mode === "cards" ? "" : "primary"}" data-act="sinmode" data-mode="pokemon">Batalla Pokémon</button><button class="btn ${SIN_NEW.mode === "cards" ? "primary" : ""}" data-act="sinmode" data-mode="cards">Modo Cartas</button></div>
+    <h1>Nueva partida</h1><p>Leyendas de Sinnoh · ${made.length || (SIN_NEW.players || 1) > 1 ? `Entrenador ${made.length + 1} de ${SIN_NEW.players} · ` : ""}Paso ${step} de 3</p>
+    ${made.length ? "" : `<div class="sin-new-actions"><button class="btn ${SIN_NEW.mode === "cards" ? "" : "primary"}" data-act="sinmode" data-mode="pokemon">Batalla Pokémon</button><button class="btn ${SIN_NEW.mode === "cards" ? "primary" : ""}" data-act="sinmode" data-mode="cards">Modo Cartas</button></div>
+    <div class="sin-new-actions" role="group" aria-label="Entrenadores">${[1, 2, 3, 4].map(n => `<button class="btn ${(SIN_NEW.players || 1) === n ? "primary" : ""}" data-act="sinplayers" data-n="${n}">${n === 1 ? "1 entrenador" : n + " entrenadores"}</button>`).join("")}</div>
+    ${(SIN_NEW.players || 1) > 1 ? "<p>Multijugador en este dispositivo: cada entrenador juega su turno y pasa el dispositivo al siguiente. Comparten el mapa (escondites, santuarios, legendarios, Ginkgo).</p>" : ""}`}
     <p>${SIN_NEW.mode === "cards" ? "Modo Cartas: el juego de mesa tal cual. Combates con las cartas y dados del mod, captura con dados, evolución pagando Puntos de Viaje y movimientos aprendidos de los Pokémon derrotados." : "Batalla Pokémon: combates como en los juegos, con EXP, niveles, ataques y evolución reales."}</p>
     ${step === 1 ? `<h2>Elige tu pueblo natal</h2><div class="sin-choices">${SIN_VILLAGES.map(v => {
       const card = SIN_HOME.find(c => c.gm === v.color);
-      return `<button class="sin-choice" data-act="sinvillage" data-village="${esc(v.village)}">${sinCardImage(card.img, "Carta de " + v.name)}<b>${esc(v.name)}</b></button>`;
+      return `<button class="sin-choice" data-act="sinvillage" data-village="${esc(v.village)}" ${taken.includes(v.village) ? "disabled" : ""}>${sinCardImage(card.img, "Carta de " + v.name)}<b>${esc(v.name)}</b></button>`;
     }).join("")}</div>` : step === 2 ? `<h2>${esc(v.name)} · Elige tu inicial</h2><div class="sin-choices sin-starters">${v.starters.map(s =>
       `<button class="sin-choice" data-act="sinstarter" data-species="${esc(s)}">${(SIN_NEW.mode === "cards" ? sinCardImage(sinStarterCard(s).img, esSp(s)) + `<b>${esc(esSp(s))}</b>` : sinMonInfo(s, "<span>Nv. 5</span>"))}</button>`).join("")}</div>
       <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los pueblos</button></div>` :
       `<h2>Prólogo · La Incursión</h2><p>${esc(v.name)} · ${esc(esSp(sp))} · Nivel 5</p>${sinCardImage(SIN_PROLOGUE.img, "Prólogo: La Incursión", "sin-prologue")}
+      ${made.length ? `<div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los iniciales</button><button class="btn primary" ${made[0].campaign === "ultra" ? `data-act="sinbeginultra" data-diff="${esc(made[0].difficulty)}"` : 'data-act="sinbegin"'}>Listo (${made[0].campaign === "ultra" ? "Ultra Explosión" : "Corazón de Sinnoh"})</button></div>` : `
       <div class="sin-new-actions"><button class="btn" data-act="sinnewback">Volver a los iniciales</button><button class="btn primary" data-act="sinbegin">Corazón de Sinnoh</button></div>
       <h2>Ultra Explosión</h2><p>Campaña alternativa: detén a los Ultraentes y derrota a Necrozma antes de que la brecha llegue al 70 %. Elige la dificultad (Bendiciones de Arceus):</p>
-      <div class="sin-new-actions">${Object.entries(SIN_DIFFICULTY).map(([k, d]) => `<button class="btn" data-act="sinbeginultra" data-diff="${k}">${esc(d.name)} (${d.bless})</button>`).join("")}</div><p id="sin-new-error" role="alert"></p>`}
+      <div class="sin-new-actions">${Object.entries(SIN_DIFFICULTY).map(([k, d]) => `<button class="btn" data-act="sinbeginultra" data-diff="${k}">${esc(d.name)} (${d.bless})</button>`).join("")}</div>`}<p id="sin-new-error" role="alert"></p>`}
     </div></div>`;
   sinFillImages();
 }
@@ -1457,7 +1478,7 @@ async function sinBegin(difficulty = null) {
   if (SIN_NEW.busy || !SIN_NEW.village || !SIN_NEW.species || ST.sin.run) return;
   const v = SIN_NEW.village, species = SIN_NEW.species;
   const token = SIN.tokens.find(t => t.n === v.village && (t.tags || []).includes("Village Token"));
-  SIN_NEW.busy = true;
+  SIN_NEW.busy = true; let fresh = false;
   document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = true; });
   try {
     const set = await sinInitialSet(species);
@@ -1470,12 +1491,20 @@ async function sinBegin(difficulty = null) {
     ST.sin.run.bag.red = 3;
     if (SIN_NEW.mode === "cards") { ST.sin.run.mode = "cards"; ST.sin.run.team = [cardSet(set, sinStarterCard(species))]; }
     if (difficulty) sinUltraSetup(ST.sin.run, difficulty);
+    if ((SIN_NEW.players || 1) > 1) {
+      const made = SIN_NEW.made ||= []; made.push(ST.sin.run); ST.sin.run = null;
+      if (made.length < SIN_NEW.players) { SIN_NEW.village = SIN_NEW.species = null; fresh = true; return sinNewScreen(); }
+      // Todos comparten el mapa del primer entrenador.
+      made.slice(1).forEach(r => SIN_WORLD.forEach(k => { if (k in made[0]) r[k] = made[0][k]; }));
+      ST.sin.multi = sinMultiAttach({players: made, cur: 0, handoff: true}); ST.sin.run = made[0];
+      SIN_NEW = {village: null, species: null, busy: false, mode: SIN_NEW.mode, players: 1, made: []};
+    }
     // La cámara del antiguo visor no se hereda a una partida nueva.
     ST.sin.cam = null; sinSave(); renderSin();
   } catch (err) {
     if ($("sin-new-error")) $("sin-new-error").textContent = "No se pudo preparar el inicial. Intenta comenzar de nuevo.";
   } finally {
-    SIN_NEW.busy = false; document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = false; });
+    SIN_NEW.busy = false; if (!fresh) document.querySelectorAll(".sin-new button").forEach(b => { b.disabled = false; });
   }
 }
 function sinReachable(pos, remaining, parents = null) {
@@ -1586,7 +1615,7 @@ function sinUpdateTurn() {
   const run = ST.sin.run; if (!run || !SIN_VIEW) return;
   const max = sinMaxMoves(run), left = run.fought || run.revive ? 0 : Math.max(0, max - run.moved);
   SIN_VIEW.reachable = run.fateTeleport ? sinTeleportCells(run) : sinReachable(run.pos, left);
-  $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · <span class="sin-wide">Movimientos: </span><span class="sin-narrow">Mov. </span>${esc(left)}/${esc(max)}<span class="sin-wide"> · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}${sinUltra(run) ? ` · <b>Brecha ${esc(Math.floor(run.breach))} %</b>` : ""}</span></div>
+  $("sin-turn").innerHTML = `<div class="sin-turn-info">${sinPlayerNo(run) ? `<b style="color:${SIN_PLAYER_COLORS[run.color] || "#447fd2"}">E${sinPlayerNo(run)}</b> · ` : ""}Turno ${esc(run.turn)} · <span class="sin-wide">Movimientos: </span><span class="sin-narrow">Mov. </span>${esc(left)}/${esc(max)}<span class="sin-wide"> · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}${sinUltra(run) ? ` · <b>Brecha ${esc(Math.floor(run.breach))} %</b>` : ""}</span></div>
     <button class="btn sin-menu-btn" data-act="sinmenu" aria-haspopup="menu">Menú</button>
     <div class="sin-wide-only">${ST.sin.boardHidden ? `<div class="sin-team">${sinTeamHTML(run)}</div>` : sinBoardHTML(run)}
     <button class="btn" data-act="sinboard">${ST.sin.boardHidden ? "Mostrar panel" : "Ocultar panel"}</button>
@@ -1666,7 +1695,8 @@ const SIN_MENU = [["sinteam", "Equipo", "pokemonA", "pokemonB"], ["sinbag", "Bol
 function sinOpenMenu() {
   const run = ST.sin.run; if (!run || document.querySelector(".sin-menu-bg")) return;
   const box = document.createElement("div"); box.className = "sin-menu-bg";
-  box.innerHTML = `<nav class="sin-menu" role="menu" aria-label="Menú">${SIN_MENU.map(([act, name, a, b]) =>
+  const menu = ST.sin.multi ? [["sinplayerspanel", "Entrenadores", "pokedexA", "pokedexB"], ...SIN_MENU] : SIN_MENU;
+  box.innerHTML = `<nav class="sin-menu" role="menu" aria-label="Menú">${menu.map(([act, name, a, b]) =>
     `<button role="menuitem" data-act="${act}" ${act === "sintrainerpanel" && !run.trainer ? "disabled" : ""}><span class="sin-menu-ic"><img src="ui/menu/${a}.png" alt=""><img src="ui/menu/${b}.png" alt=""></span>${esc(name)}${act === "sinteam" ? `<small>${esc(run.team.length)}/${esc(sinTeamSlots(run))} · ${esc(run.pv)} PV</small>` : act === "sinstamps" ? `<small>${esc(run.stamps.length)}/7</small>` : act === "sincampaign" && sinUltra(run) ? `<small>Brecha ${esc(Math.floor(run.breach))} %</small>` : ""}</button>`).join("")}
     <button class="sin-menu-close" data-act="sinmenuclose">Cerrar</button></nav>`;
   box.addEventListener("click", e => { if (e.target === box) box.remove(); });
@@ -1683,7 +1713,7 @@ function sinCampaignHTML(run) {
     ${run.act >= 3 ? `<p>Corazón de Sinnoh: ${run.heart ? "obtenido" : "pendiente: ofrenda de 1 Bonguri en el Santuario Origin"}.</p><p>Helio: ${run.act >= 4 ? "derrotado" : run.heart ? "pendiente en el Templo de Sinnoh" : "restaura primero el Corazón"}.</p>` : ""}
     ${run.won ? "<p>¡Eres Héroe de Sinnoh! Puedes seguir explorando.</p>" : ""}`;
 }
-const sinFinalChoicesHTML = () => `<div class="btns"><button class="btn primary" data-act="sinhero">Héroe de Sinnoh</button><button class="btn" disabled>Traidor de Sinnoh · Requiere otros entrenadores</button></div>`;
+const sinFinalChoicesHTML = () => `<div class="btns"><button class="btn primary" data-act="sinhero">Héroe de Sinnoh</button><button class="btn" disabled>Traidor de Sinnoh · ${ST.sin.multi ? "Sin reglas en el mod: no disponible" : "Requiere otros entrenadores"}</button></div>`;
 function sinFinalScreen() {
   const run = ST.sin.run;
   $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner"><h1>Final · La Elección</h1>${sinCampaignHTML(run)}${sinFinalChoicesHTML()}</div></div>`;
@@ -1867,7 +1897,8 @@ function sinTrade(index, card) {
   const trade = SIN_TRADES[run.ginkgo][index]; if (!trade || !sinCanPay(run, trade[0])) return;
   sinPay(run, trade[0]); Object.entries(trade[1]).forEach(([k, n]) => { run.bag[k] += n; });
   run.traded = true; run.ginkgo = sinNextGinkgo(run.ginkgo);
-  if (sinFx(run, "ginkgoBonus")) { const k = Object.keys(SIN_BONGURI)[Math.floor(Math.random() * Object.keys(SIN_BONGURI).length)]; run.bag[k]++; sinAbilityNotice(run, `Monopolio Comercial: +1 Bonguri ${SIN_BONGURI[k][0]}.`); }
+  sinOthers().filter(o => sinFx(o, "ginkgoBonus")).forEach(o => { Object.entries(trade[0] || {}).forEach(([k, n]) => { if (k in o.bag) o.bag[k] += n; }); sinAbilityNotice(o, `Monopolio Comercial: ganaste los Bonguri del comercio del Entrenador ${sinPlayerNo(run)}.`); });
+  if (!ST.sin.multi && sinFx(run, "ginkgoBonus")) { const k = Object.keys(SIN_BONGURI)[Math.floor(Math.random() * Object.keys(SIN_BONGURI).length)]; run.bag[k]++; sinAbilityNotice(run, `Monopolio Comercial: +1 Bonguri ${SIN_BONGURI[k][0]}.`); }
   run.notice = `Comerciaste con Ginkgo: recibiste ${sinRecipeText(trade[1])}.`; sinSave(); sinUpdateTurn();
 }
 const sinFlightBlocked = (run, village) => run.grunts.includes(village);
@@ -2322,7 +2353,8 @@ function sinOfferShrine(color, major = false) {
   const drawn = sinDrawShrine(run, major ? 3 : 1);
   if (drawn.length !== (major ? 3 : 1)) return;
   run.bag[color]--; if (major) run.pv -= 7;
-  if (sinFx(run, "offerRefund") && Math.random() < .5) { run.bag[color]++; sinAbilityNotice(run, "Ladrón de Ofrendas: recuperaste el Bonguri."); }
+  if (!ST.sin.multi && sinFx(run, "offerRefund") && Math.random() < .5) { run.bag[color]++; sinAbilityNotice(run, "Ladrón de Ofrendas: recuperaste el Bonguri."); }
+  sinOthers().filter(o => sinFx(o, "offerRefund")).forEach(o => { o.bag[color]++; sinAbilityNotice(o, `Ladrón de Ofrendas: ganaste el Bonguri de la ofrenda del Entrenador ${sinPlayerNo(run)}.`); });
   run.offered = true;
   if (sinFx(run, "shrinePV")) run.pv += 2;
   run.shrineEvent = {drawn, grade, selected: [], queue: major ? null : drawn.slice(), cursor: 0};
@@ -2806,9 +2838,30 @@ function sinEndTurn() {
   const run = ST.sin.run; if (!run || run.battle || run.progress || run.shrineEvent || run.fateTeleport || (run.offer && !run.offer.closed)) return;
   delete run.frenzyTurn;
   if (run.revive) run.team.forEach(s => { delete s.hpNow; delete s.status; });
-  run.notice = [sinResetTurn(run), sinUltraRound(run)].filter(Boolean).join(" "); sinSave();
+  const m = ST.sin.multi, lastOfRound = !m || m.cur === m.players.length - 1;
+  run.notice = [sinResetTurn(run), lastOfRound ? sinUltraRound(run) : ""].filter(Boolean).join(" "); sinSave();
+  if (m) return sinMultiNext();
   if (run.lost) return renderSin();
   sinUpdateTurn();
+}
+function sinMultiNext() {
+  const m = ST.sin.multi, prev = ST.sin.run, next = (m.cur + 1) % m.players.length;
+  SIN_WORLD.forEach(k => { if (k in prev) m.players[next][k] = prev[k]; });
+  m.cur = next; ST.sin.run = m.players[next]; m.handoff = true; ST.sin.cam = null;
+  sinLeave(); sinSave(); renderSin();
+}
+function sinMultiScore() {
+  const m = ST.sin.multi; if (!m) return "";
+  return `<ul class="sin-score">${m.players.map((p, i) => `<li class="${i === m.cur ? "on" : ""}"><span class="sin-score-dot" style="background:${SIN_PLAYER_COLORS[p.color] || "#447fd2"}"></span>
+    ${pimg(p.team[0]?.species || "Pikachu", 'alt=""')}<span><b>Entrenador ${i + 1}</b>${p.trainer ? " · " + esc(sinTrainer(p)?.n || "") : ""}<small>${esc(SIN_VILLAGES.find(v => v.village === p.village)?.name || "")} · ${esc(p.pv)} PV · ${esc(p.team.length)} Pokémon · Sellos ${esc(p.stamps?.length || 0)}/7${p.campaign === "ultra" ? "" : ` · ${p.won ? "Héroe de Sinnoh" : "Acto " + esc(Math.min(p.act, 4))} · Fragmentos ${esc(p.frag)}`}</small></span></li>`).join("")}</ul>`;
+}
+function sinHandoffScreen() {
+  const m = ST.sin.multi, run = ST.sin.run, v = SIN_VILLAGES.find(x => x.village === run.village);
+  $("app").innerHTML = `<div class="sin-new"><div class="sin-new-inner sin-handoff"><h1>Turno del Entrenador ${m.cur + 1}</h1>
+    <p>Pásale el dispositivo. ${esc(v?.name || "")} · ${esc(esSp(run.team[0]?.species || ""))}</p>
+    <div class="sin-handoff-mon" style="--pc:${SIN_PLAYER_COLORS[run.color] || "#447fd2"}">${pimg(run.team[0]?.species || "Pikachu", 'alt=""')}</div>
+    <div class="sin-new-actions"><button class="btn primary" data-act="sinhandoff">Empezar mi turno</button></div>
+    <h2>Entrenadores</h2>${sinMultiScore()}</div></div>`;
 }
 function sinResetTurn(run) {
   run.turn++; run.moved = 0; run.fought = false; run.healed = false; run.searched = false;
@@ -2996,6 +3049,7 @@ function sinDraw3D() {
     if (h.tokens.some(t => run?.grunts.includes(t.n))) sinBillboard(ctx, sinImage(SIN_GRUNT_IMAGE), sinProj(cam, h.x + 26, y - 14, top), 34);
     const ub = sinUltra(run) && run.ubs.find(u => u.pos.join(",") === h.c + "," + h.r);
     if (ub) sinDrawCoin(ctx, sinProj(cam, h.x, y, top), cam, ub.species, "#2b1145", "#ff5ad2");
+    sinOthers().filter(o => o.pos.join(",") === h.c + "," + h.r && o.team[0]).forEach(o => sinDrawCoin(ctx, sinProj(cam, h.x + (h === me ? -18 : 0), y, top), cam, o.team[0].species, SIN_PLAYER_COLORS[o.color] || "#447fd2", "#cfd6dd"));
     if (h === me) sinDrawCoin(ctx, sinProj(cam, h.x, y, top), cam, run.team[0].species, SIN_PLAYER_COLORS[run.color] || "#447fd2", "#fff");
   });
 }
@@ -3088,6 +3142,15 @@ function sinDraw() {
     }
   });
   sinDrawUltra(ctx, run, z);
+  // Fichas de los demás entrenadores (más pequeñas) y, encima de todo, la del entrenador actual.
+  sinOthers().forEach(o => {
+    const oh = SIN_BY_CELL.get(o.pos.join(",")), pic = o.team[0] && sinPlayerImage(o.team[0].species); if (!oh) return;
+    const same = run && o.pos.join(",") === run.pos.join(","), x = oh.x + (same ? -SIN_H * .55 : 0), y = oh.y + (same ? SIN_H * .35 : 0), rad = SIN_H * .55;
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fillStyle = SIN_PLAYER_COLORS[o.color] || "#447fd2"; ctx.fill();
+    ctx.strokeStyle = "#e8edf2"; ctx.lineWidth = 2; ctx.stroke(); ctx.beginPath(); ctx.arc(x, y, rad - 5, 0, Math.PI * 2); ctx.fillStyle = "#f4f8fc"; ctx.fill(); ctx.clip();
+    if (pic) { const {im, strip} = pic, w = im.naturalWidth / (strip ? 2 : 1), ht = im.naturalHeight, sc = (rad - 5) * 2 / Math.max(w, ht); ctx.imageSmoothingEnabled = !strip; ctx.drawImage(im, 0, 0, w, ht, x - w * sc / 2, y - ht * sc / 2, w * sc, ht * sc); }
+    ctx.restore();
+  });
   // La ficha se dibuja al final para quedar siempre por encima de todos los tokens.
   const h = run && SIN_BY_CELL.get(run.pos.join(","));
   if (h) {
@@ -3263,6 +3326,7 @@ function sinLeave() {
 function renderSin() {
   sinLeave();
   if (!ST.sin.run) return sinNewScreen();
+  if (ST.sin.multi?.handoff) return sinHandoffScreen();
   sinMigrateTeam(ST.sin.run);
   if (ST.sin.run.trainerOffer && !ST.sin.run.battle && !ST.sin.run.progress) return sinTrainerScreen();
   if (ST.sin.run.shrineEvent) return sinShrineScreen();
@@ -3273,7 +3337,7 @@ function renderSin() {
   if (ST.sin.run.act === 4 && !ST.sin.run.won) return sinFinalScreen();
   if (ST.sin.run.won && ST.sin.run.victory && !ST.sin.run.victorySeen) return sinVictoryScreen();
   $("app").innerHTML = `<div class="sin-layout"><header class="sin-top"><button class="back" data-act="sinback">‹ Batalla</button><h1>Leyendas de Sinnoh</h1>
-    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter" aria-label="Centrar ficha">Centrar<span class="sin-wide"> ficha</span></button><button class="btn" data-act="sintilt">Vista 3D</button><button class="btn" data-act="sinyaw" data-dir="-1" aria-label="Girar a la izquierda">⟲</button><button class="btn" data-act="sinyaw" data-dir="1" aria-label="Girar a la derecha">⟳</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
+    ${ST.sin.multi ? '<button class="btn sin-wide-only" data-act="sinplayerspanel">Entrenadores</button>' : ""}<div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter" aria-label="Centrar ficha">Centrar<span class="sin-wide"> ficha</span></button><button class="btn" data-act="sintilt">Vista 3D</button><button class="btn" data-act="sinyaw" data-dir="-1" aria-label="Girar a la izquierda">⟲</button><button class="btn" data-act="sinyaw" data-dir="1" aria-label="Girar a la derecha">⟳</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
     <div class="sin-stage"><canvas id="sin-map" tabindex="0" aria-label="Mapa de Sinnoh. Arrastra para mover, pellizca o usa más y menos para acercar. Toca una casilla para ver su ficha."></canvas><div class="sin-hint">Arrastra para mover · Pellizca o usa + / − para acercar · Toca una casilla</div></div>
     <section class="sin-card" id="sin-card" aria-live="polite" hidden></section><footer class="sin-turn" id="sin-turn" aria-live="polite"></footer></div>`;
   const saved = ST.sin.cam, cam = saved && [saved.x, saved.y, saved.z].every(Number.isFinite) && saved.z > 0 ? {...saved} : null;
@@ -3338,7 +3402,7 @@ document.addEventListener("click", e => {
   if (act === "sin") { if (B) B.dead = true; B = null; return go("sin"); }
   if (VIEW !== "sin") return;
   if (SIN_NEW.busy || SIN_BUSY) return;
-  if (act === "sinback") { sinLeave(); SIN_NEW = {village: null, species: null, busy: false}; return go("menu"); }
+  if (act === "sinback") { sinLeave(); SIN_NEW = {village: null, species: null, busy: false, mode: SIN_NEW.mode, players: 1, made: []}; return go("menu"); }
   if (act === "sinvillage") {
     SIN_NEW.village = SIN_VILLAGES.find(v => v.village === b.dataset.village); SIN_NEW.species = null; return sinNewScreen();
   }
@@ -3349,6 +3413,10 @@ document.addEventListener("click", e => {
     if (SIN_NEW.species) SIN_NEW.species = null; else SIN_NEW.village = null; return sinNewScreen();
   }
   if (act === "sinbegin") return sinBegin();
+  if (act === "sinplayers") { if (SIN_NEW.made?.length) return; SIN_NEW.players = Math.max(1, Math.min(4, +b.dataset.n || 1)); return sinNewScreen(); }
+  if (act === "sinhandoff" && ST.sin.multi) { ST.sin.multi.handoff = false; sinSave(); return renderSin(); }
+  if (act === "sinplayerspanel" && ST.sin.multi && SIN_VIEW) { SIN_VIEW.panel = null; SIN_VIEW.bag = SIN_VIEW.box = false; SIN_VIEW.selected = null;
+    $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Entrenadores</h2><button class="btn" data-act="sinclose">Cerrar</button></div>${sinMultiScore()}`; $("sin-card").hidden = false; return; }
   if (act === "sinmode") { SIN_NEW.mode = b.dataset.mode === "cards" ? "cards" : "pokemon"; return sinNewScreen(); }
   if (act === "sinbeginultra") return sinBegin(b.dataset.diff);
   if (act === "sintrainer") return sinChooseTrainer(+b.dataset.trainer);
@@ -3356,7 +3424,7 @@ document.addEventListener("click", e => {
   if (act === "sinexplore" && ST.sin.run?.won) { ST.sin.run.victorySeen = true; sinSave(); return renderSin(); }
   if (act === "sinabandon") {
     if (!confirm("¿Abandonar esta partida de Leyendas de Sinnoh? Se perderá su progreso.")) return;
-    sinLeave(); ST.sin.run = null; ST.sin.cam = null; SIN_NEW = {village: null, species: null, busy: false}; sinSave(); return renderSin();
+    sinLeave(); ST.sin.run = null; delete ST.sin.multi; ST.sin.cam = null; SIN_NEW = {village: null, species: null, busy: false, mode: "pokemon", players: 1, made: []}; sinSave(); return renderSin();
   }
   if (act === "sinfight") return sinFight(+b.dataset.offer);
   if (act === "singrunts") return sinFight(null, true);

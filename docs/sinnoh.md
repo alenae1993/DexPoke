@@ -469,3 +469,13 @@ Las etiquetas de la carta dan su bioma y clima.
 - Objetos con ícono (`sinItemIcon`: íconos del juego vía Essentials; los artefactos del mod usan la imagen de su ficha) y descripción (`sinItemDesc`, según el modo de la partida) en la Bolsa y en «Mi equipo».
 - `sinCardView` dibuja la carta con el objeto equipado en el círculo de objeto de la carta y el ícono de estado sobre la ilustración (panel inferior, «Mi equipo», combate y selecciones del Modo Cartas).
 - Modo Cartas: antes de cada combate (con más de un Pokémon en pie) `sinLeadScreen` muestra las cartas del equipo para elegir quién sale primero; se guarda en `run.battle.lead` y reordena `run.battle.indices`. En Modo Batalla Pokémon esto lo hace la vista previa del combate.
+
+
+## Multijugador en el mismo dispositivo (2026-11-01)
+
+En la nueva partida se eligen de 1 a 4 entrenadores. Cada uno prepara su pueblo (no se repiten) e inicial; el primero elige el modo (Batalla Pokémon o Cartas) y la campaña, y los demás la siguen. `ST.sin.multi = {players, cur, handoff}`: cada entrenador es una partida completa y `ST.sin.run` es el actual (`players[cur]` se guarda como `null` para no duplicarlo; se reconecta al cargar). Las claves de `SIN_WORLD` (escondites, santuarios, legendarios, mazos de Destino y de santuario, Ginkgo, descartes, Origin y todo lo de Ultra Explosión) pasan del entrenador que termina al siguiente.
+
+- **Terminar turno** pasa al siguiente entrenador con una pantalla de "pásale el dispositivo" y la tabla de entrenadores (también en Menú → Entrenadores). Los Ultraentes se mueven una vez por ronda (al terminar el último).
+- En el mapa se ven las fichas de los demás entrenadores (más pequeñas).
+- Habilidades que piden otros entrenadores, con su efecto original: Ladrón de Ofrendas (ganas el Bonguri de la ofrenda de otro), Monopolio Comercial (ganas los Bonguri que otro paga a Ginkgo) y Gran Primicia (+3 PV cuando otro consigue un sello). Jugando solo siguen con su adaptación.
+- Final Traidor: el mod no trae sus reglas, así que sigue sin estar disponible.
