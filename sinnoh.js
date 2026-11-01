@@ -1239,6 +1239,23 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
+  .sin-wide-only{display:contents}.sin-menu-btn,.sin-narrow{display:none!important}
+  @media(max-width:760px){.sin-wide-only,.sin-wide,.sin-tools [data-act=sinabandon],.sin-top h1{display:none!important}.sin-menu-btn{display:inline-flex!important}.sin-narrow{display:inline!important}
+    .sin-turn{flex-wrap:wrap;gap:6px 8px!important}.sin-turn-info{flex:1 1 0!important;min-width:0;white-space:nowrap;font-size:13px;overflow:hidden;text-overflow:ellipsis}.sin-turn>.btn{flex:none;padding:8px 9px;font-size:13px}
+    .sin-turn>p,.sin-turn>.sin-notice,.sin-turn>div:not(.sin-turn-info){flex-basis:100%}
+    .sin-top{flex-wrap:nowrap!important}.sin-tools{flex-wrap:nowrap!important;width:auto!important;margin-left:auto}.sin-tools{gap:4px!important}.sin-tools .btn{min-width:30px!important;padding:5px 5px;font-size:11px;white-space:nowrap}.sin-top .back{white-space:nowrap;padding:6px 0}.sin-top{gap:6px!important;padding:8px 8px!important}
+    .sin-card{max-height:58dvh}}
+  .sin-menu-bg{position:fixed;inset:0;z-index:55;background:#0005;display:flex;justify-content:flex-end;align-items:flex-start;padding:max(8px,env(safe-area-inset-top)) 8px 8px}
+  .sin-menu{width:min(250px,78vw);background:#F8F8F8;border:4px solid #4A4F5C;border-radius:10px;box-shadow:inset 0 0 0 2px #fff,0 6px 0 #0006;padding:6px;display:flex;flex-direction:column;gap:2px;animation:sinMenuIn .16s steps(4) both}
+  @keyframes sinMenuIn{from{transform:translateX(30%);opacity:0}}
+  .sin-menu button{display:grid;grid-template-columns:44px 1fr;align-items:center;column-gap:8px;min-height:48px;border:2px solid transparent;border-radius:6px;background:none;color:#2A2E36;font:700 17px var(--display);text-align:left;padding:2px 6px;cursor:pointer}
+  .sin-menu button small{grid-column:2;font:400 12px var(--mono);color:#6A7280;margin-top:-6px}
+  .sin-menu button:hover,.sin-menu button:focus-visible{border-color:#E8503A;background:#FFE9E4;outline:none}
+  .sin-menu button:disabled{opacity:.4;cursor:default}
+  .sin-menu-ic{grid-row:span 2;display:grid;place-items:center}.sin-menu-ic img{grid-area:1/1;max-width:40px;max-height:40px;image-rendering:pixelated}
+  .sin-menu-ic img+img{opacity:0}.sin-menu button:hover .sin-menu-ic img+img,.sin-menu button:focus-visible .sin-menu-ic img+img{opacity:1}
+  .sin-menu button:hover .sin-menu-ic img:first-child,.sin-menu button:focus-visible .sin-menu-ic img:first-child{opacity:0}
+  .sin-menu .sin-menu-close{display:block;text-align:center;min-height:40px;margin-top:4px;border-top:2px solid #D8DCE2;border-radius:0 0 6px 6px;font-size:15px}
   .cv{position:relative;display:inline-block;line-height:0}.cv>img{display:block}
   .cv-item{position:absolute;left:12.5%;top:50.2%;width:19%;aspect-ratio:1;border-radius:50%;background:#fff;display:grid;place-items:center;overflow:hidden;box-shadow:0 0 0 2px #b44a2f}
   .cv-item img,.cv-item .itm{width:88%!important;height:88%!important;max-width:none;object-fit:contain;image-rendering:pixelated}
@@ -1483,7 +1500,8 @@ function sinShowTeam() {
       <p><small>Amistad ${esc(s.friendship ?? "—")} · EVs ${esc(Object.values(s.evs || {}).reduce((a, b) => a + b, 0))}/510</small></p></div></li>`;
   };
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Mi equipo · ${esc(run.team.length)}/${esc(sinTeamSlots(run))}</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
-    <ul class="sin-team-list">${run.team.map(row).join("")}</ul><p>En la Caja: ${esc(run.box.length)} Pokémon (se gestionan en los pueblos).</p>`;
+    <p>Puntos de Viaje (PV): <b>${esc(run.pv)}</b></p>
+    <ul class="sin-team-list">${run.team.map(row).join("")}</ul>${run.mode === "cards" && typeof cardEvoHTML === "function" ? cardEvoHTML(run) : ""}<p>En la Caja: ${esc(run.box.length)} Pokémon (se gestionan en los pueblos).</p>`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
 }
 /* ---------- Área de entrenador (panel inferior, tal cual el mod) ----------
@@ -1551,10 +1569,11 @@ function sinUpdateTurn() {
   const run = ST.sin.run; if (!run || !SIN_VIEW) return;
   const max = sinMaxMoves(run), left = run.fought || run.revive ? 0 : Math.max(0, max - run.moved);
   SIN_VIEW.reachable = run.fateTeleport ? sinTeleportCells(run) : sinReachable(run.pos, left);
-  $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · Movimientos: ${esc(left)}/${esc(max)} · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}${sinUltra(run) ? ` · <b>Brecha ${esc(Math.floor(run.breach))} %</b>` : ""}</div>
-    ${ST.sin.boardHidden ? `<div class="sin-team">${sinTeamHTML(run)}</div>` : sinBoardHTML(run)}
+  $("sin-turn").innerHTML = `<div class="sin-turn-info">Turno ${esc(run.turn)} · <span class="sin-wide">Movimientos: </span><span class="sin-narrow">Mov. </span>${esc(left)}/${esc(max)}<span class="sin-wide"> · PV: ${esc(run.pv)} · Equipo ${esc(run.team.length)}/${esc(sinTeamSlots(run))}${sinUltra(run) ? ` · <b>Brecha ${esc(Math.floor(run.breach))} %</b>` : ""}</span></div>
+    <button class="btn sin-menu-btn" data-act="sinmenu" aria-haspopup="menu">Menú</button>
+    <div class="sin-wide-only">${ST.sin.boardHidden ? `<div class="sin-team">${sinTeamHTML(run)}</div>` : sinBoardHTML(run)}
     <button class="btn" data-act="sinboard">${ST.sin.boardHidden ? "Mostrar panel" : "Ocultar panel"}</button>
-    ${ST.sin.boardHidden ? `<button class="btn" data-act="sinteam">Equipo</button><button class="btn" data-act="sinbag">Bolsa</button><button class="btn" data-act="sincampaign">Campaña</button><button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>${run.trainer ? '<button class="btn" data-act="sintrainerpanel">Entrenador</button>' : ""}` : ""}
+    ${ST.sin.boardHidden ? `<button class="btn" data-act="sinteam">Equipo</button><button class="btn" data-act="sinbag">Bolsa</button><button class="btn" data-act="sincampaign">Campaña</button><button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>${run.trainer ? '<button class="btn" data-act="sintrainerpanel">Entrenador</button>' : ""}` : ""}</div>
     ${sinUltra(run) && run.blessings > 0 ? `<button class="btn" data-act="sinbless" ${run.blessSkip ? "disabled" : ""}>Bendición de Arceus (${esc(run.blessings)})${run.blessSkip ? ": activa" : ""}</button>` : ""}
     ${sinFx(run, "flyAnywhere") && !sinVillage(run) ? `<button class="btn" data-act="sinflyopen" ${run.flown || run.fought ? "disabled" : ""}>Volar</button>` : ""}
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
@@ -1567,6 +1586,19 @@ function sinUpdateTurn() {
   else if (SIN_VIEW.panel === "trainer") sinTrainerPanel();
   else if (SIN_VIEW.panel === "team") sinShowTeam();
   else if (SIN_VIEW.box) sinShowBox(); else if (SIN_VIEW.bag) sinShowBag(); else if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
+}
+// Menú de pausa del celular (íconos del menú de Pokémon Añil, ui/menu): abre los mismos paneles que el área de entrenador.
+const SIN_MENU = [["sinteam", "Equipo", "pokemonA", "pokemonB"], ["sinbag", "Bolsa", "bagA", "bagBm"], ["sincraftmenu", "Elaborar", "vial", "vial"],
+  ["sincampaign", "Misión", "radar", "radar"], ["sintrainerpanel", "Ficha de entrenador", "playercardA", "playercardB"],
+  ["sinstamps", "Sellos de Viaje", "pokedexA", "pokedexB"], ["sinboardcard", "Área de entrenador", "optionsA", "optionsB"], ["sinabandon", "Abandonar partida", "exitA", "exitB"]];
+function sinOpenMenu() {
+  const run = ST.sin.run; if (!run || document.querySelector(".sin-menu-bg")) return;
+  const box = document.createElement("div"); box.className = "sin-menu-bg";
+  box.innerHTML = `<nav class="sin-menu" role="menu" aria-label="Menú">${SIN_MENU.map(([act, name, a, b]) =>
+    `<button role="menuitem" data-act="${act}" ${act === "sintrainerpanel" && !run.trainer ? "disabled" : ""}><span class="sin-menu-ic"><img src="ui/menu/${a}.png" alt=""><img src="ui/menu/${b}.png" alt=""></span>${esc(name)}${act === "sinteam" ? `<small>${esc(run.team.length)}/${esc(sinTeamSlots(run))} · ${esc(run.pv)} PV</small>` : act === "sinstamps" ? `<small>${esc(run.stamps.length)}/7</small>` : act === "sincampaign" && sinUltra(run) ? `<small>Brecha ${esc(Math.floor(run.breach))} %</small>` : ""}</button>`).join("")}
+    <button class="sin-menu-close" data-act="sinmenuclose">Cerrar</button></nav>`;
+  box.addEventListener("click", e => { if (e.target === box) box.remove(); });
+  document.body.appendChild(box); box.querySelector("button:not(:disabled)")?.focus();
 }
 function sinCampaignHTML(run) {
   const act = SIN_ACTS[run.act], home = SIN_VILLAGES.find(v => v.village === run.village)?.name || run.village;
@@ -1668,7 +1700,7 @@ function sinShowBag() {
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Bolsa</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
     <ul class="sin-bag">${Object.entries(SIN_BONGURI).map(([k, [name, , color]]) =>
       `<li><span class="sin-bonguri" style="background:${color}" aria-hidden="true"></span>Bonguri ${esc(name)} ×${esc(run.bag[k])}</li>`).join("")}</ul>
-    <h2>Balls</h2><div class="sin-recipes">${Object.entries(SIN_BALLS).filter(([, b]) => b.recipe).map(([key, ball]) => `<div class="sin-recipe"><span><b>${esc(ball.name)} ×${esc(run.balls[key])}</b>
+    <h2 id="sin-craft">Balls</h2><div class="sin-recipes">${Object.entries(SIN_BALLS).filter(([, b]) => b.recipe).map(([key, ball]) => `<div class="sin-recipe"><span><b>${esc(ball.name)} ×${esc(run.balls[key])}</b>
       <small>${Object.entries(ball.recipe).map(([k, n]) => `${esc(n)} Bonguri ${esc(SIN_BONGURI[k][0])}`).join(" + ")}</small></span>
       <button class="btn" data-act="sincraft" data-ball="${key}" ${sinCanCraft(run, key) ? "" : "disabled"}>Fabricar</button></div>`).join("")}</div>
     <h2>Estofados</h2><p>Cada estofado se puede elaborar una vez por turno y se consume al instante.</p>
@@ -3086,7 +3118,7 @@ function sinApplyTilt() {
   const c = SIN_VIEW?.canvas; if (!c) return;
   c.style.transform = "";
   const t = sinTilt(), b = document.querySelector('[data-act="sintilt"]');
-  if (b) b.textContent = t === 55 ? "Vista 3D" : t ? "3D alta" : "Vista 2D";
+  if (b) b.innerHTML = t === 55 ? "<span class=\"sin-wide\">Vista </span>3D" : t ? "3D alta" : "<span class=\"sin-wide\">Vista </span>2D";
   document.querySelectorAll('[data-act="sinyaw"]').forEach(x => { x.hidden = !t; });
   sinRequestDraw();
 }
@@ -3153,7 +3185,7 @@ function renderSin() {
   if (ST.sin.run.act === 4 && !ST.sin.run.won) return sinFinalScreen();
   if (ST.sin.run.won && ST.sin.run.victory && !ST.sin.run.victorySeen) return sinVictoryScreen();
   $("app").innerHTML = `<div class="sin-layout"><header class="sin-top"><button class="back" data-act="sinback">‹ Batalla</button><h1>Leyendas de Sinnoh</h1>
-    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter">Centrar ficha</button><button class="btn" data-act="sintilt">Vista 3D</button><button class="btn" data-act="sinyaw" data-dir="-1" aria-label="Girar a la izquierda">⟲</button><button class="btn" data-act="sinyaw" data-dir="1" aria-label="Girar a la derecha">⟳</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
+    <div class="sin-tools"><button class="btn" data-act="sinout" aria-label="Alejar mapa">−</button><button class="btn" data-act="sinin" aria-label="Acercar mapa">+</button><button class="btn" data-act="sincenter" aria-label="Centrar ficha">Centrar<span class="sin-wide"> ficha</span></button><button class="btn" data-act="sintilt">Vista 3D</button><button class="btn" data-act="sinyaw" data-dir="-1" aria-label="Girar a la izquierda">⟲</button><button class="btn" data-act="sinyaw" data-dir="1" aria-label="Girar a la derecha">⟳</button><button class="btn" data-act="sinabandon">Abandonar partida</button></div></header>
     <div class="sin-stage"><canvas id="sin-map" tabindex="0" aria-label="Mapa de Sinnoh. Arrastra para mover, pellizca o usa más y menos para acercar. Toca una casilla para ver su ficha."></canvas><div class="sin-hint">Arrastra para mover · Pellizca o usa + / − para acercar · Toca una casilla</div></div>
     <section class="sin-card" id="sin-card" aria-live="polite" hidden></section><footer class="sin-turn" id="sin-turn" aria-live="polite"></footer></div>`;
   const saved = ST.sin.cam, cam = saved && [saved.x, saved.y, saved.z].every(Number.isFinite) && saved.z > 0 ? {...saved} : null;
@@ -3183,6 +3215,9 @@ document.addEventListener("click", e => {
     }
   }
   const b = e.target.closest("button[data-act]"); if (!b) return;
+  if (b.closest(".sin-menu")) document.querySelector(".sin-menu-bg")?.remove();
+  if (b.dataset.act === "sinmenu") return sinOpenMenu();
+  if (b.dataset.act === "sinmenuclose") return;
   const act = b.dataset.act;
   if (act === "sinstampseen" && ST.sin.run && (VIEW === "sin" || B?.sin)) {
     ST.sin.run.stampNotices = []; sinSave();
@@ -3269,6 +3304,10 @@ document.addEventListener("click", e => {
   if (act === "sinfatecancel" && ST.sin.run.fateTeleport) { delete ST.sin.run.fateTeleport; ST.sin.run.notice = "Teletransporte cancelado; conservas tus cartas."; sinSave(); return sinUpdateTurn(); }
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
+  if (act === "sincraftmenu") { sinShowBag(); const h = $("sin-craft"), c = $("sin-card"); if (h && c) c.scrollTop = h.offsetTop - c.offsetTop - 8; return; }
+  if (act === "sinboardcard") { if (!SIN_VIEW) return; SIN_VIEW.panel = null; SIN_VIEW.bag = SIN_VIEW.box = false; SIN_VIEW.selected = null;
+    $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Área de entrenador</h2><button class="btn" data-act="sinclose">Cerrar</button></div>${sinBoardHTML(ST.sin.run)}`;
+    $("sin-card").hidden = false; sinFillImages(); sinFillPanel(); return; }
   if (act === "sinteam") return sinShowTeam();
   if (act === "sinflipok") { document.querySelector(".sin-flip-bg")?.remove(); ST.sin.run?.flips?.shift(); save(); return sinShowFlips(); }
   if (act === "sinboard") { ST.sin.boardHidden = !ST.sin.boardHidden; save(); sinUpdateTurn(); return sinResize(); }
