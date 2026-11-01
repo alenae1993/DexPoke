@@ -237,6 +237,7 @@ function sinPlayMapFate(god, count) {
 }
 function sinTeleportCells(run) {
   const selection = run.fateTeleport; if (!selection) return new Map();
+  if (selection.tunnel) return new Map(SIN_CELLS.filter(h => sinCellBiome(h) === selection.tunnel && (h.c !== run.pos[0] || h.r !== run.pos[1])).map(h => [h.c + "," + h.r, 1]));
   return new Map(SIN_CELLS.filter(h => {
     const dc = Math.abs(h.c - run.pos[0]), dr = Math.abs(h.r - run.pos[1]);
     return (dc || dr) && (selection.count === 3 ? !h.dw : Math.max(dc, (dc + dr) / 2) <= 3);
@@ -245,9 +246,11 @@ function sinTeleportCells(run) {
 function sinTeleportTo(key) {
   const run = ST.sin.run;
   if (!run?.fateTeleport || !SIN_VIEW || run.battle || run.progress || run.shrineEvent || run.revive || !sinTeleportCells(run).has(key)) return;
-  if (!sinSpendFate(run, "palkia", run.fateTeleport.count)) return;
-  const h = SIN_BY_CELL.get(key), messages = ["¡Palkia te teletransportó sin gastar movimientos!"];
-  delete run.fateTeleport; run.pos = [h.c, h.r]; sinRevealHidden(run, key, messages);
+  const tunnel = run.fateTeleport.tunnel;
+  if (!tunnel && !sinSpendFate(run, "palkia", run.fateTeleport.count)) return;
+  const h = SIN_BY_CELL.get(key), messages = [tunnel ? (tunnel === "Ocean" ? "¡Buceaste hasta otra casilla de Océano!" : "¡Cruzaste un túnel de magma!") : "¡Palkia te teletransportó sin gastar movimientos!"];
+  if (tunnel) run[tunnel === "Ocean" ? "dived" : "tunneled"] = true;
+  delete run.fateTeleport; run.pos = [h.c, h.r]; sinRevealHidden(run, key, messages); sinTourCheck(run, messages);
   run.notice = messages.join(" "); ST.sin.cam = null; sinSave(); renderSin();
 }
 const sinMoveName = name => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
@@ -314,7 +317,7 @@ const SIN_TRAINER_CARDS = SIN.decks.find(d => (d.tags || []).includes("Trainer C
 const SIN_SOLO = "Sin efecto: requiere otros entrenadores.";
 const SIN_DICE = "Sin efecto: depende de los dados del juego de mesa.";
 const SIN_TRAINERS = [
-  {n: "Criador Pokémon", blue: {name: "Movimiento Huevo", t: "Al evolucionar un Pokémon Débil, puedes enseñarle el movimiento de su preevolución como Movimiento Huevo. Ya no puede evolucionar.", a: "Sin efecto: los movimientos ya se aprenden como en los juegos."},
+  {n: "Criador Pokémon", blue: {name: "Movimiento Huevo", t: "Al evolucionar un Pokémon Débil, puedes enseñarle el movimiento de su preevolución como Movimiento Huevo. Ya no puede evolucionar.", a: "Tus Pokémon Débiles entran con +1 Ataque y +1 At. Esp. (Cartas: +1 de fuerza).", perks: [{k: "boost", tier: "W", boosts: {atk: 1, spa: 1}}]},
     red: {name: "IVs Casi Perfectos", t: "Tus Pokémon con Movimiento Huevo ganan +5 de vida y +5 de iniciativa.", a: "Tus Pokémon Débiles entran con +1 Defensa, +1 Def. Esp. y +1 Velocidad.", perks: [{k: "boost", tier: "W", boosts: {def: 1, spd: 1, spe: 1}}]}},
   {n: "Patinadora", blue: {name: "Patinaje sobre Ruedas", t: "Una vez por turno, hasta 2 casillas de Llanura gratis. Los salvajes no legendarios solo huyen tras derrotar a dos de tus Pokémon.", a: "+2 movimientos en los turnos que empiezas en Llanura. Los salvajes huyen solo tras debilitar a dos de tus Pokémon.", fx: {biome: "Plains", flee2: true}},
     red: {name: "Equipo de Protección", t: "Tus Pokémon pueden recibir como máximo 6 de daño de un solo ataque.", a: "Ningún ataque quita más de la mitad de los PS máximos de golpe.", perks: [{k: "maxHit", frac: .5}]}},
@@ -324,10 +327,10 @@ const SIN_TRAINERS = [
     red: {name: "Cesta de Pícnic", t: "Al elaborar un estofado de Bonguri, puedes obtener el efecto de otro estofado gratis.", a: "Al elaborar un estofado, recibes un estofado gratis para usar este turno.", fx: {picnic: true}}},
   {n: "Nadador", blue: {name: "Nadar Rápido", t: "Una vez por turno, hasta 2 casillas de Océano gratis. Tus Pokémon de tipo Agua ganan +1 de iniciativa.", a: "+2 movimientos en los turnos que empiezas en Océano. Tus Pokémon Agua entran con +1 Velocidad.", fx: {biome: "Ocean"}, perks: [{k: "boost", types: ["Water"], boosts: {spe: 1}}]},
     red: {name: "Técnica de la Mariposa", t: "Al atacar con un movimiento de tipo Agua, puedes cambiarlo a tipo Bicho o Volador.", a: "Tus movimientos Agua son un 20 % más fuertes contra Pokémon Planta (adaptación).", perks: [{k: "typePow", types: ["Water"], m: 1.2, vsType: "Grass"}]}},
-  {n: "Soldado Equipo Rocket", blue: {name: "Ladrón de Pokémon", t: "En combate con otro entrenador, puedes intentar capturar su Pokémon con −2 a tus tiradas de captura.", a: "Sin efecto: no se capturan Pokémon de entrenadores."},
+  {n: "Soldado Equipo Rocket", blue: {name: "Ladrón de Pokémon", t: "En combate con otro entrenador, puedes intentar capturar su Pokémon con −2 a tus tiradas de captura.", a: "Al vencer a un entrenador o a los Reclutas, le robas 1 Bonguri al azar.", fx: {thief: true}},
     red: {name: "Retribución", t: "Cuando uno de tus Pokémon se desmaya, inflige 2 de daño al rival. Si te quedas sin Pokémon, puedes viajar a cualquier casilla.", a: "Cuando uno de tus Pokémon se debilita, el rival activo pierde 1/8 de sus PS.", perks: [{k: "retribution"}]}},
   {n: "Triatleta", blue: {name: "Nadar, Pedalear y Correr", t: "Una vez por turno, hasta 2 casillas no montañosas gratis.", a: "+2 movimientos en los turnos que no empiezas en Montaña.", fx: {biome: "!Mountain"}},
-    red: {name: "Triple Amenaza", t: "Si tu Pokémon conoce movimientos de 3 tipos, puede cambiar el tipo de su ataque a cualquiera de ellos.", a: SIN_DICE}},
+    red: {name: "Triple Amenaza", t: "Si tu Pokémon conoce movimientos de 3 tipos, puede cambiar el tipo de su ataque a cualquiera de ellos.", a: "Si tu Pokémon conoce movimientos de 3 tipos o más, sus ataques son un 20 % más fuertes. (Cartas: ataca con el mejor de esos tipos.)", perks: [{k: "triple"}]}},
   {n: "Señorita Aroma", blue: {name: "Dulce Aroma", t: "En las capturas en Árboles de Bonguri, 1 símbolo de estado cuenta como golpe normal.", a: "Las capturas de salvajes de Árboles de Bonguri tienen ratio ×1,5.", fx: {catchTree: 1.5}},
     red: {name: "Remedio Natural", t: "Con un movimiento Planta o Hada, el usuario se cura la mitad del daño infligido.", a: "Igual: tus movimientos Planta y Hada curan la mitad del daño causado.", perks: [{k: "drain", types: ["Grass", "Fairy"]}]}},
   {n: "Modelo", blue: {name: "Dama Afortunada", t: "Los golpes críticos hacen +2 de daño y los símbolos de estado −1.", a: "Tus Pokémon tienen +1 nivel de golpe crítico.", perks: [{k: "crit"}]},
@@ -336,19 +339,19 @@ const SIN_TRAINERS = [
     red: {name: "Protector Legendario", t: "Cuando se activa Ultraimpulso, tus legendarios se curan 3 y su siguiente ataque gana +2.", a: "Tus Pokémon legendarios entran con +1 Ataque y +1 Ataque Especial.", perks: [{k: "boost", tier: "L", boosts: {atk: 1, spa: 1}}]}},
   {n: "Domadragón", blue: {name: "Cría Suprema", t: "Al desbloquear, añade un Pokémon Débil de tipo Dragón del mazo con el objeto Dragón Supremo (no se desequipa).", a: "Al desbloquear, recibes un Pokémon Débil de tipo Dragón marcado como Dragón Supremo.", fx: {dragon: true}},
     red: {name: "Fuerza Máxima", t: "Tu Dragón Supremo gana +6 de vida, +2 de iniciativa y +1 de fuerza en todos sus movimientos.", a: "Tu Dragón Supremo entra con +1 Defensa, +1 Def. Esp. y +2 Velocidad y pega un 20 % más fuerte.", perks: [{k: "boost", dragon: true, boosts: {def: 1, spd: 1, spe: 2}}, {k: "typePow", dragon: true, types: "all", m: 1.2}]}},
-  {n: "Bruja", blue: {name: "Magia Inestable", t: "Al infligir un estado, puedes tirar el dado de estado para infligir otro en su lugar.", a: SIN_DICE},
+  {n: "Bruja", blue: {name: "Magia Inestable", t: "Al infligir un estado, puedes tirar el dado de estado para infligir otro en su lugar.", a: "Los efectos secundarios de tus movimientos tienen el doble de probabilidad. (Cartas: si el estado no se puede aplicar, tiras el dado de estado e infliges otro.)", perks: [{k: "serene"}]},
     red: {name: "Lanzador de Hechizos", t: "Puedes infligir estados adicionales. Tus movimientos Fantasma +1 de fuerza.", a: "Tus movimientos Fantasma son un 20 % más fuertes.", perks: [{k: "typePow", types: ["Ghost"], m: 1.2}]}},
-  {n: "Periodistas", blue: {name: "Gran Primicia", t: "Cuando otro entrenador obtiene un Sello de Viaje, puedes desafiarlo y ganarlo.", a: SIN_SOLO},
-    red: {name: "Análisis del Equipo", t: "Fuera de combate, intercambia movimientos enseñados entre tus Pokémon.", a: "Sin efecto: los movimientos se aprenden como en los juegos."}},
-  {n: "Médium", blue: {name: "Alcance Telequinético", t: "Una vez por turno, interactúa con algo a hasta 2 casillas.", a: "Sin efecto en esta versión."},
+  {n: "Periodistas", blue: {name: "Gran Primicia", t: "Cuando otro entrenador obtiene un Sello de Viaje, puedes desafiarlo y ganarlo.", a: "Jugando solo: cada Sello de Viaje que consigues te da 3 PV.", fx: {stampPV: 3}},
+    red: {name: "Análisis del Equipo", t: "Fuera de combate, intercambia movimientos enseñados entre tus Pokémon.", a: "Fuera de combate, tus Pokémon pueden recordar movimientos que ya aprendieron por nivel (Cartas: pasar movimientos enseñados entre ellos). Desde Mi equipo.", fx: {analysis: true}}},
+  {n: "Médium", blue: {name: "Alcance Telequinético", t: "Una vez por turno, interactúa con algo a hasta 2 casillas.", a: "Puedes buscar Pokémon en Árboles y Arrecifes a hasta 2 casillas sin moverte.", fx: {reach: 2}},
     red: {name: "Manipulación Sutil", t: "Con un movimiento Psíquico o Fantasma, cambia el resultado de 1 dado.", a: "Tus movimientos Psíquico y Fantasma son un 20 % más fuertes.", perks: [{k: "typePow", types: ["Psychic", "Ghost"], m: 1.2}]}},
   {n: "Veterana", blue: {name: "Experto Silvestre", t: "Al encontrar un Depósito de Bonguri, ganas 2 Bonguri adicionales del mismo tipo y 1 movimiento más este turno.", a: "Igual.", fx: {stash: true}},
     red: {name: "Fuerza Vendaval", t: "Con un movimiento Hielo o Dragón, añade hasta 2 símbolos de estado.", a: "Tus movimientos Hielo y Dragón son un 20 % más fuertes.", perks: [{k: "typePow", types: ["Ice", "Dragon"], m: 1.2}]}},
-  {n: "Artista", blue: {name: "Esquema Detallado", t: "Tras derrotar a un salvaje, enseña su movimiento a cualquier Pokémon del equipo.", a: "Sin efecto: el dueño desactivó aprender el movimiento del Pokémon derrotado."},
+  {n: "Artista", blue: {name: "Esquema Detallado", t: "Tras derrotar a un salvaje, enseña su movimiento a cualquier Pokémon del equipo.", a: "Tras derrotar a un Pokémon salvaje, obtienes 1 PV adicional.", fx: {pvDefeat: 1}},
     red: {name: "Obra Maestra", t: "Si tu grupo tiene un movimiento de cada tipo, todos tus movimientos +2 de fuerza.", a: "Si tu equipo conoce movimientos de 12 tipos o más, todos tus movimientos son un 30 % más fuertes.", perks: [{k: "masterpiece"}]}},
   {n: "Jardinero", blue: {name: "Elección de Bonguri", t: "Una vez por turno, obtén un Bonguri del Árbol de Bonguri en el que estés.", a: "Igual.", fx: {pick: true}},
     red: {name: "Forma Recortada", t: "Tus Pokémon Planta y Roca ganan +3 de iniciativa y −2 de salud.", a: "Tus Pokémon Planta y Roca entran con +2 Velocidad y −1 Defensa.", perks: [{k: "boost", types: ["Grass", "Rock"], boosts: {spe: 2, def: -1}}]}},
-  {n: "Guitarrista", blue: {name: "Mejora de Potencia", t: "Recibes un dado de Amplificador que crece con los símbolos de estado.", a: SIN_DICE},
+  {n: "Guitarrista", blue: {name: "Mejora de Potencia", t: "Recibes un dado de Amplificador que crece con los símbolos de estado.", a: "Tus ataques son un 30 % más fuertes contra rivales con un problema de estado. (Cartas: los símbolos de estado infligen +1.)", perks: [{k: "amp"}]},
     red: {name: "Exceso de Amplificador", t: "Con un movimiento Eléctrico, duplica tus dados de Amplificador.", a: "Tus movimientos Eléctricos son un 20 % más fuertes.", perks: [{k: "typePow", types: ["Electric"], m: 1.2}]}},
   {n: "Cazabichos", blue: {name: "Frenesí de Captura", t: "Tras capturar un Pokémon Bicho, gana 2 PV y un turno extra (no repetible en el turno extra).", a: "Igual.", fx: {bugFrenzy: true}},
     red: {name: "Experto en Bichos", t: "Tus movimientos Bicho +2 de iniciativa y +1 de fuerza.", a: "Tus movimientos Bicho son un 20 % más fuertes y tus Pokémon Bicho entran con +1 Velocidad.", perks: [{k: "typePow", types: ["Bug"], m: 1.2}, {k: "boost", types: ["Bug"], boosts: {spe: 1}}]}},
@@ -356,7 +359,7 @@ const SIN_TRAINERS = [
     red: {name: "Espíritu de Lucha", t: "Puedes quemar a tu Pokémon; en tipos Lucha la quemadura aumenta su daño.", a: "Tus movimientos Lucha son un 20 % más fuertes.", perks: [{k: "typePow", types: ["Fighting"], m: 1.2}]}},
   {n: "Entrenador Guay", blue: {name: "Creador de Equipo", t: "Reintenta una búsqueda una vez por encuentro. Los objetos de batalla cuestan 1 de cada Bonguri de su receta.", a: "Igual: puedes buscar de nuevo una vez por turno y los objetos de batalla cuestan 1 Bonguri de cada color de su receta.", fx: {research: true, cheapItems: true}},
     red: {name: "Ventaja Competitiva", t: "Tus Pokémon Fuertes ganan +1 de iniciativa.", a: "Tus Pokémon Fuertes entran con +1 Velocidad.", perks: [{k: "boost", tier: "S", boosts: {spe: 1}}]}},
-  {n: "Macarra", blue: {name: "Ladrón de Ofrendas", t: "Cuando otro entrenador hace una Ofrenda, ganas el Bonguri que descartó.", a: SIN_SOLO},
+  {n: "Macarra", blue: {name: "Ladrón de Ofrendas", t: "Cuando otro entrenador hace una Ofrenda, ganas el Bonguri que descartó.", a: "Jugando solo: al hacer una Ofrenda de Santuario, la mitad de las veces recuperas el Bonguri.", fx: {offerRefund: true}},
     red: {name: "Postura Intimidante", t: "Tus Pokémon Siniestro y Veneno reciben −2 de daño.", a: "Tus Pokémon Siniestro y Veneno reciben un 25 % menos de daño.", perks: [{k: "taken", defTypes: ["Dark", "Poison"], m: .75}]}},
   {n: "Ornitólogo", blue: {name: "Silbido de Pájaro", t: "Puedes volar a una aldea desde cualquier casilla descartando 1 Bonguri, si no hay Reclutas en ella.", a: "Igual.", fx: {flyAnywhere: true}},
     red: {name: "Maniobras Evasivas", t: "Tus Pokémon Volador no reciben daño de ataques de 2 o menos.", a: "Tus Pokémon Volador reciben un 50 % menos de daño de movimientos de potencia 60 o menos.", perks: [{k: "taken", defTypes: ["Flying"], m: .5, maxBP: 60}]}},
@@ -365,56 +368,56 @@ const SIN_TRAINERS = [
   {n: "Acólita de Diamante", blue: {name: "Devoción Temporal", t: "Te conviertes en Seguidor de Dialga para siempre; tu ficha cuenta como 2 cartas para Juega 3 de Dialga.", a: "Te conviertes en Seguidor de Dialga para siempre.", fx: {follower: "dialga"}},
     red: {name: "Elegido de Dialga", t: "Busca a Dialga en el mazo de Legendarios y añádelo a tu equipo.", a: "Dialga se une a tu equipo (o a la Caja).", fx: {legend: "Dialga"}}},
   {n: "Pokécolector", blue: {name: "Colección de Sellos", t: "Al reclamar cualquier recompensa de sellos, puedes reclamarla dos veces.", a: "Igual.", fx: {stampsTwice: true}},
-    red: {name: "Coleccionista Pokémon", t: "Los movimientos de las recompensas de sellos sirven para todo el equipo; los descartes se añaden a tu reserva.", a: "Sin efecto: las MT de los sellos ya sirven para todo el equipo."}},
+    red: {name: "Coleccionista Pokémon", t: "Los movimientos de las recompensas de sellos sirven para todo el equipo; los descartes se añaden a tu reserva.", a: "Cada Sello de Viaje que consigues te da también 1 Poké Ball.", fx: {stampBall: true}}},
   {n: "Pescador", blue: {name: "Súper Caña", t: "En los Arrecifes, 1 símbolo de estado cuenta como golpe normal.", a: "Las capturas de salvajes de Arrecifes tienen ratio ×1,5.", fx: {catchReef: 1.5}},
-    red: {name: "Captura del Día", t: "Tus Pokémon ganan salud según su Tamaño de Captura.", a: SIN_DICE}},
+    red: {name: "Captura del Día", t: "Tus Pokémon ganan salud según su Tamaño de Captura.", a: "Los Pokémon que capturas se unen con la salud completa y sin estados.", fx: {catchHeal: true}}},
   {n: "Chef", blue: {name: "Experto en la Materia", t: "Puedes intercambiar los Bonguri de tu bolsa por otros del mismo nivel.", a: "Igual, desde la Bolsa.", fx: {exchange: true}},
     red: {name: "Estofado Maestro", t: "Cuesta 1 de cada Bonguri: tus Pokémon ganan +1 de fuerza en sus movimientos del mismo tipo hasta el final de la batalla.", a: "Nuevo estofado (1 Bonguri de cada color): en el próximo combate, los movimientos del mismo tipo que el usuario son un 20 % más fuertes.", fx: {masterStew: true}}},
   {n: "Mochilero", blue: {name: "Tienda Portable", t: "Restaura al completo 1 Pokémon después de cada encuentro salvaje.", a: "Igual: se cura el Pokémon más herido.", fx: {portable: true}},
-    red: {name: "Capacidad de Carga", t: "Tus Pokémon pueden equiparse hasta 2 objetos distintos.", a: "Sin efecto: el motor permite un objeto por Pokémon."}},
+    red: {name: "Capacidad de Carga", t: "Tus Pokémon pueden equiparse hasta 2 objetos distintos.", a: "Tus Pokémon que llevan un objeto entran con +1 Defensa y +1 Def. Esp. (Cartas: reciben 1 de daño menos.)", perks: [{k: "boost", item: true, boosts: {def: 1, spd: 1}}]}},
   {n: "Damisela", blue: {name: "Herencia Noble", t: "Al desbloquearla, ganas 7 Puntos de Viaje. Los costes de evolución cuestan 2 PV menos.", a: "Al desbloquearla, ganas 7 PV.", fx: {pvUnlock: 7}},
     red: {name: "Hiperpoción", t: "Una vez por combate, restaura la vida y los estados de un Pokémon no debilitado.", a: "Igual, con el Pokémon activo (botón en el combate).", fx: {hyper: true}}},
   {n: "Joven", blue: {name: "Amigos de la Infancia", t: "Tus Pokémon Débiles ganan +1 de salud y +1 de iniciativa.", a: "Tus Pokémon Débiles entran con +1 Defensa y +1 Velocidad.", perks: [{k: "boost", tier: "W", boosts: {def: 1, spe: 1}}]},
     red: {name: "Carrera Futura", t: "Al desbloquearla, roba 5 tarjetas de entrenador y cambia esta por una de ellas, activando sus efectos.", a: "Igual: eliges una de 5 tarjetas nuevas con sus dos habilidades desbloqueadas.", fx: {future: true}}},
   {n: "Aristócrata", blue: {name: "Moneda Amuleto", t: "Tras capturar o derrotar a un Pokémon salvaje, obtienes el doble de Bonguri.", a: "Igual.", fx: {doubleBonguri: true}},
     red: {name: "Gloria Ball", t: "Al desbloquearla, recibes una Gloria Ball que captura automáticamente.", a: "Igual: una Gloria Ball de un solo uso que nunca falla.", fx: {glory: true}}},
-  {n: "Mercader Ginkgo", blue: {name: "Monopolio Comercial", t: "Cuando otro entrenador usa el Comercio Ginkgo, ganas los Bonguri que descarta.", a: SIN_SOLO},
-    red: {name: "Recursos Descartables", t: "Descarta 1 Bonguri para fijar la fuerza de un movimiento en 4/5/6.", a: SIN_DICE}},
+  {n: "Mercader Ginkgo", blue: {name: "Monopolio Comercial", t: "Cuando otro entrenador usa el Comercio Ginkgo, ganas los Bonguri que descarta.", a: "Jugando solo: cada Comercio Ginkgo te da 1 Bonguri extra al azar.", fx: {ginkgoBonus: true}},
+    red: {name: "Recursos Descartables", t: "Descarta 1 Bonguri para fijar la fuerza de un movimiento en 4/5/6.", a: "Tus movimientos de potencia 60 o menos son un 30 % más fuertes. (Cartas: los de fuerza 3 o menos ganan +1.)", perks: [{k: "typePow", types: "all", m: 1.3, maxBP: 60}]}},
   {n: "Esprit", blue: {name: "Planificación Anticipada", t: "Después de un combate, puedes usar los movimientos que te queden sin interactuar con nada más.", a: "Igual: tras combatir conservas los movimientos que te quedaban, pero no puedes buscar, ofrendar ni combatir.", fx: {planning: true}},
     red: {name: "Golpe Oportuno", t: "Si empiezas un combate salvaje sin haberte movido este turno, tu primer ataque hace el doble de daño.", a: "Igual.", fx: {opportune: true}}},
   {n: "Montañero", blue: {name: "Equipo de Montaña", t: "Una vez por turno, hasta 2 casillas de Montaña gratis. Te mueves sin importar la elevación.", a: "+2 movimientos en los turnos que empiezas en Montaña y puedes ignorar la regla de elevación.", fx: {biome: "Mountain", climb: true}},
     red: {name: "Pies Firmes", t: "Tus Pokémon Roca y Tierra ganan +4 de salud y −1 de iniciativa.", a: "Tus Pokémon Roca y Tierra entran con +1 Defensa, +1 Def. Esp. y −1 Velocidad.", perks: [{k: "boost", types: ["Rock", "Ground"], boosts: {def: 1, spd: 1, spe: -1}}]}},
-  {n: "Prendefuegos", blue: {name: "Reunir Leña", t: "Retira un Árbol de Bonguri para añadir 3 de Leña a tu bolsa.", a: "Sin efecto en esta versión."},
+  {n: "Prendefuegos", blue: {name: "Reunir Leña", t: "Retira un Árbol de Bonguri para añadir 3 de Leña a tu bolsa.", a: "En un Árbol de Bonguri puedes Reunir Leña una vez por turno: ganas 2 Bonguri de su color (el árbol sigue ahí).", fx: {firewood: true}},
     red: {name: "Ignición Ardiente", t: "Con un movimiento Fuego, gasta 1 Leña para quemar al rival.", a: "Tus movimientos Fuego son un 20 % más fuertes.", perks: [{k: "typePow", types: ["Fire"], m: 1.2}]}},
   {n: "Acólita de Perla", blue: {name: "Devoción Espacial", t: "Te conviertes en Seguidor de Palkia para siempre.", a: "Igual.", fx: {follower: "palkia"}},
     red: {name: "Elegido de Palkia", t: "Busca a Palkia y añádela a tu equipo.", a: "Palkia se une a tu equipo (o a la Caja).", fx: {legend: "Palkia"}}},
   {n: "Entrenador Aéreo", blue: {name: "Traje de Vuelo", t: "Puedes moverte a casillas 2 o más niveles por debajo; después, 4 casillas más mientras no subas.", a: "Puedes bajar cualquier cantidad de niveles de elevación de un paso.", fx: {glide: true}},
     red: {name: "Superioridad Aérea", t: "Tus movimientos Volador +1 de fuerza si el rival no es Volador.", a: "Igual: +20 %.", perks: [{k: "typePow", types: ["Flying"], m: 1.2, notVs: "Flying"}]}},
-  {n: "Operario", blue: {name: "Ingeniero Civil", t: "Por 2 PV, construye Carreteras.", a: "Sin efecto en esta versión."},
+  {n: "Operario", blue: {name: "Ingeniero Civil", t: "Por 2 PV, construye Carreteras.", a: "Una vez por turno puedes construir una Carretera por 2 PV: +2 movimientos este turno.", fx: {road: true}},
     red: {name: "Obras Viales", t: "Cuando tus Pokémon Acero entran en combate, el rival no puede cambiar ni huir.", a: "Tus Pokémon Acero entran con +1 Defensa y +1 Def. Esp.", perks: [{k: "boost", types: ["Steel"], boosts: {def: 1, spd: 1}}]}},
-  {n: "Turista", blue: {name: "Recorrido Histórico", t: "Marca las Localizaciones Legendarias de Artefactos para obtener Instantáneas Legendarias.", a: "Sin efecto en esta versión."},
-    red: {name: "Álbum de Vacaciones", t: "Enseña las Instantáneas Legendarias como movimientos; si completas el recorrido, +30 PV.", a: "Sin efecto en esta versión."}},
+  {n: "Turista", blue: {name: "Recorrido Histórico", t: "Marca las Localizaciones Legendarias de Artefactos para obtener Instantáneas Legendarias.", a: "La primera vez que llegas a cada Santuario ganas 3 PV.", fx: {tour: true}},
+    red: {name: "Álbum de Vacaciones", t: "Enseña las Instantáneas Legendarias como movimientos; si completas el recorrido, +30 PV.", a: "Si llegas a todos los Santuarios del mapa, ganas 30 PV.", fx: {album: true}}},
   {n: "Acólita Imparcial", blue: {name: "Devoción Eterna", t: "Te conviertes en Seguidor de Arceus: cuentas como seguidor de los 3 Dioses de Sinnoh.", a: "Ganas +1 movimiento por turno con cualquier Dios en el Santuario Origin.", fx: {follower: "arceus"}},
     red: {name: "Sentencia de Arceus", t: "Después de atacar, el rival se debilita si le quedan 2 o menos de vida.", a: "Después de atacar, el rival se debilita si le queda un 10 % de PS o menos.", perks: [{k: "sentence"}]}},
-  {n: "Buceador", blue: {name: "Tesoro Hundido", t: "En Océano, saca un Punto Oculto descartado y colócalo en tu casilla.", a: "Sin efecto en esta versión."},
+  {n: "Buceador", blue: {name: "Tesoro Hundido", t: "En Océano, saca un Punto Oculto descartado y colócalo en tu casilla.", a: "Una vez por turno, en Océano, recuperas un escondite de Bonguri ya vaciado y te llevas su contenido.", fx: {treasure: true}},
     red: {name: "Buceo", t: "Después de atacar con un movimiento Agua, el usuario puede cambiar y curarse los estados.", a: "Después de usar un movimiento Agua, el usuario se cura los estados.", perks: [{k: "cleanse", types: ["Water"]}]}},
   {n: "Dama Parasol", blue: {name: "Previsión del Tiempo", t: "Elige un clima; los movimientos de ese clima +2 de fuerza.", a: "Tus movimientos Agua y Fuego son un 20 % más fuertes (lluvia y sol).", perks: [{k: "typePow", types: ["Water", "Fire"], m: 1.2}]},
     red: {name: "Paraguas Útil", t: "Tus Pokémon reciben 2 menos de daño de los movimientos del clima actual.", a: "Tus Pokémon reciben un 15 % menos de daño de movimientos Agua y Fuego.", perks: [{k: "taken", moveTypes: ["Water", "Fire"], m: .85}]}},
   {n: "Chico Ninja", blue: {name: "Ataque Sorpresa", t: "Con Ventaja de Iniciativa, vas primero siempre.", a: "Tus Pokémon entran con +1 Velocidad.", perks: [{k: "boost", boosts: {spe: 1}}]},
-    red: {name: "Dardo Tóxico", t: "Con la Ventaja de Iniciativa, envenena, confunde o adormece al rival.", a: SIN_DICE}},
-  {n: "Soldado Equipo Magma", blue: {name: "Túneles de Magma", t: "Al final de tu turno en Montaña, muévete a cualquier otra casilla de Montaña.", a: "Sin efecto en esta versión."},
+    red: {name: "Dardo Tóxico", t: "Con la Ventaja de Iniciativa, envenena, confunde o adormece al rival.", a: "Tus ataques tienen un 30 % de probabilidad de envenenar. (Cartas: si atacas primero en la ronda, la mitad de las veces envenenas, confundes o adormeces al rival.)", perks: [{k: "dart"}]}},
+  {n: "Soldado Equipo Magma", blue: {name: "Túneles de Magma", t: "Al final de tu turno en Montaña, muévete a cualquier otra casilla de Montaña.", a: "Una vez por turno, en Montaña, puedes viajar por un túnel a cualquier otra casilla de Montaña.", fx: {tunnel: "Mountain"}},
     red: {name: "Tierra Desolada", t: "Fuego +1 de fuerza y tus Pokémon Fuego reciben 1 menos de daño.", a: "Fuego +20 % y tus Pokémon Fuego reciben un 15 % menos de daño.", perks: [{k: "typePow", types: ["Fire"], m: 1.2}, {k: "taken", defTypes: ["Fire"], m: .85}]}},
-  {n: "Científica", blue: {name: "Observación de Campo", t: "Busca en un Árbol, Arrecife o Puerta sin combatir y enseña los movimientos vistos.", a: "Sin efecto: el dueño desactivó aprender movimientos de las cartas al buscar."},
+  {n: "Científica", blue: {name: "Observación de Campo", t: "Busca en un Árbol, Arrecife o Puerta sin combatir y enseña los movimientos vistos.", a: "Al buscar en Árboles, Arrecifes y Puertas ves 1 carta de Pokémon más para elegir.", fx: {scout: true}},
     red: {name: "Análisis de Debilidades", t: "Tu daño por ventaja de tipo aumenta en 1.", a: "Tus ataques súper eficaces hacen un 20 % más de daño.", perks: [{k: "weakness"}]}},
-  {n: "Soldado Equipo Aqua", blue: {name: "Inmersión Submarina", t: "Al final de tu turno en Océano, muévete a cualquier otra casilla de Océano.", a: "Sin efecto en esta versión."},
+  {n: "Soldado Equipo Aqua", blue: {name: "Inmersión Submarina", t: "Al final de tu turno en Océano, muévete a cualquier otra casilla de Océano.", a: "Una vez por turno, en Océano, puedes bucear hasta cualquier otra casilla de Océano.", fx: {tunnel: "Ocean"}},
     red: {name: "Mar Primordial", t: "Agua +1 de fuerza y tus Pokémon Agua reciben 1 menos de daño.", a: "Agua +20 % y tus Pokémon Agua reciben un 15 % menos de daño.", perks: [{k: "typePow", types: ["Water"], m: 1.2}, {k: "taken", defTypes: ["Water"], m: .85}]}},
-  {n: "Ruinamaníaco", blue: {name: "Cazador de Artefactos", t: "Revela 1 Punto Oculto Especial; si es un Artefacto, muévete hasta él y equípalo.", a: "Sin efecto en esta versión."},
+  {n: "Ruinamaníaco", blue: {name: "Cazador de Artefactos", t: "Revela 1 Punto Oculto Especial; si es un Artefacto, muévete hasta él y equípalo.", a: "Una vez por turno revelas 1 escondite al azar; si es un Artefacto, viajas hasta él y te lo llevas.", fx: {artifactHunt: true}},
     red: {name: "Experto en Artefactos", t: "Tus Artefactos ganan +1 de fuerza a sus bonificaciones.", a: "Los movimientos potenciados por un artefacto equipado ganan un 10 % más.", perks: [{k: "artifact"}]}},
-  {n: "Pokémaníaco", blue: {name: "Disfraz Pokémon", t: "Contra un salvaje, puedes usar su movimiento característico.", a: SIN_DICE},
+  {n: "Pokémaníaco", blue: {name: "Disfraz Pokémon", t: "Contra un salvaje, puedes usar su movimiento característico.", a: "Contra Pokémon salvajes, tus Pokémon entran con +1 Velocidad. (Cartas: puedes usar el movimiento característico del salvaje.)", perks: [{k: "boost", wild: true, boosts: {spe: 1}}]},
     red: {name: "Sustituto Inesperado", t: "Recibes el objeto Sustituto: el portador puede cambiarse antes de recibir un ataque.", a: "Recibes una Banda Focus.", fx: {gift: "focussash"}}},
   {n: "Acólita de Platino", blue: {name: "Devoción Renegada", t: "Te conviertes en Seguidor de Giratina para siempre.", a: "Igual.", fx: {follower: "giratina"}},
     red: {name: "Elegido de Giratina", t: "Busca a Giratina y añádela a tu equipo.", a: "Giratina se une a tu equipo (o a la Caja).", fx: {legend: "Giratina"}}},
-  {n: "Pokémon Ranger", blue: {name: "Rancho Pokémon", t: "Puedes usar los espacios bloqueados del equipo para almacenar Pokémon.", a: "Sin efecto: la Caja ya guarda los Pokémon sobrantes."},
+  {n: "Pokémon Ranger", blue: {name: "Rancho Pokémon", t: "Puedes usar los espacios bloqueados del equipo para almacenar Pokémon.", a: "Puedes usar la Caja desde cualquier casilla.", fx: {ranch: true}},
     red: {name: "Compañeros Leales", t: "Tus Pokémon Moderados ganan +1 de vida y +1 de iniciativa por cada espacio desbloqueado.", a: "Tus Pokémon Moderados entran con +1 Defensa y +1 Velocidad por cada Fragmento (máximo +3).", perks: [{k: "boost", tier: "M", perFrag: true, boosts: {def: 1, spe: 1}}]}}
 ];
 const sinTrainer = run => run?.trainer ? SIN_TRAINERS[run.trainer.index] : null;
@@ -433,6 +436,9 @@ function sinCellBiome(h) {
   });
   return dist <= 3 ? best : null;
 }
+// Distancia en casillas hexagonales (la misma medida que el teletransporte de Palkia).
+const sinCellDist = (a, b) => { const dc = Math.abs(a[0] - b[0]), dr = Math.abs(a[1] - b[1]); return Math.max(dc, (dc + dr) / 2); };
+function sinAbilityNotice(run, text) { (run.stampNotices ||= []).push(text); }
 function sinBiomeBonus(run) {
   const biome = sinFx(run, "biome"), here = sinCellBiome(SIN_BY_CELL.get(run.pos.join(",")));
   if (!biome) return 0;
@@ -510,6 +516,7 @@ function sinPerkData(run, team) {
     const types = new Set(team.flatMap(s => s.moves.map(m => Dex.moves.get(m).type)));
     if (types.size >= 12) perks.push({k: "typePow", types: "all", m: 1.3});
   }
+  if (run.battle && (run.battle.trainer || run.battle.swarm)) perks.splice(0, perks.length, ...perks.filter(p => !p.wild));
   if (perks.some(p => p.k === "artifact")) perks.push({k: "artifactTypes", map: Object.fromEntries(Object.values(SIN_ARTIFACTS).filter(a => a.types).map(a => [a.id, a.types]))});
   return perks;
 }
@@ -534,14 +541,20 @@ Dex.data.Conditions.sinperks = {
   onBasePower(bp, user, target, move) {
     let m = 1;
     (this.effectState.perks || []).forEach(p => {
-      if (p.k === "typePow" && sinPerkFits(p, user) && (p.types === "all" || (p.types === "stab" ? user.hasType(move.type) : p.types.includes(move.type))) &&
+      if (p.k === "typePow" && sinPerkFits(p, user) && (!p.maxBP || bp <= p.maxBP) && (p.types === "all" || (p.types === "stab" ? user.hasType(move.type) : p.types.includes(move.type))) &&
         (!p.notVs || !target?.hasType(p.notVs)) && (!p.vsType || target?.hasType(p.vsType))) m *= p.m;
       if (p.k === "artifactTypes" && (p.map[user.item] || []).includes(move.type)) m *= 1.1;
       if (p.k === "first" && !this.effectState.firstUsed) { m *= 2; this.effectState.firstUsed = true; }
+      if (p.k === "triple" && user.sinTriple) m *= 1.2;
+      if (p.k === "amp" && target?.status) m *= 1.3;
     });
     if (user.sinBreach === "chromatic") m *= 1.2;
     if (m !== 1) this.chainModify(m);
     if (user.sinBreach === "quick" && bp > 60) return 60;
+  },
+  onModifyMove(move) {
+    if (!(this.effectState.perks || []).some(p => p.k === "serene") || !move.secondaries) return;
+    move.secondaries = move.secondaries.map(x => x.chance ? {...x, chance: Math.min(100, x.chance * 2)} : x);
   },
   onModifyCritRatio(ratio) { return (this.effectState.perks || []).some(p => p.k === "crit") ? ratio + 1 : ratio; },
   onModifyDamage(damage, source, target, move) {
@@ -577,6 +590,7 @@ Dex.data.Conditions.sinperks = {
       if (p.k === "drain" && p.types.includes(move.type) && move.totalDamage) this.heal(Math.ceil(move.totalDamage / 2), source, source);
       if (p.k === "cleanse" && p.types.includes(move.type) && source.status) source.cureStatus();
       if (p.k === "sentence" && target && target !== source && target.hp > 0 && target.hp <= target.maxhp * .1 && move.category !== "Status") target.faint();
+      if (p.k === "dart" && target && target !== source && target.hp > 0 && move.category !== "Status" && !target.status && this.randomChance(3, 10)) target.trySetStatus("psn", source);
     });
     if (source.sinBreach === "agile" && move.category !== "Status" && source.hp > 0) this.damage(Math.max(1, Math.floor(source.baseMaxhp / 16)), source, source);
   },
@@ -596,13 +610,14 @@ Dex.data.Conditions.sinperks = {
 function sinPerkFits(p, pokemon) {
   if (p.tier && pokemon.sinTier !== p.tier) return false;
   if (p.dragon && !pokemon.sinDragon) return false;
+  if (p.item && !pokemon.item) return false;
   if (p.types && Array.isArray(p.types) && p.k === "boost" && !p.types.some(t => pokemon.hasType(t))) return false;
   return true;
 }
 // Código que se agrega al >eval inicial del combate: niveles de encuentro y condición de efectos.
 function sinPerkEval(run, team) {
   const perks = sinPerkData(run, team);
-  const tiers = team.map((s, i) => `${s.tier ? `a[${i}].sinTier=${JSON.stringify(s.tier)};` : ""}${s.dragon ? `a[${i}].sinDragon=true;` : ""}${s.breach ? `a[${i}].sinBreach=${JSON.stringify(s.breach)};` : ""}`).join("");
+  const tiers = team.map((s, i) => `${s.tier ? `a[${i}].sinTier=${JSON.stringify(s.tier)};` : ""}${s.dragon ? `a[${i}].sinDragon=true;` : ""}${s.breach ? `a[${i}].sinBreach=${JSON.stringify(s.breach)};` : ""}${new Set((s.moves || []).map(m => Dex.moves.get(m).type)).size >= 3 ? `a[${i}].sinTriple=true;` : ""}`).join("");
   return perks.length ? `{const a=battle.sides[0].pokemon;${tiers}const sd=battle.sides[0];sd.sideConditions.sinperks=battle.initEffectState({id:"sinperks",target:sd});sd.sideConditions.sinperks.perks=${JSON.stringify(perks)};}` : "";
 }
 function sinTrainerPanel() {
@@ -942,6 +957,8 @@ function sinCheckStamps(run, event = {}) {
     if (!ok || run.stamps.some(s => s.id === i + 1)) return;
     run.stamps.push({id: i + 1, turn: run.turn, date: new Date().toISOString()}); changed = true;
     run.stampNotices.push(`¡Sello ${i + 1} conseguido! ${SIN_STAMPS[i]}`);
+    if (sinFx(run, "stampPV")) { run.pv += sinFx(run, "stampPV"); run.stampNotices.push(`Gran Primicia: +${sinFx(run, "stampPV")} PV.`); }
+    if (sinFx(run, "stampBall")) { run.balls.poke = (run.balls.poke || 0) + 1; run.stampNotices.push("Coleccionista Pokémon: +1 Poké Ball."); }
   });
   while (run.stampRewards.length < run.stamps.length) {
     const n = run.stampRewards.length + 1, tier = {2: "W", 4: "M", 6: "S"}[n];
@@ -1239,10 +1256,10 @@ sinStyle.textContent = `
   @media(prefers-reduced-motion:reduce){.sin-evolution img{animation:none}}
   .sin-offer{grid-template-columns:repeat(3,minmax(0,1fr))}
   .sin-offer .sin-choice{cursor:default;text-align:center}
-  .sin-wide-only{display:contents}.sin-menu-btn,.sin-narrow{display:none!important}
+  .sin-abil{display:flex;gap:8px;flex-wrap:wrap}.sin-wide-only{display:contents}.sin-menu-btn,.sin-narrow{display:none!important}
   @media(max-width:760px){.sin-wide-only,.sin-wide,.sin-tools [data-act=sinabandon],.sin-top h1{display:none!important}.sin-menu-btn{display:inline-flex!important}.sin-narrow{display:inline!important}
     .sin-turn{flex-wrap:wrap;gap:6px 8px!important}.sin-turn-info{flex:1 1 0!important;min-width:0;white-space:nowrap;font-size:13px;overflow:hidden;text-overflow:ellipsis}.sin-turn>.btn{flex:none;padding:8px 9px;font-size:13px}
-    .sin-turn>p,.sin-turn>.sin-notice,.sin-turn>div:not(.sin-turn-info){flex-basis:100%}
+    .sin-turn>p,.sin-turn>.sin-notice,.sin-turn>div:not(.sin-turn-info){flex-basis:100%;order:5}
     .sin-top{flex-wrap:nowrap!important}.sin-tools{flex-wrap:nowrap!important;width:auto!important;margin-left:auto}.sin-tools{gap:4px!important}.sin-tools .btn{min-width:30px!important;padding:5px 5px;font-size:11px;white-space:nowrap}.sin-top .back{white-space:nowrap;padding:6px 0}.sin-top{gap:6px!important;padding:8px 8px!important}
     .sin-card{max-height:58dvh}}
   .sin-menu-bg{position:fixed;inset:0;z-index:55;background:#0005;display:flex;justify-content:flex-end;align-items:flex-start;padding:max(8px,env(safe-area-inset-top)) 8px 8px}
@@ -1475,7 +1492,7 @@ function sinReachable(pos, remaining, parents = null) {
   dist.delete(start); return dist;
 }
 const sinTasty = run => run.stews?.tasty || run.feast?.used.includes("tasty");
-const sinMaxMoves = run => 3 + run.frag + (run.moveBonus || 0) + (sinTasty(run) ? 3 : 0) + (run.originGod && (run.follower === run.originGod || run.followerAll) ? 1 : 0) + (run.biomeBonus || 0) + (run.stashMoves || 0);
+const sinMaxMoves = run => 3 + run.frag + (run.moveBonus || 0) + (sinTasty(run) ? 3 : 0) + (run.originGod && (run.follower === run.originGod || run.followerAll) ? 1 : 0) + (run.biomeBonus || 0) + (run.stashMoves || 0) + (run.roadMoves || 0);
 // Ícono de estado del mod (dado de estados). En el modo Pokémon, Dormido usa el ícono de Somnoliento.
 const SIN_STATUS_NAMES = {par: "Paralizado", brn: "Quemado", frz: "Congelado", psn: "Envenenado", tox: "Gravemente envenenado", slp: "Dormido", conf: "Confuso", drw: "Somnoliento"};
 function sinStatusIcon(st, size = 18) {
@@ -1501,7 +1518,7 @@ function sinShowTeam() {
   };
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Mi equipo · ${esc(run.team.length)}/${esc(sinTeamSlots(run))}</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
     <p>Puntos de Viaje (PV): <b>${esc(run.pv)}</b></p>
-    <ul class="sin-team-list">${run.team.map(row).join("")}</ul>${run.mode === "cards" && typeof cardEvoHTML === "function" ? cardEvoHTML(run) : ""}<p>En la Caja: ${esc(run.box.length)} Pokémon (se gestionan en los pueblos).</p>`;
+    <ul class="sin-team-list">${run.team.map(row).join("")}</ul>${run.mode === "cards" && typeof cardEvoHTML === "function" ? cardEvoHTML(run) : ""}${sinAnalysisHTML(run)}<p>En la Caja: ${esc(run.box.length)} Pokémon (se gestionan en los pueblos).</p>`;
   $("sin-card").hidden = false; sinFillImages(); sinRequestDraw();
 }
 /* ---------- Área de entrenador (panel inferior, tal cual el mod) ----------
@@ -1575,9 +1592,10 @@ function sinUpdateTurn() {
     <button class="btn" data-act="sinboard">${ST.sin.boardHidden ? "Mostrar panel" : "Ocultar panel"}</button>
     ${ST.sin.boardHidden ? `<button class="btn" data-act="sinteam">Equipo</button><button class="btn" data-act="sinbag">Bolsa</button><button class="btn" data-act="sincampaign">Campaña</button><button class="btn" data-act="sinstamps">Sellos (${run.stamps.length}/7)</button>${run.trainer ? '<button class="btn" data-act="sintrainerpanel">Entrenador</button>' : ""}` : ""}</div>
     ${sinUltra(run) && run.blessings > 0 ? `<button class="btn" data-act="sinbless" ${run.blessSkip ? "disabled" : ""}>Bendición de Arceus (${esc(run.blessings)})${run.blessSkip ? ": activa" : ""}</button>` : ""}
+    ${sinAbilityButtons(run)}
     ${sinFx(run, "flyAnywhere") && !sinVillage(run) ? `<button class="btn" data-act="sinflyopen" ${run.flown || run.fought ? "disabled" : ""}>Volar</button>` : ""}
     <button class="btn primary" data-act="sinendturn">Terminar turno</button>
-    ${run.fateTeleport ? '<p>Palkia: toca una casilla resaltada. <button class="btn" data-act="sinfatecancel">Cancelar teletransporte</button></p>' : ""}
+    ${run.fateTeleport ? `<p>${run.fateTeleport.tunnel ? "Toca una casilla resaltada." : "Palkia: toca una casilla resaltada."} <button class="btn" data-act="sinfatecancel">Cancelar</button></p>` : ""}
     ${run.notice ? `<p class="sin-notice">${esc(run.notice)}</p>` : ""}${sinStampNotices(run)}`;
   setTimeout(sinShowFlips, 0); sinFillImages(); if (SIN_VIEW.panel === "ginkgo") sinShowGinkgo(); else if (SIN_VIEW.panel === "fly") sinShowFlight();
   else if (SIN_VIEW.panel === "campaign") sinShowCampaign();
@@ -1586,6 +1604,60 @@ function sinUpdateTurn() {
   else if (SIN_VIEW.panel === "trainer") sinTrainerPanel();
   else if (SIN_VIEW.panel === "team") sinShowTeam();
   else if (SIN_VIEW.box) sinShowBox(); else if (SIN_VIEW.bag) sinShowBag(); else if (SIN_VIEW.selected) sinShowCell(SIN_VIEW.selected); sinRequestDraw();
+}
+// Habilidades de Tarjeta de Entrenador que se usan desde el mapa.
+function sinAbilityButtons(run) {
+  if (!sinMapAction(run)) return "";
+  const biome = sinCellBiome(SIN_BY_CELL.get(run.pos.join(","))), out = [];
+  if (sinFx(run, "road")) out.push(`<button class="btn" data-act="sinroad" ${run.roadMoves || run.pv < 2 ? "disabled" : ""}>Carretera (2 PV)</button>`);
+  const tunnel = sinFx(run, "tunnel");
+  if (tunnel === biome && !run.fought) out.push(`<button class="btn" data-act="sintunnel" ${run[tunnel === "Ocean" ? "dived" : "tunneled"] ? "disabled" : ""}>${tunnel === "Ocean" ? "Bucear" : "Túnel"}</button>`);
+  if (sinFx(run, "treasure") && biome === "Ocean") out.push(`<button class="btn" data-act="sintreasure" ${run.dived2 ? "disabled" : ""}>Tesoro Hundido</button>`);
+  if (sinFx(run, "artifactHunt")) out.push(`<button class="btn" data-act="sinhunt" ${run.hunted ? "disabled" : ""}>Cazar artefacto</button>`);
+  if (sinFx(run, "firewood") && sinCellTokens(SIN_BY_CELL.get(run.pos.join(","))).some(t => /Apricorn Tree$/.test(t.n))) out.push(`<button class="btn" data-act="sinwood" ${run.woodcut ? "disabled" : ""}>Reunir Leña</button>`);
+  return out.length ? `<div class="sin-abil">${out.join("")}</div>` : "";
+}
+function sinAbilityAction(act) {
+  const run = ST.sin.run; if (!run || !sinMapAction(run)) return;
+  const here = run.pos.join(","), biome = sinCellBiome(SIN_BY_CELL.get(here)), pick = () => Object.keys(SIN_BONGURI)[Math.floor(Math.random() * Object.keys(SIN_BONGURI).length)];
+  if (act === "sinroad" && sinFx(run, "road") && !run.roadMoves && run.pv >= 2) { run.pv -= 2; run.roadMoves = 2; run.notice = "Construiste una carretera: +2 movimientos este turno."; }
+  else if (act === "sintunnel" && sinFx(run, "tunnel") === biome && !run.fought && !run[biome === "Ocean" ? "dived" : "tunneled"]) {
+    run.fateTeleport = {tunnel: biome}; run.notice = biome === "Ocean" ? "Toca una casilla de Océano resaltada para bucear hasta ella." : "Toca una casilla de Montaña resaltada para cruzar el túnel.";
+  } else if (act === "sintreasure" && sinFx(run, "treasure") && biome === "Ocean" && !run.dived2) {
+    run.dived2 = true;
+    const spent = Object.values(run.hidden).filter(x => !x.present && /Apricorn Stash$/.test(SIN.tokens[x.token]?.n || ""));
+    const x = spent[Math.floor(Math.random() * spent.length)];
+    if (x) { const color = /^(\w+) Apricorn Stash$/.exec(SIN.tokens[x.token].n)[1].toLowerCase(), n = x.amount || 1; run.bag[color] += n; run.notice = `Tesoro Hundido: recuperaste ${n} Bonguri ${SIN_BONGURI[color][n === 1 ? 0 : 1]}.`; }
+    else { const k = pick(); run.bag[k]++; run.notice = `Tesoro Hundido: aún no vaciaste escondites; encontraste 1 Bonguri ${SIN_BONGURI[k][0]}.`; }
+  } else if (act === "sinhunt" && sinFx(run, "artifactHunt") && !run.hunted) {
+    run.hunted = true;
+    const keys = Object.keys(run.hidden).filter(k => run.hidden[k].present && !run.hidden[k].revealed), key = keys[Math.floor(Math.random() * keys.length)];
+    if (!key) run.notice = "No quedan escondites boca abajo.";
+    else {
+      const t = SIN.tokens[run.hidden[key].token];
+      if (SIN_ARTIFACTS[t.n]) { const h = SIN_BY_CELL.get(key), messages = ["¡Era un Artefacto! Viajas hasta él."]; run.pos = [h.c, h.r]; sinRevealHidden(run, key, messages); run.notice = messages.join(" "); ST.sin.cam = null; }
+      else run.notice = `Cazador de Artefactos: el escondite revisado guarda ${sinName(t)}, no un Artefacto.`;
+    }
+  } else if (act === "sinwood" && sinFx(run, "firewood") && !run.woodcut) {
+    const tree = sinCellTokens(SIN_BY_CELL.get(here)).find(t => /Apricorn Tree$/.test(t.n)); if (!tree) return;
+    const color = (/^(\w+) Apricorn Tree$/.exec(tree.n)?.[1] || "").toLowerCase(), k = SIN_BONGURI[color] ? color : pick();
+    run.woodcut = true; run.bag[k] += 2; run.notice = `Reuniste leña: +2 Bonguri ${SIN_BONGURI[k][1]}.`;
+  } else return;
+  sinSave(); sinUpdateTurn();
+}
+// Análisis del Equipo: recordar movimientos por nivel (Batalla Pokémon) o pasar movimientos enseñados (Modo Cartas).
+function sinAnalysisHTML(run) {
+  if (!sinFx(run, "analysis") || !sinMapAction(run)) return "";
+  if (run.mode === "cards") {
+    const rows = run.team.flatMap((s, i) => (s.cmoves || []).map((m, j) => run.team.map((t, k) => k !== i && t.card && (m.type === "Typeless" || t.card.learn.includes(m.type)) && !cardMoves(t).some(x => x.name === m.name) && (t.cmoves || []).length < 2 ?
+      `<button class="btn" data-act="sinpassmove" data-from="${i}" data-slot="${j}" data-to="${k}">${esc(m.name)}: ${esc(esSp(s.species))} → ${esc(esSp(t.species))}</button>` : "").join(""))).join("");
+    return `<h2>Análisis del Equipo</h2>${rows ? `<div class="btns">${rows}</div>` : "<p>Ningún movimiento enseñado se puede pasar ahora (el que lo recibe debe poder aprender su tipo y tener un espacio libre).</p>"}`;
+  }
+  const rows = run.team.map((s, i) => {
+    const learned = (sinSpeciesData(s.species)?.lv || []).filter(([n]) => n > 0 && n <= s.level).map(([, m]) => toID(m)).filter(m => Dex.moves.get(m).exists && !s.moves.includes(m));
+    return [...new Set(learned)].map(m => `<button class="btn" data-act="sinremind" data-member="${i}" data-move="${m}">${esc(esSp(s.species))}: ${esc(esMove(m))}</button>`).join("");
+  }).join("");
+  return `<h2>Análisis del Equipo · Recordar movimientos</h2><p>El movimiento recordado reemplaza al último de la lista si ya conoce 4.</p>${rows ? `<div class="btns">${rows}</div>` : "<p>No hay movimientos para recordar.</p>"}`;
 }
 // Menú de pausa del celular (íconos del menú de Pokémon Añil, ui/menu): abre los mismos paneles que el área de entrenador.
 const SIN_MENU = [["sinteam", "Equipo", "pokemonA", "pokemonB"], ["sinbag", "Bolsa", "bagA", "bagBm"], ["sincraftmenu", "Elaborar", "vial", "vial"],
@@ -1795,6 +1867,7 @@ function sinTrade(index, card) {
   const trade = SIN_TRADES[run.ginkgo][index]; if (!trade || !sinCanPay(run, trade[0])) return;
   sinPay(run, trade[0]); Object.entries(trade[1]).forEach(([k, n]) => { run.bag[k] += n; });
   run.traded = true; run.ginkgo = sinNextGinkgo(run.ginkgo);
+  if (sinFx(run, "ginkgoBonus")) { const k = Object.keys(SIN_BONGURI)[Math.floor(Math.random() * Object.keys(SIN_BONGURI).length)]; run.bag[k]++; sinAbilityNotice(run, `Monopolio Comercial: +1 Bonguri ${SIN_BONGURI[k][0]}.`); }
   run.notice = `Comerciaste con Ginkgo: recibiste ${sinRecipeText(trade[1])}.`; sinSave(); sinUpdateTurn();
 }
 const sinFlightBlocked = (run, village) => run.grunts.includes(village);
@@ -2052,6 +2125,7 @@ function sinMoveTo(key) {
     const h = SIN_BY_CELL.get(step); run.pos = [h.c, h.r]; run.moved++;
     if (sinRevealHidden(run, step, messages)) break;
   }
+  sinTourCheck(run, messages);
   run.notice = messages.join(" "); sinSave();
   if (run.offer && !run.offer.closed) renderSin(); else sinUpdateTurn();
 }
@@ -2103,9 +2177,9 @@ function sinSearch(index) {
   if (t.n === "Alpha Pokémon" && hidden?.token === index && hidden.revealed && hidden.present) {
     sinAlphaOffer(run, hidden, key); sinSave(); return renderSin();
   }
-  if (!sinSearchToken(t) || t.cell.join(",") !== key) return;
+  if (!sinSearchToken(t) || (t.cell.join(",") !== key && !(sinFx(run, "reach") && sinCellDist(t.cell, run.pos) <= sinFx(run, "reach")))) return;
   const [lo, hi] = SIN_WILD_LEVELS[t.tier];
-  const cards = shuffle(sinWildCards(t).slice()).slice(0, SIN_OFFER_COUNT[t.tier]).map(c =>
+  const cards = shuffle(sinWildCards(t).slice()).slice(0, SIN_OFFER_COUNT[t.tier] + (sinFx(run, "scout") ? 1 : 0)).map(c =>
     ({species: c.d.sp, img: c.img, level: lo + Math.floor(Math.random() * (hi - lo + 1))}));
   run.searched = true; run.offer = {cards, token: index, place: sinName(t), meta: sinMeta(t), closed: false};
   sinSave(); renderSin();
@@ -2232,12 +2306,23 @@ function sinShowShrine() {
       ${run.pv >= 7 ? `<button class="btn" data-act="sinshrinedraw" data-color="${color}" data-major="1" ${run.bag[color] ? "" : "disabled"}>Ofrenda mayor (7 PV): robar 3 y elegir 2</button>` : ""}</div></div>`).join("")}`;
   $("sin-card").hidden = false;
 }
+function sinTourCheck(run, messages) {
+  if (!sinFx(run, "tour") && !sinFx(run, "album")) return;
+  const shrine = sinHereShrine(run); if (!shrine) return;
+  run.toured ||= [];
+  if (run.toured.includes(shrine.n)) return;
+  run.toured.push(shrine.n);
+  if (sinFx(run, "tour")) { run.pv += 3; messages.push(`Recorrido Histórico: primera visita a ${sinName(shrine)}, +3 PV.`); }
+  const all = [...new Set(SIN.tokens.filter(t => / Shrine$/.test(t.n) && t.cell).map(t => t.n))];
+  if (sinFx(run, "album") && !run.albumDone && all.every(n => run.toured.includes(n))) { run.albumDone = true; run.pv += 30; messages.push("¡Álbum de Vacaciones completo: +30 PV!"); }
+}
 function sinOfferShrine(color, major = false) {
   const run = ST.sin.run, shrine = run && sinHereShrine(run), grade = sinBonguriGrade(color);
   if (!sinMapAction(run) || !shrine || run.offered || sinShrineOccupied(run, shrine.n) || !grade || !(run.bag[color] > 0) || (major && run.pv < 7)) return;
   const drawn = sinDrawShrine(run, major ? 3 : 1);
   if (drawn.length !== (major ? 3 : 1)) return;
   run.bag[color]--; if (major) run.pv -= 7;
+  if (sinFx(run, "offerRefund") && Math.random() < .5) { run.bag[color]++; sinAbilityNotice(run, "Ladrón de Ofrendas: recuperaste el Bonguri."); }
   run.offered = true;
   if (sinFx(run, "shrinePV")) run.pv += 2;
   run.shrineEvent = {drawn, grade, selected: [], queue: major ? null : drawn.slice(), cursor: 0};
@@ -2483,6 +2568,7 @@ function sinResult(won, me) {
     sinGainExp(run, trainer ? run.battle.foes : wild, me, !!trainer);
     if (trainer) {
       sinCheckStamps(run, {trainer: true});
+      if (sinFx(run, "thief")) { const k = Object.keys(SIN_BONGURI)[Math.floor(Math.random() * Object.keys(SIN_BONGURI).length)]; run.bag[k]++; sinAbilityNotice(run, `Ladrón de Pokémon: robaste 1 Bonguri ${SIN_BONGURI[k][0]}.`); }
       run.progress.kind = "trainer";
       if (trainer.kind === "grunt" && run.act === 1) {
         run.act = 2; run.grunts = run.grunts.filter(v => v !== run.village); run.moveBonus += 2;
@@ -2500,7 +2586,7 @@ function sinResult(won, me) {
       run.pv += run.progress.pv;
       if (SIN_SIGNATURE_TEACH && !me.sinCaught && move) run.progress.signature = {move};
       if (run.mode === "cards" && !me.sinCaught) { const c = cardByImg(encounter.card) || cardBySpecies(wild.species); if (c) run.progress.cardTeach = {move: cardStats(c).sig}; }
-      if (!me.sinCaught && sinFx(run, "pvDefeat")) { run.pv += 2; run.progress.pv += 2; }
+      if (!me.sinCaught && sinFx(run, "pvDefeat")) { const n = sinFx(run, "pvDefeat"); run.pv += n; run.progress.pv += n; }
       if (!me.sinCaught) run.discard.push({species: wild.species, tier, signature: move});
       run.progress.unlockTiers = [wild.alpha ? "S" : run.battle.legend ? "L" : tier];
       if (me.sinCaught && sinFx(run, "bugFrenzy") && !run.frenzyTurn && Dex.species.get(wild.species).types.includes("Bug")) { run.pv += 2; run.progress.pv += 2; run.frenzy = true; }
@@ -2515,6 +2601,7 @@ function sinResult(won, me) {
         wild.hpMax = wild.card ? wild.card.hp : calcStat(Dex.species.get(wild.species), wild, "hp");
         wild.hpNow = Math.max(1, Math.min(wild.hpMax, Math.ceil(m.hp / m.max * wild.hpMax)));
         wild.status = SIN_STATUS[m.status] ? m.status : "";
+        if (sinFx(run, "catchHeal")) { delete wild.hpNow; wild.status = ""; }
         const boxed = run.team.length >= sinTeamSlots(run);
         (boxed ? run.box : run.team).push(wild);
         run.caught++;
@@ -2694,7 +2781,7 @@ function sinBoxMember(s) {
 }
 function sinShowBox() {
   const run = ST.sin.run;
-  if (!run || !SIN_VIEW || run.battle || run.progress || !sinAtVillage(run)) return;
+  if (!run || !SIN_VIEW || run.battle || run.progress || !(sinAtVillage(run) || sinFx(run, "ranch"))) return;
   const selected = SIN_VIEW.boxMember;
   SIN_VIEW.box = true; SIN_VIEW.bag = false; SIN_VIEW.selected = null; SIN_VIEW.panel = null;
   $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Caja (${esc(run.box.length)})</h2><button class="btn" data-act="sinclose">Cerrar</button></div>
@@ -2729,6 +2816,7 @@ function sinResetTurn(run) {
   run.offered = false; run.feast = {remaining: 0, used: []}; run.fatePlayed = false; delete run.fateTeleport;
   if (SIN_VIEW) SIN_VIEW.bagStew = false;
   run.offer = null; run.revive = false; run.picked = false; run.researched = false; run.stashMoves = 0; run.biomeBonus = sinBiomeBonus(run);
+  run.roadMoves = 0; run.tunneled = false; run.dived = false; run.dived2 = false; run.hunted = false; run.woodcut = false;
   if (sinFx(run, "wish")) run.team.forEach(s => { if (s.hpNow != null && s.hpNow > 0) { s.hpNow = Math.min(s.hpMax, s.hpNow + Math.ceil(s.hpMax / 10)); if (s.hpNow >= s.hpMax) delete s.hpNow; } });
   return run.stars >= 4 ? sinDrawFate(run, Math.floor(run.stars / 4)) : "";
 }
@@ -3101,11 +3189,11 @@ function sinShowCell(h) {
         ${commander && run.act === 2 && !run.fragments.includes(commander.id) ? `<small>${esc(commander.fragment)} · ${esc(commander.lake)}</small>${here ? `<button class="btn primary sin-move" data-act="sincommander" data-commander="${esc(commander.id)}" ${sinCanChallengeTrainer(run, commander.id) ? "" : "disabled"}>Desafiar ${commander.article === "la" ? "a la" : "al"} ${esc(commander.name)}</button>` : ""}` : ""}
         ${here && t.n === "Origin Shrine" && run.act === 3 && !run.heart ? `<button class="btn primary sin-move" data-act="sinheart" ${run.originGod || !Object.values(run.bag).some(n => n > 0) || run.revive ? "disabled" : ""}>Ofrenda: restaurar el Corazón de Sinnoh</button>${run.originGod ? "<small>Primero derrota o captura al Dios de Sinnoh del santuario.</small>" : ""}` : ""}
         ${here && t.n === "Temple of Sinnoh Battle" && run.act === 3 ? `<button class="btn primary sin-move" data-act="sinhelio" ${sinCanChallengeTrainer(run, "boss") ? "" : "disabled"}>Desafiar a Helio</button>${!run.heart ? "<small>Primero restaura el Corazón de Sinnoh.</small>" : ""}` : ""}
-        ${here && sinSearchToken(t) ? `<button class="btn primary sin-move" data-act="sinsearch" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Buscar Pokémon</button>` : ""}
+        ${(here || (sinFx(run, "reach") && sinCellDist(t.cell, run.pos) <= sinFx(run, "reach"))) && sinSearchToken(t) ? `<button class="btn primary sin-move" data-act="sinsearch" data-token="${SIN.tokens.indexOf(t)}" ${canSearch ? "" : "disabled"}>Buscar Pokémon</button>` : ""}
         ${here && t.n === "Alpha Pokémon" && t.hidden?.revealed ? `<button class="btn primary sin-move" data-act="sinsearch" data-token="${t.hidden.token}" ${canSearch ? "" : "disabled"}>Buscar Pokémon Alfa</button>` : ""}
         ${here && ((t.n === "Campsite" && t.hidden?.revealed) || (t.tags || []).includes("Village Token")) ? `<button class="btn primary sin-move" data-act="sinheal" ${run.healed || run.revive ? "disabled" : ""}>Curar equipo</button><button class="btn sin-move" data-act="singinkgo" ${run.traded || run.revive ? "disabled" : ""}>Comerciar con Ginkgo</button>` : ""}
         ${here && SIN_VILLAGES.some(v => v.village === t.n) ? `<button class="btn sin-move" data-act="sinflyopen" ${run.flown || run.revive || sinFlightBlocked(run, t.n) || !Object.values(run.bag).some(n => n > 0) ? "disabled" : ""}>Volar (1 Bonguri)</button>` : ""}
-        ${here && (t.tags || []).includes("Village Token") ? `<button class="btn sin-move" data-act="sinbox">Caja (${esc(run.box.length)})</button>` : ""}</li>`;
+        ${here && ((t.tags || []).includes("Village Token") || sinFx(run, "ranch")) ? `<button class="btn sin-move" data-act="sinbox">Caja (${esc(run.box.length)})</button>` : ""}</li>`;
     }).join("")}</ul>` : '<p>No hay tokens en esta casilla.</p>'}`;
   $("sin-card").hidden = false; sinRequestDraw();
 }
@@ -3301,9 +3389,18 @@ document.addEventListener("click", e => {
     ST.sin.run.offer.closed = true; ST.sin.run.notice = "Decidiste no combatir. Ya usaste la búsqueda de este turno."; sinSave(); return renderSin();
   }
   if (!SIN_VIEW || !ST.sin.run) return;
-  if (act === "sinfatecancel" && ST.sin.run.fateTeleport) { delete ST.sin.run.fateTeleport; ST.sin.run.notice = "Teletransporte cancelado; conservas tus cartas."; sinSave(); return sinUpdateTurn(); }
+  if (act === "sinfatecancel" && ST.sin.run.fateTeleport) { const wasTunnel = ST.sin.run.fateTeleport.tunnel; delete ST.sin.run.fateTeleport; ST.sin.run.notice = wasTunnel ? "Viaje cancelado." : "Teletransporte cancelado; conservas tus cartas."; sinSave(); return sinUpdateTurn(); }
   if (ST.sin.run.fateTeleport && !["sinbag", "sinclose", "sincenter", "sinin", "sinout"].includes(act)) return;
   if (act === "sinbag") return sinShowBag();
+  if (["sinroad", "sintunnel", "sintreasure", "sinhunt", "sinwood"].includes(act)) return sinAbilityAction(act);
+  if (act === "sinremind" || act === "sinpassmove") {
+    const run = ST.sin.run; if (!sinFx(run, "analysis") || !sinMapAction(run)) return;
+    if (act === "sinremind") { const s = run.team[+b.dataset.member], m = b.dataset.move; if (!s || !Dex.moves.get(m).exists || s.moves.includes(m)) return;
+      if (s.moves.length >= 4) s.moves[3] = m; else s.moves.push(m); run.notice = `${esSp(s.species)} recordó ${esMove(m)}.`; }
+    else { const from = run.team[+b.dataset.from], to = run.team[+b.dataset.to], mv = from?.cmoves?.[+b.dataset.slot]; if (!mv || !to?.card || (to.cmoves || []).length >= 2) return;
+      from.cmoves.splice(+b.dataset.slot, 1); (to.cmoves ||= []).push(mv); run.notice = `${esSp(to.species)} aprendió ${mv.name} de ${esSp(from.species)}.`; }
+    sinSave(); sinUpdateTurn(); return sinShowTeam();
+  }
   if (act === "sincraftmenu") { sinShowBag(); const h = $("sin-craft"), c = $("sin-card"); if (h && c) c.scrollTop = h.offsetTop - c.offsetTop - 8; return; }
   if (act === "sinboardcard") { if (!SIN_VIEW) return; SIN_VIEW.panel = null; SIN_VIEW.bag = SIN_VIEW.box = false; SIN_VIEW.selected = null;
     $("sin-card").innerHTML = `<div class="sin-card-head"><h2>Área de entrenador</h2><button class="btn" data-act="sinclose">Cerrar</button></div>${sinBoardHTML(ST.sin.run)}`;

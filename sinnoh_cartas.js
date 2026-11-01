@@ -160,6 +160,25 @@ function cardEffect(text) {
 
 /* ---------- Combate ---------- */
 let CB = null; // combate en curso
+// Habilidades de combate de la Tarjeta de Entrenador ("perks" de sinnoh.js) traducidas a dados: ±1 de fuerza, de daño o de iniciativa.
+function cardPerkList(run) {
+  if (typeof sinAbilities !== "function") return [];
+  const b = run.battle, wild = !b.trainer && !b.swarm;
+  const list = sinAbilities(run).flatMap(a => a.perks || []).map(p => p.perFrag ? {...p, boosts: Object.fromEntries(Object.entries(p.boosts).map(([k, v]) => [k, v * Math.min(3, run.frag)]))} : p)
+    .filter(p => (!p.perFrag || run.frag > 0) && (!p.wild || wild));
+  if (wild && sinFx(run, "opportune") && b.start?.moved === 0) list.push({k: "first"});
+  if (b.masterStew) list.push({k: "typePow", types: "stab"});
+  return list;
+}
+function cardPerkFits(p, f) {
+  if (f.side !== "p1") return false;
+  if (p.tier && f.set.tier !== p.tier) return false;
+  if (p.dragon && !f.set.dragon) return false;
+  if (p.item && !f.set.item) return false;
+  if (p.k === "boost" && Array.isArray(p.types) && !p.types.some(t => f.set.card.types.includes(t))) return false;
+  return true;
+}
+const cardPerks = (k, f) => (CB?.perks || []).filter(p => p.k === k && (!f || cardPerkFits(p, f)));
 const cardTypeBonus = (moveType, types) => {
   if (!moveType || moveType === "Typeless" || moveType === "???") return 0;
   return types.reduce((sum, t) => sum + (!Dex.getImmunity(moveType, t) ? -4 : Dex.getEffectiveness(moveType, t) * 2), 0);
@@ -179,7 +198,7 @@ function cardStart(run) {
   foeSets.forEach((s, i) => { if (b.wild?.hpNowCard != null && !b.trainer && !b.swarm) s.hpNow = b.wild.hpNowCard; cards.push(s); });
   const mine = b.indices.map(i => cardFighter(run.team[i], i, "p1"));
   const foes = cards.map((s, i) => cardFighter(s, i, "p2")).filter((f, i) => !b.swarm || (!b.captures?.[i] && !b.defeated?.includes(i)));
-  CB = {run, mine, foes, me: mine.find(f => f.hp > 0), foe: foes[0], turn: 1, log: [], token: "p1", over: false, busy: false,
+  CB = {run, perks: cardPerkList(run), mine, foes, me: mine.find(f => f.hp > 0), foe: foes[0], turn: 1, log: [], token: "p1", over: false, busy: false,
     foeName: b.trainer?.name || (b.trainer ? "Reclutas del Equipo Galaxia" : b.swarm ? "Enjambre" : null), wildFaints: 0, ballFails: 0, phase: "choose"};
   VIEW = "sincards"; if (typeof bgm === "function") bgm(b.legend?.god ? "bgm_final" : b.legend || b.swarm ? "bgm_boss" : b.trainer ? "bgm_trainer" : "bgm_wild");
   cardLog(CB.foeName ? `¡${CB.foeName} te desafía!` : `¡Apareció ${esSp(CB.foe.set.species)} salvaje!`);
@@ -187,7 +206,7 @@ function cardStart(run) {
 }
 const cardLog = text => { CB.log.unshift(text); };
 // Orden de la ronda: mayor iniciativa primero; el empate lo gana quien tiene la ficha de Ventaja (y la cede).
-function cardInit(f) { return f.set.card.init - (f.status === "par" ? 3 : 0); }
+function cardInit(f) { return f.set.card.init - (f.status === "par" ? 3 : 0) + cardPerks("boost", f).reduce((a, p) => a + 2 * Math.max(0, p.boosts.spe || 0), 0); }
 function cardNextRound() {
   if (CB.over) return;
   const a = cardInit(CB.me), b = cardInit(CB.foe);
@@ -256,6 +275,13 @@ function cardStrength(att, def, mv, fx) {
   if (fx.revenge) str += att.lastHit || 0;
   if (fx.faintedStr) str += (att.side === "p1" ? CB.mine : CB.foes).filter(f => f.hp <= 0).length;
   if (fx.teamMoveStr) str += (att.side === "p1" ? CB.mine : CB.foes).filter(f => f.hp > 0 && cardMoves(f.set).some(m => cardNorm(m.name) === fx.teamMoveStr.replace(/\.$/, ""))).length;
+  if (att.side === "p1") {
+    cardPerks("typePow", att).forEach(p => {
+      if ((p.maxBP && mv.str > 3) || (p.vsType && !def.set.card.types.includes(p.vsType)) || (p.notVs && def.set.card.types.includes(p.notVs))) return;
+      if (p.types === "all" || (p.types === "stab" ? att.set.card.types.includes(mv.type) : (p.types || []).includes(mv.type))) str += 1;
+    });
+    if (cardPerks("boost", att).some(p => (p.boosts.atk || 0) > 0 || (p.boosts.spa || 0) > 0)) str += 1;
+  }
   if (fx.maxStr) str = Math.min(str, fx.maxStr);
   if (fx.minStr) str = Math.max(str, fx.minStr);
   if (def.status === "frz") str += 2;
@@ -266,6 +292,10 @@ function cardStrength(att, def, mv, fx) {
 }
 function cardRoll(n) { return Array.from({length: n}, () => CARD_DIE[Math.floor(Math.random() * 6)]); }
 function cardSetStatus(target, st, source) {
+  if (st && target.side === "p2" && !target.status && target.hp > 0 && target.set.card.types.includes(CARD_STATUS[st].immune) && cardPerks("serene").length) {
+    const other = Object.keys(CARD_STATUS).filter(k => !target.set.card.types.includes(CARD_STATUS[k].immune));
+    st = other[Math.floor(Math.random() * other.length)]; cardLog("Magia Inestable: el estado cambia.");
+  }
   if (!st || target.hp <= 0 || target.status || target.statusImmune || target.set.card.types.includes(CARD_STATUS[st].immune)) return false;
   target.status = st; cardLog(`¡${esSp(target.set.species)} ahora está ${CARD_STATUS[st].name}!`); return true;
 }
@@ -285,6 +315,7 @@ function cardAttack(att, def, mv) {
   const bestType = list => list.reduce((a, t) => cardTypeBonus(t, def.set.card.types) > cardTypeBonus(a, def.set.card.types) ? t : a, mv.type);
   if (fx.anyType) mv = {...mv, type: bestType(att.set.card.learn)};
   if (fx.ownType) mv = {...mv, type: bestType(att.set.card.types)};
+  if (cardPerks("triple", att).length) { const types = [...new Set(cardMoves(att.set).map(m => m.type).filter(t => t !== "Typeless"))]; if (types.length >= 3) mv = {...mv, type: bestType(types)}; }
   if (fx.allTypes) mv = {...mv, type: bestType(TYPES.map(t => Dex.types.get(t).name))};
   if (fx.copyFx) {
     const other = [...cardMoves(att.set).filter(m => m.name !== mv.name), ...cardMoves(def.set)].map(m => cardEffect(m.effect)).find(o => o.known && !o.copyFx && !o.mimic && !o.metronome);
@@ -322,10 +353,10 @@ function cardAttack(att, def, mv) {
   if (def.marks.reflectCrit && !fx.pure) { reflected = dice.filter(d => d === "crit").length; for (let i = dice.length - 1; i >= 0; i--) if (dice[i] === "crit") dice.splice(i, 1); }
   delete def.marks.reflectCrit;
   const st = count("status"), hits = count("hit"), crits = count("crit");
-  const statusDmg = Math.max(0, (fx.statusBonus || 0) + (att.marks.atkStatus || 0) + (def.marks.defStatus || 0));
+  const statusDmg = Math.max(0, (fx.statusBonus || 0) + (att.marks.atkStatus || 0) + (def.marks.defStatus || 0) + (cardPerks("amp", att).length ? 1 : 0));
   delete att.marks.atkStatus; delete def.marks.defStatus;
   const eff = cardTypeBonus(mv.type, def.set.card.types);
-  let dmg = hits * (1 + (fx.hitBonus || 0)) + crits * (2 + (fx.critBonus || 0)) + st * statusDmg;
+  let dmg = hits * (1 + (fx.hitBonus || 0)) + crits * (2 + (fx.critBonus || 0) + (cardPerks("crit", att).length ? 1 : 0)) + st * statusDmg;
   if (dice.length) dmg += cardTypeBonus(mv.type, def.set.card.types);
   if (fx.extraVsType && def.set.card.types.includes(fx.extraVsType[1])) dmg += fx.extraVsType[0];
   if (fx.knowsType && cardMoves(att.set).some(m => m !== mv && m.type === fx.knowsType[0])) dmg += fx.knowsType[1];
@@ -339,6 +370,20 @@ function cardAttack(att, def, mv) {
   }
   if (fx.doubleIfStatus && def.status) dmg *= 2;
   if (fx.doubleIfSt && def.status === fx.doubleIfSt) dmg *= 2;
+  if (att.side === "p1" && dice.length) {
+    if (eff > 0 && cardPerks("weakness").length) dmg += 1;
+    cardPerks("armor").forEach(p => { dmg -= Math.round((1 - p.m) / .08); });
+    if (cardPerks("first").length && !CB.firstUsed) { CB.firstUsed = true; dmg *= 2; cardLog("¡Ataque oportuno: daño doble!"); }
+  }
+  if (def.side === "p1" && dmg > 0) {
+    cardPerks("taken", def).forEach(p => {
+      if ((p.defTypes && !p.defTypes.some(t => def.set.card.types.includes(t))) || (p.moveTypes && !p.moveTypes.includes(mv.type)) || (p.maxBP && mv.str > 3)) return;
+      dmg -= p.m <= .5 ? 2 : 1;
+    });
+    if (cardPerks("boost", def).some(p => (p.boosts.def || 0) > 0 || (p.boosts.spd || 0) > 0)) dmg -= 1;
+    const cap = Math.min(...cardPerks("maxHit", def).map(p => Math.max(1, Math.round(def.max * p.frac))));
+    if (dmg > cap) dmg = cap;
+  }
   if (att.status === "brn") dmg -= 2;
   dmg = Math.max(0, dmg);
   cardLog(`Dados: ${hits} golpe${hits === 1 ? "" : "s"}, ${crits} crítico${crits === 1 ? "" : "s"}, ${st} estado${st === 1 ? "" : "s"}.`);
@@ -354,6 +399,14 @@ function cardAttack(att, def, mv) {
   delete def.marks.critTrap;
   if (def.aura && att.hp > 0) cardSetStatus(att, def.aura);
   roll.text = `${hits} golpe${hits === 1 ? "" : "s"}, ${crits} crítico${crits === 1 ? "" : "s"}, ${st} estado${st === 1 ? "" : "s"} → ${dmg} de daño a ${esSp(def.set.species)}${eff > 0 ? " (súper eficaz)" : eff < 0 ? " (poco eficaz)" : ""}${att.status === "brn" ? " (Quemado: −2)" : ""}${fx.doubleIfStatus && def.status ? " (doble por su estado)" : ""}. Le quedan ${def.hp}/${def.max}.`;
+  if (att.side === "p1" && before > def.hp && att.hp > 0 && cardPerks("drain", att).some(p => p.types.includes(mv.type)) && !fx.drain) {
+    att.hp = Math.min(att.max, att.hp + Math.floor((before - def.hp) / 2)); cardLog(`${name} recupera vida.`);
+  }
+  if (att.side === "p1" && att.status && cardPerks("cleanse", att).some(p => p.types.includes(mv.type))) { att.status = ""; cardLog(`${name} se libra de su estado.`); }
+  if (att.side === "p1" && def.hp > 0 && def.hp <= Math.ceil(def.max / 10) && cardPerks("sentence", att).length) { def.hp = 0; cardLog(`¡${esSp(def.set.species)} cae ante la sentencia!`); }
+  if (att.side === "p1" && def.hp > 0 && !def.status && CB.order?.[0] === "p1" && CB.step === 0 && cardPerks("dart", att).length && Math.random() < .5) {
+    const st2 = ["psn", "conf", "drw"][Math.floor(Math.random() * 3)]; cardLog("¡Dardo Tóxico!"); cardSetStatus(def, st2);
+  }
   if (fx.drain && before > def.hp && att.hp > 0) { att.hp = Math.min(att.max, att.hp + Math.floor((before - def.hp) / 2)); cardLog(`${name} recupera vida.`); }
   if (fx.execute && def.hp > 0 && def.hp <= fx.execute) { def.hp = 0; cardLog(`¡${esSp(def.set.species)} se debilita!`); }
   const hpBeforeRecoil = att.hp;
@@ -410,6 +463,7 @@ function cardAttack(att, def, mv) {
 function cardAfterAction() {
   const actor = CB.order[CB.step - 1] === "p1" ? CB.me : CB.foe;
   if (actor.status === "psn" && actor.hp > 0) cardDamage(actor, 2, "por el veneno");
+  if (actor.side === "p1" && actor.hp > 0 && actor.hp < actor.max && cardPerks("residualHeal", actor).some(p => p.types.some(t => actor.set.card.types.includes(t)))) { actor.hp++; cardLog(`${esSp(actor.set.species)} se cura 1.`); }
   if (actor.regen && actor.hp > 0 && actor.hp < actor.max) { actor.hp = Math.min(actor.max, actor.hp + actor.regen); cardLog(`${esSp(actor.set.species)} se cura ${actor.regen}.`); }
   if (CB.foe.hp <= 0) {
     cardLog(`¡${esSp(CB.foe.set.species)} se debilitó!`);
@@ -421,6 +475,7 @@ function cardAfterAction() {
   }
   if (CB.me.hp <= 0) {
     cardLog(`¡${esSp(CB.me.set.species)} se debilitó!`);
+    if (cardPerks("retribution").length && CB.foe.hp > 0) cardDamage(CB.foe, 2, "por Retribución");
     const b = CB.run.battle, wild = !b.trainer && !b.swarm, legend = b.legend || b.wild?.alpha;
     CB.wildFaints++;
     const fleeAfter = sinFx?.(CB.run, "flee2") ? 2 : 1;
@@ -508,7 +563,7 @@ function cardRender() {
     `<div class="cb-moves">${cardMoves(CB.me.set).map((mv, i) => {
       const fx = cardEffect(mv.effect), str = cardStrength(CB.me, CB.foe, mv, fx), eff = cardTypeBonus(mv.type, CB.foe.set.card.types);
       return `<button class="cb-move" data-act="cbmove" data-move="${i}">${cardMoveCard(mv)}<span class="cb-move-info">${str} dado${str === 1 ? "" : "s"}${eff ? ` · ${eff > 0 ? "+" : ""}${eff}` : ""}${fx.known || !mv.effect ? "" : " · sin efecto en esta versión"}</span></button>`;
-    }).join("")}${CB.mine.filter(f => f !== CB.me && f.hp > 0 && !CB.me.trapped).flatMap(f => cardMoves(f.set).map((mv, j) => [f, mv, j])).filter(([, mv]) => cardEffect(mv.effect).fromBench).map(([f, mv, j]) =>
+    }).join("")}${!b.trainer && !b.swarm && CB.perks.some(p => p.wild) ? `<button class="cb-move" data-act="cbdisguise">${cardMoveCard(CB.foe.set.card.sig)}<span class="cb-move-info">Disfraz Pokémon: su movimiento</span></button>` : ""}${CB.mine.filter(f => f !== CB.me && f.hp > 0 && !CB.me.trapped).flatMap(f => cardMoves(f.set).map((mv, j) => [f, mv, j])).filter(([, mv]) => cardEffect(mv.effect).fromBench).map(([f, mv, j]) =>
       `<button class="cb-move" data-act="cbbench" data-member="${f.index}" data-move="${j}">${cardMoveCard(mv)}<span class="cb-move-info">Desde el equipo: entra ${esc(esSp(f.set.species))}</span></button>`).join("")}</div>
     ${canBall ? `<div class="btns">${Object.entries(SIN_BALLS).filter(([k]) => run.balls[k] > 0).map(([k, ball]) => `<button class="btn" data-act="cbball" data-ball="${k}">${esc(ball.name)} ×${run.balls[k]} (${k === "glory" ? "segura" : CARD_BALL_DICE[k] + " dados"})</button>`).join("")}</div>` : ""}`;
   $("app").innerHTML = `<div class="top"><span></span><h1>${CB.foeName ? esc(CB.foeName) : "Combate salvaje"} · Ronda ${CB.turn}</h1><span></span></div>
@@ -524,6 +579,7 @@ document.addEventListener("click", e => {
   if (act === "cbmove" && CB.phase === "choose") { const mv = cardMoves(CB.me.set)[+b.dataset.move]; if (!mv) return; return cardAct(() => cardAttack(CB.me, CB.foe, mv), () => { CB.step++; cardAfterAction(); }); }
   if (act === "cbnext" && CB.phase === "result") { const next = CB.after; CB.after = null; CB.phase = "busy"; return next(); }
   if (act === "cbball") return cardThrow(b.dataset.ball);
+  if (act === "cbdisguise" && CB.phase === "choose" && CB.perks.some(p => p.wild)) { const mv = CB.foe.set.card.sig; return cardAct(() => cardAttack(CB.me, CB.foe, mv), () => { CB.step++; cardAfterAction(); }); }
   if (act === "cbbench" && CB.phase === "choose") {
     const f = CB.mine.find(x => x.index === +b.dataset.member), mv = f && cardMoves(f.set)[+b.dataset.move];
     if (!f || f.hp <= 0 || !mv || CB.me.trapped) return;
